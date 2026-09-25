@@ -1,0 +1,21 @@
+# Final Handoff
+
+- Mode used:
+- User goal:
+- Approved scope/specification:
+- What changed:
+- Files changed:
+- Existing references followed:
+- Tests/validation run:
+- Results and evidence:
+- Build/run result:
+- UI evidence, if applicable:
+- Security/performance review, if applicable:
+- Documentation impact:
+- Cleanup result:
+- Known risks/limitations:
+- Intentionally not changed:
+- Files safe to stage:
+- Files not safe to stage:
+- Suggested commit message (text only):
+- Recommended next action:
