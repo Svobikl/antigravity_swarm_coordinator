@@ -87,7 +87,8 @@ antigravity_swarm_coordinator/
 │   │   └── GLOBAL_DEVELOPMENT_RULES.md # Comprehensive multi-agent rules & operating principles
 │   ├── docs/
 │   │   ├── V4_1_OPERATOR_GUIDE.md     # Operator guide for semantic integrity and 4-axis completion
-│   │   └── ANTIGRAVITY_LONG_HORIZON_AUDIT_V4.md # Architecture audit and theoretical foundation
+│   │   ├── ANTIGRAVITY_LONG_HORIZON_AUDIT_V4.md # Architecture audit and theoretical foundation
+│   │   └── RECOMMENDED_SKILLS.md      # Curated companion skills guide and budget rules
 │   ├── scripts/                       # Python state validation and audit execution scripts
 │   │   ├── validate_program_state.py  # Strict mechanical program state & task graph validator
 │   │   ├── validate_agent_setup.py    # Runtime environment setup verification
@@ -114,7 +115,7 @@ antigravity_swarm_coordinator/
 
 ## 🛠️ Specialized Roles & Skills Catalog
 
-This repository includes all **21 specialized skills**:
+This repository includes all **21 specialized skills** directly powering the coordinator and auditors:
 
 1. **`swarm-coordinator`**: Global orchestration lead and state machine authority.
 2. **`skill-router`**: Catalog routing and strict active skill budget enforcement (max 8).
@@ -137,6 +138,57 @@ This repository includes all **21 specialized skills**:
 19. **`report-consistency-auditor`**: Cross-report claim reconciliation and arithmetic verification.
 20. **`research-validity-auditor`**: Scientific validity, causal data contracts, and ablation checks.
 21. **`semantic-completion-auditor`**: Independent semantic sign-off preventing goalpost drift.
+
+---
+
+## 🧩 Recommended Companion Skills (Curated Catalog)
+
+The Swarm Coordinator operates with a searchable library of installed skills, dynamically activating up to **8 active skills** per leaf task. Based on what is proven and installed in this Antigravity environment, the following companion skills are strongly recommended:
+
+### 1. Antigravity Swarm (ASW) Execution Suite
+*Included in this repository under `plugins/antigravity-swarm` and registered in Antigravity.*
+- **`asw`**: Main Antigravity Swarm execution loop with automated tests, subagents, and manual QA receipts.
+- **`asw-plan`**: Pre-implementation decision-complete planning before large or ambiguous work.
+- **`asw-loop`**: Autonomous RED ➔ GREEN ➔ real-surface QA loop.
+- **`asw-goal`**: Converts ambiguous briefs into concrete, measurable evidence criteria.
+- **`asw-review`**: Post-change behavioral diff audit to prevent regressions.
+- **`asw-debug`**: Hypothesis-driven debugging for crashes, hangs, and runtime drift.
+- **`asw-remove-ai-slops`**: Cleans AI clutter, unnecessary comments, and dead abstractions.
+- **`asw-lsp`**: Symbol safety and compiler diagnostics checking.
+
+### 2. Task Planning & Disk-State Persistence
+- **`planning-with-files`**: Uses persistent Markdown files as working memory on disk (matches Manus-style durability).
+- **`subagent-driven-development`**: Coordinates bounded, parallel subagent dispatching.
+- **`executing-plans`**: Step-by-step plan execution with strict review gates.
+- **`writing-plans`**: Creates actionable, atomic implementation checklists.
+
+### 3. Test-Driven Development (TDD) & Evidence Gates
+- **`test-driven-development`** / **`tdd-workflow`**: Enforces writing failing tests prior to production code.
+- **`verification-before-completion`**: Guarantees tasks are not marked complete without verified disk proof.
+- **`lint-and-validate`**: Mandatory post-change validation execution.
+
+### 4. Diagnostics & Code Auditing
+- **`systematic-debugging`**: 4-phase root-cause diagnosis before proposing fixes.
+- **`debugger`**: Dedicated diagnostic assistant for unexpected test failures and crashes.
+- **`vibe-code-auditor`**: Audits rapidly generated AI code for structural flaws, mocks, and fragility.
+- **`simplify-code`**: Safe, low-risk code simplification and minimal blast-radius enforcement.
+- **`code-reviewer`**: Comprehensive code review checking idiomatic design and security risks.
+
+### 5. Architecture & Security Governance
+- **`architect-review`** / **`senior-architect`**: Component boundary and architectural decision evaluation.
+- **`security-auditor`**: DevSecOps, privilege boundaries, and dependency vulnerability scanning.
+- **`database-design`**: Relational/NoSQL schema modeling and migration safety.
+
+### 6. Shell & Environment Reliability (Windows / Cross-Platform)
+- **`windows-shell-reliability`**: Escaping, paths, CRLF, and execution pitfalls for Windows PowerShell/CMD.
+- **`powershell-windows`**: Error handling and native syntax for robust automation.
+- **`posix-shell-pro`**: Defensive shell scripting for Linux/macOS environments.
+
+### 7. Quantitative Research & Data Science (Mode 5)
+- **`quant-analyst`**: Financial metrics, risk evaluation, and backtesting sanity auditing.
+- **`scikit-learn`**: Out-of-sample data splitting, pipeline hygiene, and model validation.
+
+> 📖 **Full Details:** See [`core_framework/docs/RECOMMENDED_SKILLS.md`](core_framework/docs/RECOMMENDED_SKILLS.md) for how the `skill-router` manages dynamic activation under the 8-skill budget.
 
 ---
 
