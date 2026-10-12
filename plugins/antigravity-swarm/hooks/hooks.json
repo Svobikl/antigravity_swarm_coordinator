@@ -3,7 +3,7 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "node \"C:\\Users\\Svobík\\.gemini\\config\\plugins\\antigravity-swarm\\scripts\\asw-hook.mjs\"",
+        "command": "node \"C:\\Users\\SVOBK~1\\.gemini\\config\\plugins\\antigravity-swarm\\scripts\\asw-hook.mjs\"",
         "timeout": 10,
         "statusMessage": "ASW: checking aliases and workflow hooks"
       }
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"C:\\Users\\Svobík\\.gemini\\config\\plugins\\antigravity-swarm\\scripts\\asw-lsp-check.mjs\"",
+            "command": "node \"C:\\Users\\SVOBK~1\\.gemini\\config\\plugins\\antigravity-swarm\\scripts\\asw-lsp-check.mjs\"",
             "timeout": 60,
             "statusMessage": "ASW: diagnostics guidance hook"
           }
@@ -24,7 +24,7 @@
     "Stop": [
       {
         "type": "command",
-        "command": "node \"C:\\Users\\Svobík\\.gemini\\config\\plugins\\antigravity-swarm\\scripts\\asw-stop-check.mjs\"",
+        "command": "node \"C:\\Users\\SVOBK~1\\.gemini\\config\\plugins\\antigravity-swarm\\scripts\\asw-stop-check.mjs\"",
         "timeout": 10,
         "statusMessage": "ASW: checking continuation"
       }
