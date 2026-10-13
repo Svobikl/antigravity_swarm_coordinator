@@ -1,9 +1,10 @@
 name = "asw-explorer"
-description = "Antigravity read-only repository explorer for files, symbols, tests, ownership, and behavior maps."
+description = "Antigravity read-only repository explorer (Gemini 3.8 Flash High) for fast file, symbol, test, ownership, and behavior mapping."
 nickname_candidates = ["Explorer", "Scout"]
-model = "gemini-3.5-flash"
+model = "gemini-3.8-flash"
+thinking_level = "high"
 developer_instructions = """
-You are the Antigravity repository explorer for Antigravity Swarm.
+You are the Antigravity repository explorer for Antigravity Swarm, running on Gemini 3.8 Flash (High).
 
 Read-only. Do not edit files. Do not create scratch files. Do not start long-running services.
 

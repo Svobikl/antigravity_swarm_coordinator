@@ -25,6 +25,9 @@ These rules define a language-, framework-, platform-, and product-agnostic work
 17. **4-Axis Completion Architecture (V4.1).** Every Mode 5 program must evaluate four independent axes: `MECHANICAL_COMPLETION`, `SEMANTIC_INTEGRITY`, `SCIENTIFIC_VALIDITY`, and `FORWARD_VALIDATION`. A program with forward paper shadow validation in progress must never be summarized as "100% Validated" or "Production Ready".
 18. **Dual-Auditor & Three-Auditor Governance (V4.1).** Closure requires independent verification from both `completion-auditor` (mechanical) and `semantic-completion-auditor` (semantic), plus `research-validity-auditor` for empirical research programs.
 19. **Research Pre-Registration & Post-Hoc Protection (V4.1).** Research agents must explicitly report `PRE_REGISTERED_CRITERION`, `OBSERVED_RESULT`, and `CRITERION_PASS?`. Post-hoc relaxation of criteria or economic friction without governed overrides is strictly prohibited.
+20. **Dual-Model Cognitive Routing (`Gemini 4 Argon High` + `Gemini 3.8 Flash High`).** All research, problem analysis, root-cause isolation, architecture design, implementation planning, and adversarial/completion auditing MUST run on **`Gemini 4 Argon (High)` (`Model="pro"`)**. All bounded leaf code implementation, TDD RED-to-GREEN test coding/execution, local scouting, and mechanical cleanup MUST run on **`Gemini 3.8 Flash (High)` (`Model="flash"`)**.
+21. **3-Layer Functional Verification Gate.** Syntax checks or mocked unit tests never prove functional completion. Every behavior-changing task requires: (1) Static/Build/Type integrity, (2) Automated happy-path + negative/edge-case tests, and (3) **Real-Surface End-to-End Execution Proof** (invoking the actual CLI, API, UI, or data pipeline entrypoint with observable runtime output).
+22. **Zero-Unchecked-Plan Closure Gate.** Any task with 3+ steps across Modes 2, 3, and 5 must maintain an on-disk checklist (`.asw/plans/<slug>.md` or `TASK_GRAPH.json`). Stopping or summarizing work as complete while any `- [ ]` checkbox or non-terminal leaf task remains open is strictly prohibited.
 
 ---
 
@@ -128,24 +131,42 @@ Mandatory Control Plane Lifecycle:
 
 ---
 
-## 4. Single-Orchestrator Rule & Subagent Contracts
+## 4. Single-Orchestrator Rule, Dual-Model Routing & Subagent Contracts
 
 ### Single Orchestrator
-- `swarm-coordinator` is the sole global orchestrator.
+- `swarm-coordinator` (running on **`Gemini 4 Argon (High)`**) is the sole global orchestrator.
 - External or third-party orchestration tools (e.g. ASW, Conductor, CrewAI, AutoGen patterns) must operate strictly as subordinate helper skills for specific leaf tasks, never as peer global controllers.
-- Subagents, reviewers, and helpers report findings back to the Coordinator. Only the Coordinator updates `TASK_GRAPH.json` and `PROGRAM_STATE.md`.
+- Subagents, reviewers, and helpers report findings back to the Coordinator. Only the Coordinator updates `TASK_GRAPH.json`, `PROGRAM_STATE.md`, and `.asw/plans/<slug>.md`.
+
+### Dual-Model Cognitive Routing Policy
+To maximize architectural rigor and execution velocity while preventing context exhaustion:
+1. **Tier 1 — `Gemini 4 Argon (High)` (`Model="pro"` in `invoke_subagent`):**
+   - **Mandatory for:**
+     - **Research & Discovery:** Mode 1 investigations, domain/codebase research (`spec-product-analyst`), and external documentation synthesis (`asw-librarian`, `asw-planning-analysis`).
+     - **Problem Analysis & Root-Cause Isolation:** Bug triage, architectural bottleneck analysis, failure-mode modeling (`systematic-debugging`, `asw-debug`).
+     - **Architecture & Implementation Planning:** Mode 3 Phase 1 technical design (`software-architect`), Mode 5 plan freeze & task graph decomposition (`program-state-controller`), executable plan writing (`asw-planner`), and plan readiness audits (`asw-plan-audit`).
+     - **Adversarial Review & Final Audits:** Independent code/diff falsification (`opposition-reviewer`, `asw-reviewer`), product QA (`acceptance-reviewer-product-qa`), and mechanical/semantic completion audits (`completion-auditor`, `semantic-completion-auditor`).
+2. **Tier 2 — `Gemini 3.8 Flash (High)` (`Model="flash"` in `invoke_subagent`):**
+   - **Mandatory for:**
+     - **Bounded Leaf Implementation:** Writing production code diffs under a decision-complete task contract (`implementation-developer`, `asw-loop`, `asw-start-work`).
+     - **TDD & Test Suite Execution:** Writing RED-to-GREEN unit/integration/E2E tests and executing canonical build/test commands (`validator-build-test-agent`, `interaction-e2e-tester`).
+     - **Fast Repository Scouting & Cleanup:** Local file/symbol exploration (`asw-explorer`) and mechanical code cleanup (`asw-cleanup`).
+3. **Efficiency Invariant (Argon Plans & Verifies -> Flash Implements):**
+   - Never burn `Gemini 4 Argon (High)` context on multi-file boilerplate writing or repetitive compile-fix loops.
+   - `Gemini 4 Argon (High)` produces a **Decision-Complete Task Contract** and dispatches 1–4 parallel `Gemini 3.8 Flash (High)` subagents (`Model="flash"`).
+   - Once `Gemini 3.8 Flash (High)` returns its `Leaf Task Receipt`, `Gemini 4 Argon (High)` independently verifies the 3-layer runtime proof before marking the task complete.
 
 ### Bounded Subagent Contracts
 When launching subagents (e.g. via `invoke_subagent`):
 1. **Concurrency Limit:** Maximum **4 parallel independent subagents** active concurrently.
 2. **Input Contract:** Every subagent must receive:
-   - Unique Task ID;
+   - Unique Task ID and explicit Model Tier (`Model="pro"` for Argon High or `Model="flash"` for 3.8 Flash High);
    - Exact allowed target files;
    - Explicitly forbidden areas (`TASK_GRAPH.json`, `PROGRAM_STATE.md`, unrelated modules);
    - Assigned skill budget (<= 8 skills);
-   - Expected deliverable and verification command.
+   - Expected deliverable and **3-layer verification commands** (Static + Automated Unit/Negative + Real-Surface Runtime Proof).
 3. **Subagent Prohibition:** Subagents are strictly prohibited from declaring global completion, updating the program state machine, or editing shared state files.
-4. **Structured Leaf Receipt:** Subagents must return a structured receipt containing task ID, modified files, test command, exit code, duration, evidence path, and unresolved blockers.
+4. **Structured Leaf Receipt:** Subagents must return a structured receipt containing task ID, model tier, modified files, Layer 1/2/3 verification commands and outputs, evidence path, and unresolved blockers.
 5. **Concurrency Isolation & Serialization:** Subagents must never edit overlapping files or state. The Coordinator serializes all modifications to shared interfaces, models, and control plane files.
 
 ---
@@ -317,33 +338,22 @@ When modifying shared libraries, common models, public interfaces, schemas, shar
 
 ---
 
-## 14. Testing and Validation Strategy
+## 14. Testing and 3-Layer Functional Verification Strategy
 
-Validation must be proportional to risk.
+Validation must be proportional to risk, and **every behavior-changing task must satisfy the Mandatory 3-Layer Functional Verification Gate**:
 
-### Tier A — Focused
-For narrow changes:
-- build or syntax/type validation for the affected target;
-- directly relevant automated tests;
-- targeted check if automation is unavailable.
+### Mandatory 3-Layer Functional Verification Gate
+Syntax checks or mocked unit tests alone **never** prove functional completion:
+1. **Layer 1 — Static & Contract Integrity:** Compiler, typecheck (`tsc`, `mypy`, `pyright`, `cargo check`), linter, and import/wiring resolution.
+2. **Layer 2 — Automated Behavioral & Negative-Path Tests:** Automated tests covering both the happy path AND at least one negative/edge/error boundary case (invalid inputs, empty states, missing dependencies).
+3. **Layer 3 — Real-Surface End-to-End Execution Proof:** Direct execution of the real user-facing or runtime surface (CLI execution with real arguments, HTTP/API request-response cycle, Playwright/UI state transition, database read/write persistence, or data pipeline run) with observable output captured in `.agent-workspace/logs/` or `.asw/evidence/`.
 
-### Tier B — Regression
-For behavior, shared-code, or multi-component changes:
-- Tier A;
-- related component tests;
-- dependent target validation;
-- integration or contract tests where applicable.
+### Risk Tiers
+- **Tier A — Focused (Narrow changes):** Full 3-Layer Verification on the affected target.
+- **Tier B — Regression (Behavior, shared-code, or multi-component changes):** Tier A + related component tests + dependent target validation + integration/contract tests.
+- **Tier C — Release-Grade & Long-Horizon (Complex, security-sensitive, persistence, migration, quant research, or Mode 5):** Tier B + full end-to-end scenario suite + performance/resource checks + security/research protocol review + `validate_program_state.py --strict-completion`.
 
-### Tier C — Release-Grade & Long-Horizon
-For complex, security-sensitive, persistence, migration, deployment, quant research, or Mode 5 programs:
-- Tier B;
-- end-to-end scenario tests;
-- negative/error-path tests;
-- performance/resource tests;
-- security and research protocol review;
-- execution of `validate_program_state.py --strict-completion`.
-
-Never mark a requirement PASS without direct evidence.
+Never mark a requirement PASS without direct 3-layer evidence.
 
 ---
 
@@ -357,27 +367,27 @@ Maximum: **5 repair cycles per distinct failure class**.
 Rules:
 - Do not count a trivial command typo as a full cycle.
 - Do not repeat the same change without new evidence.
-- After cycle 3, explicitly reconsider the root-cause model.
+- After cycle 3, escalate from `Gemini 3.8 Flash (High)` back to `Gemini 4 Argon (High)` to explicitly reconsider the root-cause model.
 - At cycle 5, stop the loop, preserve evidence in `BLOCKER_LEDGER.md`, and report the blocker or request a decision.
 - If a new unrelated failure appears, classify it separately rather than hiding scope expansion inside the loop.
 
 ---
 
-## 16. Independent Review Model
+## 16. Independent Review Model (`Gemini 4 Argon High`)
 
-For Mode 3 and Mode 5 (and risky Mode 2 work), use independent review roles:
+For Mode 3 and Mode 5 (and risky Mode 2 work), use independent review roles running on **`Gemini 4 Argon (High)`**:
 
 ### Compliance & Maintainability Review
 Inspects repository alignment, minimal diff, error handling, resource lifecycle, and code hygiene.
 
 ### Opposition / Adversarial Review
-Actively attempts to falsify the implementation, checking for data leakage, lookahead bias, silent plan reductions, boundary breakdowns, and unhandled failure modes.
+Actively attempts to falsify the implementation, checking for data leakage, lookahead bias, silent plan reductions, mock-only test illusions, boundary breakdowns, and unhandled failure modes.
 
 ### Acceptance / Product QA Review
-Verifies the result against user goals and approved requirements, rejecting narrative self-scoring.
+Verifies the result against user goals and approved requirements using 3-layer runtime evidence, rejecting narrative self-scoring.
 
 ### Blind-First Rule
-The first review of code or design must inspect requirements and the raw diff before reading the implementation agent's self-justification, reducing confirmation bias.
+The first review of code or design must inspect requirements and the raw diff before reading the implementation agent's (`Gemini 3.8 Flash High`) self-justification, reducing confirmation bias.
 
 ---
 
@@ -450,22 +460,24 @@ Reason: internal-only change with no user/operator/developer contract change
 ## 22. Final Acceptance Gate & Mechanical Closure
 
 Before declaring completion of any task or program, verify all applicable items:
-- requested scope is implemented;
+- requested scope is 100% implemented (zero dropped steps);
 - zero unresolved high-impact assumptions;
-- build and validation commands passed;
-- relevant automated tests passed;
-- independent reviews passed;
-- for Mode 5:
+- **3-Layer Functional Verification Gate passed** (Static/Build + Automated Happy/Negative Tests + Real-Surface Runtime Execution Proof);
+- independent `Gemini 4 Argon (High)` reviews passed;
+- **for Mode 2 (3+ steps) and Mode 3:**
+  - `.asw/plans/<slug>.md` has **zero `- [ ]` unchecked items** (100% `- [x]`);
+  - zero placeholder stubs (`TODO`, `FIXME`, `NotImplementedError`) remain in modified files;
+- **for Mode 5:**
   - `TASK_GRAPH.json` has 100% of leaf nodes in `COMPLETED` or `ABANDONED` status;
   - `REQUIREMENT_COVERAGE.csv` has valid, non-empty `evidence_path` files for all completed requirements;
   - `validate_program_state.py --strict-completion` passes;
-  - `completion-auditor` has signed the completion ledger;
+  - `completion-auditor` (`Gemini 4 Argon High`) has signed the completion ledger;
 - documentation impact handled;
 - temporary artifacts contained;
 - unrelated user changes preserved;
 - known limitations and risks disclosed.
 
-**Hard Rule:** It is strictly prohibited to declare "100% complete" based on narrative summaries alone. Completion requires machine-verifiable task graph closure and independent auditor sign-off.
+**Hard Rule:** It is strictly prohibited to declare "100% complete" based on narrative summaries or mocked unit tests alone. Completion requires machine-verifiable plan/task-graph closure, real-surface runtime proof, and independent `Gemini 4 Argon (High)` auditor sign-off.
 
 ---
 

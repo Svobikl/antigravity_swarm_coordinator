@@ -49,10 +49,14 @@ In Antigravity, the swarm coordinator functions under the **Single Orchestrator 
 
 ### Core Rules
 1. **Single Orchestrator:** `swarm-coordinator` is the SOLE authority for global scope and state. Helper orchestration tools (ASW, Conductor) act strictly as localized sub-workflows under coordinator control.
-2. **Active Skill Budget:** Enforces a strict budget of **maximum 8 active skills** loaded in context per leaf task, preventing context-window degradation.
-3. **Bounded Subagents:** Maximum **4 parallel independent subagents** active concurrently. Subagents receive strict task contracts and are strictly forbidden from declaring global completion or editing global control-plane state.
-4. **State Serialization:** Parallel subagents must never edit overlapping files or state. The coordinator serializes all shared state updates.
-5. **Dual Control Plane (V4.1 Semantic Integrity):**
+2. **Dual-Model Cognitive Routing (`Gemini 4 Argon High` + `Gemini 3.8 Flash High`):**
+   - **Tier 1 (`Gemini 4 Argon (High)` / `Model="pro"`):** Mandatory for all **research, problem analysis, root-cause isolation, architecture design, implementation planning**, and **independent adversarial/completion auditing** (`swarm-coordinator`, `spec-product-analyst`, `software-architect`, `asw-planner`, `asw-plan-audit`, `opposition-reviewer`, `acceptance-reviewer-product-qa`, `completion-auditor`).
+   - **Tier 2 (`Gemini 3.8 Flash (High)` / `Model="flash"`):** Mandatory for **high-velocity bounded code implementation, TDD RED-to-GREEN cycles, test suite execution**, and **fast local repository scouting** (`implementation-developer`, `asw-loop`, `validator-build-test-agent`, `interaction-e2e-tester`, `asw-explorer`).
+3. **3-Layer Functional Verification Gate:** Syntax checks or mocked unit tests alone never prove completion. Every behavior-changing task requires: (1) Static/Build/Type integrity, (2) Automated happy-path + negative/edge-case tests, and (3) **Real-Surface End-to-End Runtime Proof** (invoking the actual CLI, API, UI, or data pipeline entrypoint with observable output).
+4. **Zero-Unchecked-Plan Closure Gate:** Multi-step tasks (Modes 2, 3, and 5) maintain an on-disk checklist (`.asw/plans/<slug>.md` or `TASK_GRAPH.json`) enforced by `asw-stop-check.mjs` and `completion-auditor`. Stopping while any `- [ ]` checkbox remains open is prohibited.
+5. **Active Skill Budget:** Enforces a strict budget of **maximum 8 active skills** loaded in context per leaf task, preventing context-window degradation.
+6. **Bounded Subagents & State Serialization:** Maximum **4 parallel independent subagents** active concurrently. Subagents receive strict task contracts and never edit overlapping files or global control-plane state.
+7. **Dual Control Plane (V4.1 Semantic Integrity):**
    - **Mechanical Completion:** Were all tasks executed and all required evidence artifacts generated on disk?
    - **Semantic Integrity:** Did the program solve the original problem under the specified rules without post-hoc threshold relaxation, metric tampering, or goalpost moving?
 

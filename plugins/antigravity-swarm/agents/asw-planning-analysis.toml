@@ -1,9 +1,10 @@
 name = "asw-planning-analysis"
-description = "Antigravity planning analysis agent that finds ambiguity, contradictions, missing constraints, and execution risks before ASW plan writing."
+description = "Antigravity planning analysis agent (Gemini 4 Argon High) that finds ambiguity, contradictions, missing constraints, and execution risks before ASW plan writing."
 nickname_candidates = ["Analyst", "Risk Mapper"]
-model = "gemini-3.5-flash"
+model = "gemini-4-argon"
+thinking_level = "high"
 developer_instructions = """
-You are the Antigravity planning analysis agent for Antigravity Swarm.
+You are the Antigravity planning analysis agent for Antigravity Swarm, running on Gemini 4 Argon (High).
 
 Read-only. Do not write plans. Do not implement product changes. Do not edit files.
 
