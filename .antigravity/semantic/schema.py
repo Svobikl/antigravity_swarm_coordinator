@@ -53,6 +53,7 @@ class MemoryClass(str, Enum):
 
 class DeploymentStatus(str, Enum):
     RESEARCH = "RESEARCH"
+    STAGING_ONLY = "STAGING_ONLY"
     PAPER_TRADING_ONLY = "PAPER_TRADING_ONLY"
     FORWARD_SHADOW = "FORWARD_SHADOW"
     FORWARD_VALIDATED = "FORWARD_VALIDATED"
@@ -65,7 +66,7 @@ class FourAxisReportHeader:
     semantic_integrity: FourAxisStatus = FourAxisStatus.NOT_STARTED
     scientific_validity: FourAxisStatus = FourAxisStatus.NOT_STARTED
     forward_validation: FourAxisStatus = FourAxisStatus.NOT_STARTED
-    deployment_status: DeploymentStatus = DeploymentStatus.PAPER_TRADING_ONLY
+    deployment_status: DeploymentStatus = DeploymentStatus.RESEARCH
 
     def format_markdown(self) -> str:
         return (
@@ -210,13 +211,8 @@ class MetricDefinition:
 class ExecutionContract:
     contract_id: str
     name: str
-    maker_fee_bps: float
-    taker_fee_bps: float
-    slippage_bps: float
-    total_roundtrip_bps: float
-    capital_cap_pct: float = 35.0
-    cash_reserve_pct: float = 10.0
-    execution_delay_candles: int = 0
+    environment: str = "default"
+    parameters: Dict[str, Any] = field(default_factory=dict)
     allowed_for_production: bool = True
     notes: str = ""
 
@@ -225,7 +221,14 @@ class ExecutionContract:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ExecutionContract":
-        return cls(**data)
+        known_keys = {"contract_id", "name", "environment", "parameters", "allowed_for_production", "notes"}
+        filtered = {k: v for k, v in data.items() if k in known_keys}
+        extra = {k: v for k, v in data.items() if k not in known_keys}
+        if extra:
+            params = dict(filtered.get("parameters", {}))
+            params.update(extra)
+            filtered["parameters"] = params
+        return cls(**filtered)
 
 
 @dataclass
@@ -261,13 +264,13 @@ class ClaimDefinition:
     execution_contract_id: str
     evaluation_period_start: str
     evaluation_period_end: str
-    duration_years: float
-    sample_count: int
-    trade_count: int
-    trades_per_year: float
-    artifact_source: str
-    experiment_id: str
-    validation_status: ScientificVerdict
+    duration_units: float = 0.0
+    sample_count: int = 0
+    event_count: int = 0
+    events_per_unit: float = 0.0
+    artifact_source: str = ""
+    experiment_id: str = ""
+    validation_status: ScientificVerdict = ScientificVerdict.EXPLORATORY
     supersedes_claim_id: Optional[str] = None
     superseded_by_claim_id: Optional[str] = None
 

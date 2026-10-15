@@ -84,7 +84,7 @@ These skills serve as the localized execution engine under coordinator supervisi
 
 | Skill | Role / Function | Value to Swarm Coordinator |
 | :--- | :--- | :--- |
-| **`quant-analyst`** | Financial/statistical model evaluation and backtesting sanity. | Essential for quant programs (e.g. Freqtrade, Sharpe/DSR verification). |
+| **`quant-analyst`** | Financial/statistical model evaluation and backtesting sanity. | Essential for quantitative programs (statistical significance, time-series and model verification). |
 | **`scikit-learn`** | ML pipelines, fold evaluation, and leak-free cross-validation. | Pairs with `research-experiment-auditor` for fold safety. |
 | **`polars`** / **`networkx`** | High-performance dataframe and graph analysis. | Large-scale dataset and execution graph processing. |
 

@@ -2,7 +2,7 @@
 """Run Semantic Completion Audit for a Mode 5 program.
 
 Usage:
-    python .antigravity/scripts/run_semantic_audit.py [--program-dir research_v3/mode5] [--strict-scientific]
+    python .antigravity/scripts/run_semantic_audit.py [--program-dir docs/agentic/mode5] [--strict-scientific]
 """
 import argparse
 from pathlib import Path
@@ -21,7 +21,7 @@ from semantic.auditor import SemanticCompletionAuditor
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Semantic Completion Audit (Antigravity V4.1)")
-    parser.add_argument("--program-dir", type=str, default="research_v3/mode5", help="Path to program directory")
+    parser.add_argument("--program-dir", type=str, default="docs/agentic/mode5", help="Path to program directory")
     parser.add_argument("--root", type=str, default=".", help="Root repository directory")
     parser.add_argument("--strict-scientific", action="store_true", help="Enforce 3-auditor research governance")
     args = parser.parse_args()

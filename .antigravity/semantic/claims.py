@@ -1,9 +1,9 @@
 """Antigravity V4.1 Claim Registry and Lineage Manager.
 
 Implements:
-- CLAIM_REGISTRY.json: Versioned claim registry for all high-impact research results
+- CLAIM_REGISTRY.json: Versioned claim registry for all high-impact research/engineering results
 - Claim immutability & explicit supersession lineage (CLAIM-001 -> CLAIM-001-V2)
-- Arithmetic validation: trades_per_year == trade_count / duration_years
+- Arithmetic validation: events_per_unit == event_count / duration_units
 - Scientific verdict enforcement (EXPLORATORY cannot be claimed as VALIDATED)
 """
 from __future__ import annotations
@@ -57,13 +57,14 @@ class ClaimRegistryManager:
                 )
 
         # Arithmetic validation (§28)
-        if claim.duration_years > 0 and claim.trade_count > 0:
-            expected_rate = claim.trade_count / claim.duration_years
-            if abs(claim.trades_per_year - expected_rate) > 1.5:
+        if claim.duration_units > 0 and claim.event_count > 0:
+            expected_rate = claim.event_count / claim.duration_units
+            tolerance = max(1.0, expected_rate * 0.05)
+            if abs(claim.events_per_unit - expected_rate) > tolerance:
                 return False, (
-                    f"Arithmetic contradiction in claim '{cid}': trade_count={claim.trade_count} "
-                    f"over {claim.duration_years:.2f} years implies ~{expected_rate:.1f} trades/year, "
-                    f"but claimed trades_per_year={claim.trades_per_year}."
+                    f"Arithmetic contradiction in claim '{cid}': event_count={claim.event_count} "
+                    f"over {claim.duration_units:.2f} units implies ~{expected_rate:.2f} events/unit, "
+                    f"but claimed events_per_unit={claim.events_per_unit}."
                 )
 
         # Handle supersession linkage

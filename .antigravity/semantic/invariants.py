@@ -3,9 +3,9 @@
 Enforces:
 - Canonical invariant definition & persistence in PROGRAM_INVARIANTS.json
 - Governed overrides in INVARIANT_OVERRIDES.json
-- Prevention of silent invariant drift (38 bps -> 34 bps, DSR 0.95 -> 0.80)
+- Prevention of silent parameter or threshold drift across tasks and reports
 - User-locked invariant protection (cannot be changed autonomously without human approval)
-- Hard drift (blocking completion) vs Soft drift (reported as alternative)
+- Hard drift (blocking completion) vs Soft drift (reported as experimental alternative)
 """
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ class InvariantManager:
         if not inv:
             return False, f"Invariant '{override.invariant_id}' not found in canonical invariants."
 
-        # Check user-locked invariants (§11)
+        # Check user-locked invariants
         if inv.user_locked and not override.user_approved:
             return False, (
                 f"Invariant '{override.invariant_id}' is USER_LOCKED. "
@@ -205,7 +205,7 @@ class InvariantManager:
 
 
 def build_default_invariants(program_id: str, source_hash: str = "") -> ProgramInvariants:
-    """Constructs default canonical invariants adhering to Long-Horizon V4.1 standards."""
+    """Constructs generic default canonical invariants adhering to Long-Horizon V4.1 standards."""
     now_str = datetime.now(timezone.utc).isoformat()
     return ProgramInvariants(
         program_id=program_id,
@@ -214,12 +214,12 @@ def build_default_invariants(program_id: str, source_hash: str = "") -> ProgramI
         source_hash=source_hash,
         invariants={
             "safety": {
-                "real_capital_allowed": InvariantDefinition(
+                "autonomous_production_deploy_allowed": InvariantDefinition(
                     value=False,
                     type="bool",
                     user_locked=True,
-                    description="Autonomous real capital deployment strictly forbidden (§0)",
-                    source_reference="MASTER_PLAN_SECTION_0"
+                    description="Autonomous production deployment or irreversible live action without explicit human approval is forbidden",
+                    source_reference="GLOBAL_DEVELOPMENT_RULES_SECTION_1"
                 )
             },
             "scientific": {
@@ -227,63 +227,40 @@ def build_default_invariants(program_id: str, source_hash: str = "") -> ProgramI
                     value=False,
                     type="bool",
                     user_locked=True,
-                    description="Outer OOS data may never be used for feature/model selection (§16, §77)",
-                    source_reference="MASTER_PLAN_SECTION_16"
+                    description="Outer holdout / OOS data may never be used for feature, model, or parameter selection",
+                    source_reference="GLOBAL_DEVELOPMENT_RULES_SECTION_7"
                 ),
                 "require_factorial_ablation_for_interactions": InvariantDefinition(
                     value=True,
                     type="bool",
                     user_locked=False,
-                    description="Any claim of interaction effects must include complete factorial ablation (§37)",
-                    source_reference="MASTER_PLAN_SECTION_37"
+                    description="Any claim of multi-factor interaction effects must include complete ablation breakdown",
+                    source_reference="GLOBAL_DEVELOPMENT_RULES_SECTION_7"
                 )
             },
-            "statistical": {
-                "dsr_significance_threshold": InvariantDefinition(
-                    value=0.95,
-                    type="float",
-                    user_locked=True,
-                    description="Canonical Deflated Sharpe Ratio significance threshold (§61)",
-                    source_reference="MASTER_PLAN_SECTION_61"
-                ),
-                "max_pbo_threshold": InvariantDefinition(
-                    value=0.20,
-                    type="float",
-                    user_locked=False,
-                    description="Maximum allowable probability of backtest overfitting (§62)",
-                    source_reference="MASTER_PLAN_SECTION_62"
-                )
-            },
-            "economic": {
-                "e1_roundtrip_bps": InvariantDefinition(
-                    value=38.0,
-                    type="float",
-                    user_locked=False,
-                    description="Canonical Tier E1 roundtrip execution friction in basis points (§15)",
-                    source_reference="MASTER_PLAN_SECTION_15"
-                ),
-                "allow_cost_redefinition": InvariantDefinition(
+            "quality": {
+                "allow_post_hoc_threshold_relaxation": InvariantDefinition(
                     value=False,
                     type="bool",
                     user_locked=True,
-                    description="Silent modification of execution friction is prohibited (§3)",
-                    source_reference="MASTER_PLAN_SECTION_3"
+                    description="Silent post-hoc relaxation of pre-registered acceptance or evaluation criteria is prohibited",
+                    source_reference="GLOBAL_DEVELOPMENT_RULES_SECTION_1"
+                ),
+                "require_three_layer_verification": InvariantDefinition(
+                    value=True,
+                    type="bool",
+                    user_locked=True,
+                    description="Every behavior-changing task requires static/build, automated happy+negative test, and real-surface runtime proof",
+                    source_reference="GLOBAL_DEVELOPMENT_RULES_SECTION_14"
                 )
             },
             "data": {
-                "free_first": InvariantDefinition(
-                    value=True,
-                    type="bool",
-                    user_locked=False,
-                    description="Open-source and free data must be exhausted before paid sources (§21)",
-                    source_reference="MASTER_PLAN_SECTION_21"
-                ),
                 "point_in_time_causality": InvariantDefinition(
                     value=True,
                     type="bool",
                     user_locked=True,
-                    description="Strict causality with zero lookahead bias across all features and sentiment (§28)",
-                    source_reference="MASTER_PLAN_SECTION_28"
+                    description="Strict causality with zero lookahead bias across all data pipelines",
+                    source_reference="GLOBAL_DEVELOPMENT_RULES_SECTION_7"
                 )
             },
             "agentic": {
@@ -291,15 +268,15 @@ def build_default_invariants(program_id: str, source_hash: str = "") -> ProgramI
                     value=8,
                     type="int",
                     user_locked=True,
-                    description="Maximum number of active skills loaded in context per leaf task (§82)",
-                    source_reference="MASTER_PLAN_SECTION_82"
+                    description="Maximum number of active skills loaded in context per leaf task",
+                    source_reference="GLOBAL_DEVELOPMENT_RULES_SECTION_5"
                 ),
                 "single_global_orchestrator": InvariantDefinition(
                     value=True,
                     type="bool",
                     user_locked=True,
-                    description="swarm-coordinator is the sole authority for global scope and state (§4, §41)",
-                    source_reference="MASTER_PLAN_SECTION_4"
+                    description="swarm-coordinator is the sole authority for global scope and state",
+                    source_reference="GLOBAL_DEVELOPMENT_RULES_SECTION_4"
                 )
             },
             "completion": {
@@ -307,17 +284,18 @@ def build_default_invariants(program_id: str, source_hash: str = "") -> ProgramI
                     value=True,
                     type="bool",
                     user_locked=True,
-                    description="Dual auditor sign-off (completion-auditor and semantic-completion-auditor) required (§23)",
-                    source_reference="MASTER_PLAN_SECTION_23"
+                    description="Independent auditor sign-off (completion-auditor and semantic-completion-auditor) required",
+                    source_reference="GLOBAL_DEVELOPMENT_RULES_SECTION_22"
                 ),
                 "four_axis_evaluation_required": InvariantDefinition(
                     value=True,
                     type="bool",
                     user_locked=True,
-                    description="Must report mechanical, semantic, scientific, and forward status (§2)",
-                    source_reference="MASTER_PLAN_SECTION_2"
+                    description="Must report mechanical, semantic, scientific, and forward validation status",
+                    source_reference="GLOBAL_DEVELOPMENT_RULES_SECTION_1"
                 )
             },
             "user_defined": {}
         }
     )
+

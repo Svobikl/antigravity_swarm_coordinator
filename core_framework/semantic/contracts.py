@@ -1,9 +1,9 @@
 """Antigravity V4.1 Execution and Data Contract Registries.
 
 Implements:
-- EXECUTION_CONTRACTS.json: Versioned transaction-cost and capital-constraint contracts (E0, E1, E2, E3).
-- DATA_CONTRACTS.json: Versioned dataset contracts with date boundaries, causal flags, and hashes.
-- Enforces that all backtests reference explicit contract IDs rather than ambiguous prose.
+- EXECUTION_CONTRACTS.json: Versioned environment, cost, latency, or resource-constraint contracts.
+- DATA_CONTRACTS.json: Versioned dataset contracts with time/split boundaries, causal flags, and hashes.
+- Enforces that all evaluations and benchmarks reference explicit contract IDs rather than ambiguous prose.
 """
 from __future__ import annotations
 
@@ -46,13 +46,13 @@ class ExecutionContractManager:
         cid = contract.contract_id
         if cid in self.contracts:
             existing = self.contracts[cid]
-            if existing.total_roundtrip_bps != contract.total_roundtrip_bps:
+            if existing.to_dict() != contract.to_dict():
                 return False, (
-                    f"Execution contract '{cid}' already exists with {existing.total_roundtrip_bps} bps. "
-                    "In-place cost changes are prohibited. Register a new contract ID (e.g. E1_V2)."
+                    f"Execution contract '{cid}' already exists with different parameters. "
+                    f"In-place contract changes are prohibited. Register a new versioned contract ID (e.g. '{cid}_V2')."
                 )
         self.contracts[cid] = contract
-        return True, f"Contract '{cid}' registered ({contract.total_roundtrip_bps} bps roundtrip)."
+        return True, f"Execution contract '{cid}' registered."
 
     def get_contract(self, contract_id: str) -> Optional[ExecutionContract]:
         return self.contracts.get(contract_id)
@@ -88,51 +88,15 @@ class DataContractManager:
 
     def register_contract(self, contract: DataContract) -> Tuple[bool, str]:
         self.contracts[contract.contract_id] = contract
-        return True, f"Data contract '{contract.contract_id}' registered for symbol '{contract.symbol}'."
+        return True, f"Data contract '{contract.contract_id}' registered for '{contract.symbol}'."
 
     def get_contract(self, contract_id: str) -> Optional[DataContract]:
         return self.contracts.get(contract_id)
 
 
 def build_default_execution_contracts(program_id: str) -> ExecutionContractManager:
-    """Builds canonical execution contracts adhering to Master Plan V3.5 §15."""
+    """Builds a clean, project-agnostic execution contract registry."""
     mgr = ExecutionContractManager(Path("."))
-    mgr.contracts = {
-        "E0_ZERO_COST": ExecutionContract(
-            contract_id="E0_ZERO_COST",
-            name="Ideal Zero Cost Benchmark",
-            maker_fee_bps=0.0,
-            taker_fee_bps=0.0,
-            slippage_bps=0.0,
-            total_roundtrip_bps=0.0,
-            capital_cap_pct=100.0,
-            cash_reserve_pct=0.0,
-            allowed_for_production=False,
-            notes="Exploratory upper-bound reference only"
-        ),
-        "E1_CANONICAL_REALISTIC": ExecutionContract(
-            contract_id="E1_CANONICAL_REALISTIC",
-            name="Canonical Realistic Friction V1",
-            maker_fee_bps=5.0,
-            taker_fee_bps=5.0,
-            slippage_bps=14.0,
-            total_roundtrip_bps=38.0,
-            capital_cap_pct=35.0,
-            cash_reserve_pct=10.0,
-            allowed_for_production=True,
-            notes="Master Plan contract: 5 bps taker entry + 5 bps taker exit + 14 bps slippage x 2 = 38 bps roundtrip"
-        ),
-        "E2_STRESSED": ExecutionContract(
-            contract_id="E2_STRESSED",
-            name="High Friction Stress Scenario",
-            maker_fee_bps=10.0,
-            taker_fee_bps=10.0,
-            slippage_bps=25.0,
-            total_roundtrip_bps=70.0,
-            capital_cap_pct=35.0,
-            cash_reserve_pct=10.0,
-            allowed_for_production=False,
-            notes="Stress testing for high volatility regimes"
-        )
-    }
+    mgr.contracts = {}
     return mgr
+

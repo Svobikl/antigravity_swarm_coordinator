@@ -2,7 +2,7 @@
 """Run Report Consistency & Contradiction Audit.
 
 Usage:
-    python .antigravity/scripts/run_report_consistency_audit.py [--program-dir research_v3/mode5]
+    python .antigravity/scripts/run_report_consistency_audit.py [--program-dir docs/agentic/mode5]
 """
 import argparse
 from pathlib import Path
@@ -21,7 +21,7 @@ from semantic.consistency import ReportConsistencyAuditor
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Report Consistency Audit (Antigravity V4.1)")
-    parser.add_argument("--program-dir", type=str, default="research_v3/mode5", help="Path to program directory")
+    parser.add_argument("--program-dir", type=str, default="docs/agentic/mode5", help="Path to program directory")
     parser.add_argument("--report", type=str, default=None, help="Specific report file to check")
     args = parser.parse_args()
 
@@ -36,7 +36,7 @@ def main() -> int:
         reports = [Path(args.report).resolve()]
     else:
         reports = list(p_dir.glob("*.md"))
-        rep_dir = REPO_ROOT / "research_v3/reports"
+        rep_dir = REPO_ROOT / ".agent-workspace/reports"
         if rep_dir.exists():
             reports.extend(rep_dir.glob("*.md"))
 

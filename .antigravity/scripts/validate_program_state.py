@@ -343,7 +343,6 @@ def main() -> int:
 
     if not graph_path:
         candidates = (
-            list(root_dir.glob("research_v3/mode5/TASK_GRAPH.json")) +
             list(root_dir.glob("docs/agentic/**/TASK_GRAPH.json")) +
             list(root_dir.glob(".agent-workspace/**/TASK_GRAPH.json"))
         )
@@ -352,8 +351,8 @@ def main() -> int:
 
     if not coverage_path:
         candidates = (
-            list(root_dir.glob("research_v3/mode5/REQUIREMENT_COVERAGE.csv")) +
-            list(root_dir.glob("docs/agentic/**/REQUIREMENT_COVERAGE.csv"))
+            list(root_dir.glob("docs/agentic/**/REQUIREMENT_COVERAGE.csv")) +
+            list(root_dir.glob(".agent-workspace/**/REQUIREMENT_COVERAGE.csv"))
         )
         if candidates:
             coverage_path = candidates[0]

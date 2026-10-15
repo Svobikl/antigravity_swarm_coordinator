@@ -53,4 +53,4 @@ Use them for discovery, durable decisions, failed hypotheses, and artifact point
 
 ## Expected effect
 
-The V4 design specifically targets the observed failure mode in the quant research work: branches such as Laya or sentiment can no longer disappear from a completion report if they remain unmapped/unverified, and a report cannot claim 100% completion unless the source-plan coverage and task graph both close with direct evidence.
+The V4 design specifically targets the observed failure mode in long-horizon engineering and research work: planned sub-branches or experimental tracks can no longer disappear from a completion report if they remain unmapped/unverified, and a report cannot claim 100% completion unless the source-plan coverage and task graph both close with direct evidence.

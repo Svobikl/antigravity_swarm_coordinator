@@ -1,8 +1,8 @@
 """Antigravity V4.1 Metric Definition Registry and Versioning.
 
 Implements:
-- Canonical metric naming, formulas, units, frequency, and annualization
-- Mandatory metric versioning (prevents silent in-place changes to Sharpe, DSR, etc.)
+- Canonical metric naming, formulas, units, and aggregation frequency
+- Mandatory metric versioning (prevents silent in-place formula modifications)
 - Test vector validation to verify deterministic calculations
 """
 from __future__ import annotations
@@ -49,7 +49,7 @@ class MetricRegistryManager:
                 return False, (
                     f"Metric '{key}' already registered with version {existing.version}. "
                     f"To update formula, you MUST register a new versioned metric (e.g., '{key}_v2'). "
-                    "Silent formula modification is forbidden by V4.1 Metric Governance (§15)."
+                    "Silent formula modification is forbidden by V4.1 Metric Governance."
                 )
         self.metrics[key] = metric
         return True, f"Metric '{key}' successfully registered at version {metric.version}."
@@ -59,63 +59,8 @@ class MetricRegistryManager:
 
 
 def build_default_metric_registry(program_id: str) -> MetricRegistryManager:
-    """Builds canonical metrics for quantitative research programs."""
+    """Builds an empty, project-agnostic metric registry ready for program-specific definitions."""
     mgr = MetricRegistryManager(Path("."))
-    canonical_metrics = {
-        "sharpe_ratio": MetricDefinition(
-            canonical_name="annualized_sharpe_ratio",
-            version="1.0.0",
-            formula="(mean(excess_returns) / std(excess_returns)) * sqrt(annualization_factor)",
-            units="ratio",
-            frequency="4h",
-            annualization_factor=2190.0,
-            implementation_path="research_v3/framework/metrics.py",
-            test_vectors=[
-                {"description": "Unit test verification in test_backtester_accounting.py"}
-            ]
-        ),
-        "sortino_ratio": MetricDefinition(
-            canonical_name="annualized_sortino_ratio",
-            version="1.0.0",
-            formula="(mean(excess_returns) / downside_std(excess_returns)) * sqrt(annualization_factor)",
-            units="ratio",
-            frequency="4h",
-            annualization_factor=2190.0,
-            implementation_path="research_v3/framework/metrics.py"
-        ),
-        "deflated_sharpe_ratio": MetricDefinition(
-            canonical_name="deflated_sharpe_ratio",
-            version="1.0.0",
-            formula="Bailey_de_Prado_2014_DSR(sharpe, var_sharpe, trials_effective, skewness, kurtosis)",
-            units="probability [0, 1]",
-            frequency="cumulative",
-            annualization_factor=None,
-            implementation_path="research_v3/framework/dsr.py"
-        ),
-        "profit_factor": MetricDefinition(
-            canonical_name="profit_factor",
-            version="1.0.0",
-            formula="sum(positive_trade_pnl) / abs(sum(negative_trade_pnl))",
-            units="ratio",
-            frequency="trade_level",
-            implementation_path="research_v3/framework/metrics.py"
-        ),
-        "max_drawdown_pct": MetricDefinition(
-            canonical_name="maximum_drawdown_percentage",
-            version="1.0.0",
-            formula="min((equity_curve - rolling_peak) / rolling_peak) * 100",
-            units="percentage",
-            frequency="continuous",
-            implementation_path="research_v3/framework/metrics.py"
-        ),
-        "trades_per_year": MetricDefinition(
-            canonical_name="annualized_trade_frequency",
-            version="1.0.0",
-            formula="total_trades / (duration_days / 365.25)",
-            units="trades/year",
-            frequency="annualized",
-            implementation_path="research_v3/framework/metrics.py"
-        )
-    }
-    mgr.metrics = canonical_metrics
+    mgr.metrics = {}
     return mgr
+

@@ -2,7 +2,7 @@
 """Run Invariant Audit for a Mode 5 program.
 
 Usage:
-    python .antigravity/scripts/run_invariant_audit.py [--program-dir research_v3/mode5]
+    python .antigravity/scripts/run_invariant_audit.py [--program-dir docs/agentic/mode5]
 """
 import argparse
 from pathlib import Path
@@ -21,7 +21,7 @@ from semantic.invariants import InvariantManager
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Invariant Audit (Antigravity V4.1)")
-    parser.add_argument("--program-dir", type=str, default="research_v3/mode5", help="Path to program directory")
+    parser.add_argument("--program-dir", type=str, default="docs/agentic/mode5", help="Path to program directory")
     args = parser.parse_args()
 
     p_dir = Path(args.program_dir).resolve()

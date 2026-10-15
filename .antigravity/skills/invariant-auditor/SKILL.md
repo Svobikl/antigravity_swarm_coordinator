@@ -10,7 +10,7 @@ Enforce non-negotiable program invariants and prevent silent contract drift acro
 - Verify that every parameter (economic costs, statistical thresholds, safety constraints, data causality, skill limits) matches canonical values.
 
 ### 2. Drift Classification
-- **Hard Drift:** Unauthorized modification of canonical parameters (e.g. 38 bps -> 34 bps, DSR 0.95 -> 0.80). Automatically blocks completion (`INVARIANT_DRIFT_BLOCKING`).
+- **Hard Drift:** Unauthorized modification of canonical parameters (e.g. relaxing acceptance thresholds, altering evaluation constraints, or bypassing required verification gates). Automatically blocks completion (`INVARIANT_DRIFT_BLOCKING`).
 - **Soft Drift:** Legitimate empirical exploration. Allowed only if explicitly designated as an experimental alternative, while the canonical baseline remains reported and evaluated.
 
 ### 3. Governed Override Governance
