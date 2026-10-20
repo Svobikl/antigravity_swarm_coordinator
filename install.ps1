@@ -26,8 +26,8 @@
     Installs global prompt, skills, and plugin.
 
 .EXAMPLE
-    .\install.ps1 -TargetRepoPath "C:\MyProject"
-    Installs global components plus copies .antigravity into C:\MyProject.
+    .\install.ps1 -TargetRepoPath "~/Projects/MyProject"
+    Installs global components plus copies .antigravity into ~/Projects/MyProject.
 #>
 
 [CmdletBinding()]

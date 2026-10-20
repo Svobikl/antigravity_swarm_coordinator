@@ -25,7 +25,10 @@ These rules define a language-, framework-, platform-, and product-agnostic work
 17. **4-Axis Completion Architecture (V4.1).** Every Mode 5 program must evaluate four independent axes: `MECHANICAL_COMPLETION`, `SEMANTIC_INTEGRITY`, `SCIENTIFIC_VALIDITY`, and `FORWARD_VALIDATION`. A program with forward paper shadow validation in progress must never be summarized as "100% Validated" or "Production Ready".
 18. **Dual-Auditor & Three-Auditor Governance (V4.1).** Closure requires independent verification from both `completion-auditor` (mechanical) and `semantic-completion-auditor` (semantic), plus `research-validity-auditor` for empirical research programs.
 19. **Research Pre-Registration & Post-Hoc Protection (V4.1).** Research agents must explicitly report `PRE_REGISTERED_CRITERION`, `OBSERVED_RESULT`, and `CRITERION_PASS?`. Post-hoc relaxation of criteria or economic friction without governed overrides is strictly prohibited.
-20. **Dual-Model Cognitive Routing (`Gemini 4 Argon High` + `Gemini 3.8 Flash High`).** All research, problem analysis, root-cause isolation, architecture design, implementation planning, and adversarial/completion auditing MUST run on **`Gemini 4 Argon (High)` (`Model="pro"`)**. All bounded leaf code implementation, TDD RED-to-GREEN test coding/execution, local scouting, and mechanical cleanup MUST run on **`Gemini 3.8 Flash (High)` (`Model="flash"`)**.
+20. **Tri-Model Cross-Family Cognitive Routing (`Gemini 4 Argon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`).**
+   - **Tier 1A (`Gemini 4 Argon High` / `Model="pro"`):** Primary Architect, Planner, and Harness² Proposer for all research, problem analysis, root-cause isolation, architecture design, and Mode 3/5 implementation planning (`asw-planner`).
+   - **Tier 1B (`Claude Opus 5.5` natively in Antigravity):** Independent Cross-Family Opposition Reviewer, Plan Auditor, and Blind Selector. Mandated for Pre-Execution Plan Opposition Reviews across 6 adversarial vectors (`asw-plan-audit`), Code Diff & Evidence Opposition Reviews across 4 attack vectors (`asw-opposition-reviewer`), and Harness² blind candidate selection (`channels["selector"]`).
+   - **Tier 2 (`Gemini 3.8 Flash High` / `Model="flash"`):** High-velocity bounded leaf implementation (`asw-loop`, `asw-start-work`), RED-to-GREEN TDD execution (`validator-build-test-agent`), local scouting, and mechanical cleanup.
 21. **3-Layer Functional Verification Gate.** Syntax checks or mocked unit tests never prove functional completion. Every behavior-changing task requires: (1) Static/Build/Type integrity, (2) Automated happy-path + negative/edge-case tests, and (3) **Real-Surface End-to-End Execution Proof** (invoking the actual CLI, API, UI, or data pipeline entrypoint with observable runtime output).
 22. **Zero-Unchecked-Plan Closure Gate.** Any task with 3+ steps across Modes 2, 3, and 5 must maintain an on-disk checklist (`.asw/plans/<slug>.md` or `TASK_GRAPH.json`). Stopping or summarizing work as complete while any `- [ ]` checkbox or non-terminal leaf task remains open is strictly prohibited.
 
@@ -131,30 +134,34 @@ Mandatory Control Plane Lifecycle:
 
 ---
 
-## 4. Single-Orchestrator Rule, Dual-Model Routing & Subagent Contracts
+## 4. Single-Orchestrator Rule, Tri-Model Cross-Family Routing & Subagent Contracts
 
 ### Single Orchestrator
 - `swarm-coordinator` (running on **`Gemini 4 Argon (High)`**) is the sole global orchestrator.
 - External or third-party orchestration tools (e.g. ASW, Conductor, CrewAI, AutoGen patterns) must operate strictly as subordinate helper skills for specific leaf tasks, never as peer global controllers.
 - Subagents, reviewers, and helpers report findings back to the Coordinator. Only the Coordinator updates `TASK_GRAPH.json`, `PROGRAM_STATE.md`, and `.asw/plans/<slug>.md`.
 
-### Dual-Model Cognitive Routing Policy
-To maximize architectural rigor and execution velocity while preventing context exhaustion:
-1. **Tier 1 — `Gemini 4 Argon (High)` (`Model="pro"` in `invoke_subagent`):**
+### Tri-Model Cross-Family Cognitive Routing Policy
+To maximize architectural rigor, cross-family adversarial robustness, and execution velocity while preventing context exhaustion:
+1. **Tier 1A - Primary Architect, Planner & Proposer (`Gemini 4 Argon (High)` / `Model="pro"` in `invoke_subagent`):**
    - **Mandatory for:**
      - **Research & Discovery:** Mode 1 investigations, domain/codebase research (`spec-product-analyst`), and external documentation synthesis (`asw-librarian`, `asw-planning-analysis`).
      - **Problem Analysis & Root-Cause Isolation:** Bug triage, architectural bottleneck analysis, failure-mode modeling (`systematic-debugging`, `asw-debug`).
-     - **Architecture & Implementation Planning:** Mode 3 Phase 1 technical design (`software-architect`), Mode 5 plan freeze & task graph decomposition (`program-state-controller`), executable plan writing (`asw-planner`), and plan readiness audits (`asw-plan-audit`).
-     - **Adversarial Review & Final Audits:** Independent code/diff falsification (`opposition-reviewer`, `asw-reviewer`), product QA (`acceptance-reviewer-product-qa`), and mechanical/semantic completion audits (`completion-auditor`, `semantic-completion-auditor`).
-2. **Tier 2 — `Gemini 3.8 Flash (High)` (`Model="flash"` in `invoke_subagent`):**
+     - **Architecture & Implementation Planning:** Mode 3 Phase 1 technical design (`software-architect`), Mode 5 plan freeze & task graph decomposition (`program-state-controller`), and executable plan writing (`asw-planner`).
+     - **Harness² Adaptation Proposer:** Proposing invariant (`INV`), domain (`DOM`), and composition (`COMPOSE`) harness mutations.
+2. **Tier 1B - Independent Cross-Family Opposition Reviewer & Blind Selector (`Claude Opus 5.5` natively in Antigravity):**
+   - **Mandatory for:**
+     - **Pre-Execution Plan Opposition Review Gate:** Independent audit of implementation plans across the 6 adversarial vectors (`asw-plan-audit`, `invoke_opus_reviewer.py --mode plan-review`) before execution waves are dispatched.
+     - **Diff & Evidence Opposition Gate:** Falsifying code diffs, verifying negative/edge test proof, checking blast radius, and detecting lookahead/data leakage (`asw-opposition-reviewer`, `invoke_opus_reviewer.py --mode diff-review`).
+     - **Blind Candidate Selection & Reflection:** Acting as `channels["selector"]` in Harness² adaptation sweeps, ensuring primary proposers never grade or select their own proposals.
+3. **Tier 2 - High-Velocity Implementation & Bounded Execution (`Gemini 3.8 Flash (High)` / `Model="flash"` in `invoke_subagent`):**
    - **Mandatory for:**
      - **Bounded Leaf Implementation:** Writing production code diffs under a decision-complete task contract (`implementation-developer`, `asw-loop`, `asw-start-work`).
      - **TDD & Test Suite Execution:** Writing RED-to-GREEN unit/integration/E2E tests and executing canonical build/test commands (`validator-build-test-agent`, `interaction-e2e-tester`).
-     - **Fast Repository Scouting & Cleanup:** Local file/symbol exploration (`asw-explorer`) and mechanical code cleanup (`asw-cleanup`).
-3. **Efficiency Invariant (Argon Plans & Verifies -> Flash Implements):**
-   - Never burn `Gemini 4 Argon (High)` context on multi-file boilerplate writing or repetitive compile-fix loops.
-   - `Gemini 4 Argon (High)` produces a **Decision-Complete Task Contract** and dispatches 1–4 parallel `Gemini 3.8 Flash (High)` subagents (`Model="flash"`).
-   - Once `Gemini 3.8 Flash (High)` returns its `Leaf Task Receipt`, `Gemini 4 Argon (High)` independently verifies the 3-layer runtime proof before marking the task complete.
+     - **Fast Local Scouting & Mechanical Cleanup:** Rapid file/symbol lookup (`asw-explorer`) and behavior-preserving code cleanup (`asw-cleanup`).
+4. **Efficiency Invariant (Argon Plans -> Opus Audits -> Flash Implements -> Opus & Argon Verify):**
+   - Never burn `Gemini 4 Argon (High)` or `Claude Opus 5.5` context on multi-file boilerplate writing or repetitive compile-fix loops.
+   - `Gemini 4 Argon (High)` produces a **Decision-Complete Task Contract** and implementation plan; `Claude Opus 5.5` audits and approves the plan; `Gemini 3.8 Flash (High)` executes the bounded leaf implementation; `Claude Opus 5.5` and `completion-auditor` audit empirical evidence before completion sign-off.
 
 ### Bounded Subagent Contracts
 When launching subagents (e.g. via `invoke_subagent`):
@@ -373,7 +380,7 @@ Rules:
 
 ---
 
-## 16. Independent Review Model (`Gemini 4 Argon High`)
+## 16. Independent Review Model (`Claude Opus 5.5` + `Gemini 4 Argon High`)
 
 For Mode 3 and Mode 5 (and risky Mode 2 work), use independent review roles running on **`Gemini 4 Argon (High)`**:
 
@@ -463,7 +470,7 @@ Before declaring completion of any task or program, verify all applicable items:
 - requested scope is 100% implemented (zero dropped steps);
 - zero unresolved high-impact assumptions;
 - **3-Layer Functional Verification Gate passed** (Static/Build + Automated Happy/Negative Tests + Real-Surface Runtime Execution Proof);
-- independent `Gemini 4 Argon (High)` reviews passed;
+- independent `Gemini 4 Argon (High)` and Antigravity-native `Claude Opus 5.5` reviews passed;
 - **for Mode 2 (3+ steps) and Mode 3:**
   - `.asw/plans/<slug>.md` has **zero `- [ ]` unchecked items** (100% `- [x]`);
   - zero placeholder stubs (`TODO`, `FIXME`, `NotImplementedError`) remain in modified files;
@@ -477,7 +484,7 @@ Before declaring completion of any task or program, verify all applicable items:
 - unrelated user changes preserved;
 - known limitations and risks disclosed.
 
-**Hard Rule:** It is strictly prohibited to declare "100% complete" based on narrative summaries or mocked unit tests alone. Completion requires machine-verifiable plan/task-graph closure, real-surface runtime proof, and independent `Gemini 4 Argon (High)` auditor sign-off.
+**Hard Rule:** It is strictly prohibited to declare "100% complete" based on narrative summaries or mocked unit tests alone. Completion requires machine-verifiable plan/task-graph closure, real-surface runtime proof, and independent `Gemini 4 Argon (High)` auditor sign-off and cross-family opposition review sign-off by **Claude Opus 5.5**.
 
 ---
 

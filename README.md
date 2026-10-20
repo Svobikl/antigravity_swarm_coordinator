@@ -49,9 +49,17 @@ In Antigravity, the swarm coordinator functions under the **Single Orchestrator 
 
 ### Core Rules
 1. **Single Orchestrator:** `swarm-coordinator` is the SOLE authority for global scope and state. Helper orchestration tools (ASW, Conductor) act strictly as localized sub-workflows under coordinator control.
-2. **Dual-Model Cognitive Routing (`Gemini 4 Argon High` + `Gemini 3.8 Flash High`):**
-   - **Tier 1 (`Gemini 4 Argon (High)` / `Model="pro"`):** Mandatory for all **research, problem analysis, root-cause isolation, architecture design, implementation planning**, and **independent adversarial/completion auditing** (`swarm-coordinator`, `spec-product-analyst`, `software-architect`, `asw-planner`, `asw-plan-audit`, `opposition-reviewer`, `acceptance-reviewer-product-qa`, `completion-auditor`).
-   - **Tier 2 (`Gemini 3.8 Flash (High)` / `Model="flash"`):** Mandatory for **high-velocity bounded code implementation, TDD RED-to-GREEN cycles, test suite execution**, and **fast local repository scouting** (`implementation-developer`, `asw-loop`, `validator-build-test-agent`, `interaction-e2e-tester`, `asw-explorer`).
+2. **Tri-Model Cross-Family Cognitive Routing (`Gemini 4 Argon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`):**
+   - **Tier 1A (`Gemini 4 Argon (High)` / `Model="pro"`):** Mandatory Primary Architect, Planner, Synthesizer & Harness? Proposer (`swarm-coordinator`, `spec-product-analyst`, `software-architect`, `asw-planner`, `completion-auditor`).
+   - **Tier 1B (`Claude Opus 5.5` natively in Antigravity / `model = "claude-opus-5-5"`):** Mandatory Cross-Family **Opposition Reviewer, Plan Auditor & Blind Selector**:
+     - **Pre-Execution Plan Opposition Gate (`asw-plan-audit.toml` / `invoke_opus_reviewer.py --mode plan-review`):** Every implementation plan drafted by `Gemini 4 Argon (High)` is audited across 6 adversarial vectors before execution waves are dispatched.
+     - **Execution & Diff Opposition Gate (`asw-opposition-reviewer.toml` / `invoke_opus_reviewer.py --mode diff-review`):** Falsifies empirical claims, boundary cases, and negative test coverage before task closure, and serves as `channels["selector"]` in Harness? adaptation sweeps.
+   - **Tier 2 (`Gemini 3.8 Flash (High)` / `Model="flash"`):** Mandatory for **high-velocity bounded code implementation, TDD RED-to-GREEN cycles, test suite execution**, and **isolated git-worktree candidate rollouts** (`implementation-developer`, `asw-loop`, `validator-build-test-agent`, `interaction-e2e-tester`, `asw-explorer`).
+3. **Harness? Recursive Adaptation Engine (`.antigravity/harness2/` & `asw-harness-adapt`):**
+   - Integrates Google Research's **Harness?** (`Propose?Probe?Compose?Select?Reflect`) hardened for cross-platform Windows + POSIX execution (`msvcrt.locking` / `fcntl.flock`, `.as_posix()` path normalization, symlink/junction rejection).
+   - Enforces immutable governance protection (`ANTIGRAVITY_SURFACE` / `AntigravitySubstrate`) preventing self-modification of `GLOBAL_DEVELOPMENT_RULES.md`, `PROGRAM_INVARIANTS.json`, or `METRIC_REGISTRY.json`.
+   - Automatically syncs verified `EXPERIENCE.md` lessons (filtered via `assert_no_grader_verdicts`) into the path-independent Obsidian Knowledge Vault (`~/Documents/AgentMemory` or `$OBSIDIAN_VAULT_PATH`).
+4. **100% Path-Independence Invariant:** Zero hardcoded user directory paths or literal usernames anywhere in the coordinator, skills, plugins, or scripts (enforced mechanically by `tests/test_path_independence.py` and `AntigravitySubstrate.validate()`).
 3. **3-Layer Functional Verification Gate:** Syntax checks or mocked unit tests alone never prove completion. Every behavior-changing task requires: (1) Static/Build/Type integrity, (2) Automated happy-path + negative/edge-case tests, and (3) **Real-Surface End-to-End Runtime Proof** (invoking the actual CLI, API, UI, or data pipeline entrypoint with observable output).
 4. **Zero-Unchecked-Plan Closure Gate:** Multi-step tasks (Modes 2, 3, and 5) maintain an on-disk checklist (`.asw/plans/<slug>.md` or `TASK_GRAPH.json`) enforced by `asw-stop-check.mjs` and `completion-auditor`. Stopping while any `- [ ]` checkbox remains open is prohibited.
 5. **Active Skill Budget:** Enforces a strict budget of **maximum 8 active skills** loaded in context per leaf task, preventing context-window degradation.
@@ -207,7 +215,7 @@ Run the included PowerShell script from a PowerShell prompt:
 .\install.ps1
 
 # 2. Or restore globally and deploy .antigravity into a specific project repository:
-.\install.ps1 -TargetRepoPath "C:\Path\To\YourProject"
+.\install.ps1 -TargetRepoPath "~/Projects/YourProject"
 ```
 
 The script will:
