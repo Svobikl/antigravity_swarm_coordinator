@@ -79,7 +79,7 @@ Do not preload every skill. The installed catalog is a searchable on-disk refere
 
 # Obsidian Self-Learning Knowledge Vault
 
-Persistent self-learning knowledge vault located at `~/Documents/AgentMemory` (or `$OBSIDIAN_VAULT_PATH` if set), managed via `.antigravity/scripts/memory_manager.py` and the `obs-memory` / `memory-state-curator` skills.
+Persistent self-learning knowledge vault located at `~/Documents/AgentMemory` (or `$OBSIDIAN_VAULT_PATH` if set), managed via `.antigravity/scripts/memory_manager.py` (with global fallback `~/.gemini/scripts/memory_manager.py`, which auto-provisions `.antigravity/scripts/` into any new project directory) and the `obs-memory` / `memory-state-curator` skills.
 
 ## Continuous Self-Learning & Project Memory Protocol (Mandatory)
 - **Session Start & Pre-Task Auto-Recall**: Before planning or executing any non-trivial task (code, presentation, architecture, research), run `python .antigravity/scripts/memory_manager.py --recall --project-path . --task-type <code|presentation|research|general>` to load `profile/User and Company Profile.md`, domain preferences (`Presentations and Visual Style.md`, `Coding and Architecture Preferences.md`), `lessons/Engineering Lessons and Anti-Patterns.md`, and the project overview in `projects/{project-name}/` (auto-indexing the project if missing).

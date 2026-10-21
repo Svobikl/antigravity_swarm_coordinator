@@ -285,6 +285,67 @@ class TestObsidianMemoryManager(unittest.TestCase):
             )
             self.assertNotEqual(bad_proj.returncode, 0)
 
+    def test_auto_provisions_antigravity_and_handles_cp1252_unicode_edge(self):
+        """Recalling or indexing a sub-project auto-provisions .antigravity/scripts/memory_manager.py and handles cp1252 stdout without UnicodeEncodeError."""
+        import os
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            vault_dir = tmp_path / "AgentMemory"
+            sub_proj = tmp_path / "edgerelay_subproject"
+            sub_proj.mkdir(parents=True)
+            (sub_proj / "README.md").write_text(
+                "# EdgeRelay²\n\nPříliš žluťoučký kůň s podporou Harness² a ℝ³.\n",
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["PYTHONIOENCODING"] = "cp1252"
+
+            # First call via script_path with PYTHONIOENCODING=cp1252
+            p1 = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.script_path),
+                    "--recall",
+                    "--project-path",
+                    str(sub_proj),
+                    "--task-type",
+                    "code",
+                    "--vault-dir",
+                    str(vault_dir),
+                ],
+                capture_output=True,
+                env=env,
+            )
+            self.assertEqual(p1.returncode, 0, f"Failed under cp1252: {p1.stderr.decode('utf-8', errors='replace')}")
+
+            # Verify .antigravity/scripts/memory_manager.py was auto-provisioned into sub_proj
+            local_mm = sub_proj / ".antigravity" / "scripts" / "memory_manager.py"
+            self.assertTrue(
+                local_mm.is_file(),
+                "memory_manager.py must auto-provision .antigravity/scripts/memory_manager.py into target project",
+            )
+
+            # Now run the exact command from inside sub_proj using relative path .antigravity/scripts/memory_manager.py
+            p2 = subprocess.run(
+                [
+                    sys.executable,
+                    ".antigravity/scripts/memory_manager.py",
+                    "--recall",
+                    "--project-path",
+                    ".",
+                    "--task-type",
+                    "code",
+                    "--vault-dir",
+                    str(vault_dir),
+                ],
+                cwd=str(sub_proj),
+                capture_output=True,
+                env=env,
+            )
+            self.assertEqual(p2.returncode, 0, f"Relative invocation inside sub_proj failed: {p2.stderr.decode('utf-8', errors='replace')}")
+
 
 if __name__ == "__main__":
     unittest.main()

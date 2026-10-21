@@ -91,6 +91,7 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             fake_home = Path(tmp) / "home"
             fake_target = Path(tmp) / "target_project"
+            (fake_target / "edgerelay_child" / ".git").mkdir(parents=True, exist_ok=True)
             proc = subprocess.run(
                 [
                     sys.executable,
@@ -110,6 +111,9 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
             self.assertTrue((fake_home / ".agents" / "AGENTS.md").is_file())
             self.assertTrue((fake_home / ".gemini" / "config" / "plugins" / "antigravity-swarm" / "agents" / "asw-plan-audit.toml").is_file())
             self.assertTrue((fake_target / ".antigravity" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md").is_file())
+            self.assertTrue((fake_home / ".gemini" / "scripts" / "memory_manager.py").is_file(), "install.py must install global ~/.gemini/scripts/memory_manager.py")
+            self.assertTrue((fake_home / ".gemini" / ".antigravity" / "scripts" / "memory_manager.py").is_file(), "install.py must install global ~/.gemini/.antigravity")
+            self.assertTrue((fake_target / "edgerelay_child" / ".antigravity" / "scripts" / "memory_manager.py").is_file(), "install.py must deploy .antigravity/scripts into child git repos")
             # Verify Obsidian Knowledge Vault is automatically enforced & target project indexed
             vault_dir = fake_home / "Documents" / "AgentMemory"
             self.assertTrue((vault_dir / "Home.md").is_file(), "install.py must enforce local Obsidian Vault initialization")

@@ -157,14 +157,38 @@ def run_install(
             summary["agents_synced"] = count
             summary["plugin_installed"] = True
 
-    # 4. Optional Target Repository Deployment
+    # 3B. Global .antigravity & ~/.gemini/scripts installation (so scripts work in any directory)
+    src_ag_global = repo_root / ".antigravity"
+    if src_ag_global.is_dir():
+        copy_tree_clean(src_ag_global, gemini_dir / ".antigravity")
+        global_scripts_dst = gemini_dir / "scripts"
+        global_scripts_dst.mkdir(parents=True, exist_ok=True)
+        src_scripts = src_ag_global / "scripts"
+        if src_scripts.is_dir():
+            for script_file in src_scripts.iterdir():
+                if script_file.is_file():
+                    shutil.copy2(script_file, global_scripts_dst / script_file.name)
+
+    # 4. Optional Target Repository Deployment (including child git repositories)
     resolved_target: Path | None = None
     if target_repo is not None:
         resolved_target = target_repo.expanduser().resolve()
         resolved_target.mkdir(parents=True, exist_ok=True)
         src_ag = repo_root / ".antigravity"
         if src_ag.is_dir():
-            copy_tree_clean(src_ag, resolved_target / ".antigravity")
+            if resolved_target != repo_root:
+                copy_tree_clean(src_ag, resolved_target / ".antigravity")
+            for child in sorted(resolved_target.iterdir()):
+                if child.is_dir() and (child / ".git").exists() and child.resolve() != repo_root.resolve():
+                    child_ag = child / ".antigravity"
+                    for sub_name in ("scripts", "rules", "agents"):
+                        src_sub = src_ag / sub_name
+                        dst_sub = child_ag / sub_name
+                        if src_sub.is_dir():
+                            dst_sub.mkdir(parents=True, exist_ok=True)
+                            for item in src_sub.iterdir():
+                                if item.is_file():
+                                    shutil.copy2(item, dst_sub / item.name)
             summary["target_repo_deployed"] = True
 
     # 5. Enforced Local Obsidian Self-Learning Knowledge Vault & Project Indexing

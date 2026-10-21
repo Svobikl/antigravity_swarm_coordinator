@@ -34,6 +34,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -522,6 +523,44 @@ def _detect_project_metadata(project_path: Path) -> dict[str, object]:
     }
 
 
+def ensure_project_antigravity(project_path: Path, home_dir: Path | None = None) -> bool:
+    """Ensure the target project directory has .antigravity/scripts, rules, and agents provisioned."""
+    proj_dir = project_path.expanduser().resolve()
+    if not proj_dir.is_dir():
+        return False
+    target_ag = proj_dir / ".antigravity"
+    if (target_ag / "scripts" / "memory_manager.py").is_file() and (
+        target_ag / "rules" / "GLOBAL_DEVELOPMENT_RULES.md"
+    ).is_file():
+        return True
+
+    base_home = home_dir.expanduser().resolve() if home_dir else Path.home()
+    script_parent_ag = Path(__file__).resolve().parent.parent
+    donor_candidates = [
+        script_parent_ag,
+        base_home / ".gemini" / ".antigravity",
+        proj_dir.parent / ".antigravity",
+    ]
+    donor_ag: Path | None = None
+    for cand in donor_candidates:
+        if (cand / "scripts" / "memory_manager.py").is_file():
+            donor_ag = cand
+            break
+
+    if donor_ag is None or donor_ag.resolve() == target_ag.resolve():
+        return False
+
+    for sub_name in ("scripts", "rules", "agents"):
+        src_sub = donor_ag / sub_name
+        dst_sub = target_ag / sub_name
+        if src_sub.is_dir():
+            dst_sub.mkdir(parents=True, exist_ok=True)
+            for item in src_sub.iterdir():
+                if item.is_file():
+                    shutil.copy2(item, dst_sub / item.name)
+    return (target_ag / "scripts" / "memory_manager.py").is_file()
+
+
 def index_project(
     project_path: Path | str,
     vault_dir: Path | str | None = None,
@@ -532,6 +571,8 @@ def index_project(
     proj_dir = Path(project_path).expanduser().resolve()
     if not proj_dir.is_dir():
         raise FileNotFoundError(f"Project directory does not exist: {proj_dir}")
+
+    ensure_project_antigravity(proj_dir, home_dir=home_dir)
 
     v_dir = resolve_vault_dir(vault_dir, home_dir=home_dir)
     init_vault(v_dir, home_dir=home_dir)
@@ -841,6 +882,7 @@ def recall_context(
     if project_path is not None and str(project_path).strip():
         p_path = Path(project_path).expanduser().resolve()
         if p_path.is_dir():
+            ensure_project_antigravity(p_path, home_dir=home_dir)
             resolved_project_name = resolved_project_name or p_path.name
             if not (v_dir / "projects" / resolved_project_name / f"{resolved_project_name}.md").is_file():
                 index_project(p_path, vault_dir=v_dir, project_name=resolved_project_name, home_dir=home_dir)
@@ -888,6 +930,10 @@ def recall_context(
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description="Obsidian Self-Learning Memory & Project Knowledge Engine")
     parser.add_argument("--vault-dir", type=Path, default=None, help="Override Obsidian Vault directory")
     parser.add_argument("--obsidian-config", type=Path, default=None, help="Override obsidian.json path")
@@ -973,7 +1019,11 @@ def main() -> int:
                 project_path=args.project_path,
                 task_type=args.task_type,
             )
-            sys.stdout.write(out_md)
+            try:
+                sys.stdout.write(out_md)
+                sys.stdout.flush()
+            except (BrokenPipeError, OSError):
+                pass
             return 0
 
         parser.print_help()
