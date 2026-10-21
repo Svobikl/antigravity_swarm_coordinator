@@ -211,7 +211,24 @@ antigravity_swarm_coordinator/
 
 ## 🛠️ Bundled 200-Skill Multi-Domain Golden Catalog (`core_framework/skills/`)
 
-This repository bundles **all 200 curated, deduplicated skills** across 9 domains directly in `core_framework/skills/`. Every `SKILL.md` is normalized without UTF-8 BOMs and with a concise single-line `description` (`<= 97` chars) so Antigravity IDE loads 100% of the catalog into `<skills>` without triggering context-budget truncation, while `skill-router` dynamically activates at most **8 active skills** per leaf task:
+### Why We Audited & Curated This Complete Skill Pack (Solving the Context-Window Bloat Problem)
+
+The internet and open-source AI repositories are flooded with massive packs of **1,500–2,000+ community skills**. In practice, installing raw community skill dumps creates severe problems for agentic coding environments like **Google Antigravity** and **Gemini CLI**:
+
+1. **Context-Window Pollution & Silent Customization Truncation:** At the start of every session, the IDE builds a system-prompt index (`<skills>`) containing the name, file path, and `description` frontmatter of every installed skill. When 1,500–2,000+ skills are installed on disk, just listing their metadata overflows the IDE's customization token budget (`"If a budget is exceeded, large rules are demoted to path pointers and large customizations are excluded automatically"`). The IDE then silently truncates or excludes ~90% of installed skills—often evicting the most critical architecture and coordinator skills first because their descriptions are longer.
+2. **Massive Duplication, Broken Templates & Unusable Wrappers:** Our forensic audit of **2,040+ community skills** (3,765 skill directories across global folders) revealed that over 85% consisted of redundant noise:
+   - **119 hyper-fragmented `azure-*` micro-skills** for individual NuGet/Maven/PyPI SDK packages,
+   - **91 `*-automation` wrappers** coupled to third-party paid SaaS MCP servers (Composio Rube),
+   - **77 duplicate hyphen-prefixed plugin clones** (e.g., `code-documentation-doc-generate` vs. `documentation-generation-doc-generate`),
+   - **58 foreign-language-only (Chinese CJK / Brazilian Portuguese) skills**,
+   - **25 unfilled boilerplate templates** whose description literally read `"One sentence - what this skill does and when to invoke it"`,
+   - **Hundreds of overlapping micro-variants** (e.g., 46 overlapping SEO micro-skills and 184 overlapping UI style stubs), plus **18 files with UTF-8 BOMs (`\xef\xbb\xbf`)** that broke strict YAML frontmatter parsers.
+
+To solve this permanently, we conducted a **full audit, deduplication, and frontmatter normalization**, distilling a **complete, self-contained 200-Skill Multi-Domain Golden Catalog** bundled directly inside `core_framework/skills/`:
+
+- **Zero Context Truncation (100% Indexed):** All 200 skills are UTF-8 BOM-free and normalized to a crisp, high-signal single-line `description` (`<= 97` characters). The entire 200-skill index fits comfortably inside Antigravity IDE's startup customization budget with **0 excluded skills**.
+- **On-Demand Loading (Max 8 Active Skills Budget):** Full `SKILL.md` bodies are **never** preloaded into the prompt. Instead, `swarm-coordinator` and `skill-router` load only the **1–8 relevant skills on demand** for the active task, keeping the model's context window clean and sharp.
+- **Complete Multi-Domain Coverage Out of the Box:** Because real-world projects span far more than just writing code, this single audited pack equips Antigravity across **all 9 operational domains**—from software engineering, Odoo ERP, and embedded firmware to legal/GDPR compliance, executive presentations/Office docs, product strategy, hardware BOM sourcing, marketing/SEO/GEO, 3D UI/UX, and quantitative research:
 
 | # | Domain | Count | Included Skills (Highlights) |
 | :--- | :--- | :---: | :--- |
