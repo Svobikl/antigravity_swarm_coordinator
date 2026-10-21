@@ -32,15 +32,44 @@ from pathlib import Path
 
 
 def discover_antigravity_runtime(repo_root: Path) -> dict:
-    """Path-independently discover Antigravity native execution runtime and subagents."""
+    """Path-independently discover Antigravity native execution runtime and subagents (Windows, macOS, Linux)."""
+    home = Path.home()
     local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        ls_candidate = Path(local_app_data) / "Programs" / "antigravity" / "resources" / "bin" / "language_server.exe"
-    else:
-        ls_candidate = Path.home() / "AppData" / "Local" / "Programs" / "antigravity" / "resources" / "bin" / "language_server.exe"
+    win_base = Path(local_app_data) if local_app_data else home / "AppData" / "Local"
+    win_ls = win_base / "Programs" / "antigravity" / "resources" / "bin" / "language_server.exe"
 
-    ls_found = ls_candidate.exists()
+    mac_candidates = [
+        (home / "Applications" / "Antigravity.app" / "Contents" / "Resources" / "app" / "extensions" / "antigravity" / "bin" / "language_server_macos_arm", "~/Applications/Antigravity.app/.../language_server_macos_arm"),
+        (home / "Applications" / "Antigravity.app" / "Contents" / "Resources" / "app" / "extensions" / "antigravity" / "bin" / "language_server_macos_x64", "~/Applications/Antigravity.app/.../language_server_macos_x64"),
+        (home / "Applications" / "Antigravity.app" / "Contents" / "Resources" / "bin" / "language_server", "~/Applications/Antigravity.app/Contents/Resources/bin/language_server"),
+        (Path("/Applications/Antigravity.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm"), "/Applications/Antigravity.app/.../language_server_macos_arm"),
+        (Path("/Applications/Antigravity.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_x64"), "/Applications/Antigravity.app/.../language_server_macos_x64"),
+        (Path("/Applications/Antigravity.app/Contents/Resources/bin/language_server"), "/Applications/Antigravity.app/Contents/Resources/bin/language_server"),
+    ]
+
+    ls_found = False
+    ls_location = None
+    if win_ls.exists():
+        ls_found = True
+        ls_location = "%LOCALAPPDATA%/Programs/antigravity/resources/bin/language_server.exe"
+    else:
+        for cand_path, cand_label in mac_candidates:
+            if cand_path.exists():
+                ls_found = True
+                ls_location = cand_label
+                break
+
     agy_path = shutil.which("agy")
+    if not agy_path:
+        for agy_cand in (
+            home / ".antigravity" / "bin" / "agy",
+            Path("/Applications/Antigravity.app/Contents/Resources/app/bin/agy"),
+            Path("/opt/homebrew/bin/agy"),
+            Path("/usr/local/bin/agy"),
+        ):
+            if agy_cand.is_file():
+                agy_path = str(agy_cand)
+                break
 
     # Discover subagent tomls
     agents_dir = repo_root / ".antigravity" / "agents"
@@ -51,7 +80,7 @@ def discover_antigravity_runtime(repo_root: Path) -> dict:
 
     return {
         "language_server_found": ls_found,
-        "language_server_location": "%LOCALAPPDATA%/Programs/antigravity/resources/bin/language_server.exe" if ls_found else None,
+        "language_server_location": ls_location,
         "agy_found": bool(agy_path),
         "subagent_tomls": subagent_status,
         "active_model": "claude-opus-5-5",

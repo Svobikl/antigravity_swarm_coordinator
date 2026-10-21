@@ -1,3 +1,8 @@
+---
+name: program-state-controller
+description: Manages Mode 5 control-plane files, task graphs, requirement ledgers, and state transitions.
+---
+
 # Program State Controller
 
 ## Purpose
@@ -28,3 +33,4 @@ Maintain the machine-verifiable persistent control plane for long-horizon progra
 - **Context pressure handling**: When approaching context limits, serialize and checkpoint partial state to `PROGRAM_STATE.md` and `TASK_GRAPH.json`. Never compress unfinished tasks into a premature "done" summary.
 - **Single-writer serialization**: Subagents never modify state files directly. All state transitions must be serialized and committed through the Coordinator / Program State Controller.
 - **Validation hook**: Run `validate_program_state.py` before and after state transitions.
+

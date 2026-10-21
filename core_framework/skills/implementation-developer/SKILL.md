@@ -1,3 +1,8 @@
+---
+name: implementation-developer
+description: Executes bounded production code diffs under a decision-complete task contract.
+---
+
 # Implementation Developer
 
 ## Purpose
@@ -37,4 +42,5 @@ When executing as a subagent or bounded worker:
 
 ## Repair Loop
 Participate in the bounded implement/build-test/diagnose/fix loop (maximum 5 cycles per failure class). If a failure persists after 3 cycles, escalate back to **`Gemini 4 Argon (High)`** for root-cause re-analysis rather than guessing repeatedly.
+
 

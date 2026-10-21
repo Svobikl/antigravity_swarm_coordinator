@@ -63,8 +63,9 @@ def discover_antigravity_runtime() -> dict[str, str | Path | None]:
 
     Priority order:
     1. HARNESS2_ANTIGRAVITY_CMD env override
-    2. shutil.which("agy")
-    3. %LOCALAPPDATA%/Programs/antigravity/resources/bin/language_server.exe
+    2. shutil.which("agy") or macOS/Homebrew/Linux agy paths
+    3. Windows (%LOCALAPPDATA%/Programs/antigravity/resources/bin/language_server.exe)
+       or macOS (/Applications/Antigravity.app or ~/Applications/Antigravity.app)
     4. shutil.which("claude") fallback
     """
     cmd_override = os.environ.get("HARNESS2_ANTIGRAVITY_CMD")
@@ -75,11 +76,39 @@ def discover_antigravity_runtime() -> dict[str, str | Path | None]:
     if agy:
         return {"kind": "agy", "path": Path(agy), "cmd": agy}
 
+    home = Path.home()
+    for agy_cand in (
+        home / ".antigravity" / "bin" / "agy",
+        Path("/Applications/Antigravity.app/Contents/Resources/app/bin/agy"),
+        home / "Applications" / "Antigravity.app" / "Contents" / "Resources" / "app" / "bin" / "agy",
+        Path("/opt/homebrew/bin/agy"),
+        Path("/usr/local/bin/agy"),
+    ):
+        if agy_cand.is_file():
+            return {"kind": "agy", "path": agy_cand, "cmd": str(agy_cand)}
+
     local_app_data = os.environ.get("LOCALAPPDATA")
-    base = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
-    ls_path = base / "Programs" / "antigravity" / "resources" / "bin" / "language_server.exe"
-    if ls_path.is_file():
-        return {"kind": "language_server", "path": ls_path, "cmd": str(ls_path)}
+    base = Path(local_app_data) if local_app_data else home / "AppData" / "Local"
+    win_ls = base / "Programs" / "antigravity" / "resources" / "bin" / "language_server.exe"
+
+    mac_app_roots = (
+        home / "Applications" / "Antigravity.app" / "Contents" / "Resources",
+        Path("/Applications/Antigravity.app/Contents/Resources"),
+    )
+    ls_candidates: list[Path] = [win_ls]
+    for app_res in mac_app_roots:
+        ls_candidates.extend([
+            app_res / "app" / "extensions" / "antigravity" / "bin" / "language_server_macos_arm",
+            app_res / "app" / "extensions" / "antigravity" / "bin" / "language_server_macos_x64",
+            app_res / "app" / "extensions" / "antigravity" / "bin" / "language_server",
+            app_res / "bin" / "language_server_macos_arm",
+            app_res / "bin" / "language_server_macos_x64",
+            app_res / "bin" / "language_server",
+        ])
+
+    for ls_path in ls_candidates:
+        if ls_path.is_file():
+            return {"kind": "language_server", "path": ls_path, "cmd": str(ls_path)}
 
     claude = shutil.which("claude.cmd") or shutil.which("claude")
     if claude:

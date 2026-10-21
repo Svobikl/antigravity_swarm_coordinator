@@ -1,3 +1,8 @@
+---
+name: memory-state-curator
+description: Synchronizes verified architectural knowledge and recaps with the Obsidian vault.
+---
+
 # Memory & State Curator
 
 ## Purpose
@@ -17,3 +22,4 @@ Govern interactions with persistent memory systems, knowledge graphs (e.g. Graph
   - Record architectural decisions (`DECISION_LEDGER.md`), failed hypotheses, and major milestones into the memory system for future session discovery.
   - Store pointers to artifacts rather than duplicating volatile, evolving source code.
   - Prune obsolete or invalidated assumptions from memory when refuted by empirical tests.
+

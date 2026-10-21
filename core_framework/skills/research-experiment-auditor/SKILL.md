@@ -1,3 +1,8 @@
+---
+name: research-experiment-auditor
+description: Enforces out-of-sample evaluation, fold safety, and anti-leakage in quant/ML research.
+---
+
 # Research & Experiment Auditor
 
 ## Purpose
@@ -30,3 +35,4 @@ Enforce empirical rigor, statistical safety, and machine learning governance in 
 ### 5. Complete Trial Accounting
 - All attempted trials, failed hypotheses, and discarded variations must be logged in the research ledger.
 - Selective reporting of only winning configurations without accounting for the search space (p-hacking / backtest overfitting) is rejected.
+

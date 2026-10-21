@@ -1,3 +1,8 @@
+---
+name: documentation-handoff-agent
+description: Audits READMEs, ADRs, and handoff documentation against verified runtime behavior.
+---
+
 # Documentation & Handoff Agent
 
 ## Purpose
@@ -28,3 +33,4 @@ Summarize:
 - suggested commit message as text only.
 
 Never claim staging, commit, push, release, deployment, or external publication unless it actually happened with authorization.
+

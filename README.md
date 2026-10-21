@@ -1,8 +1,8 @@
-# Antigravity Swarm Coordinator (Long-Horizon V4.1 + Harness² + Claude Opus 5.5)
+# Antigravity Swarm Coordinator (Long-Horizon V4.1 + Harness² + Claude Opus 5.5 + 200 Multi-Domain Skills)
 
-Complete backup, distribution, and setup package for the default **Swarm Coordinator**, **Google Research `Harness²` recursive adaptation engine**, and **Tri-Model Cross-Family Governance Framework** (`Gemini 4 Argon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`) for **Google Antigravity** and **Gemini CLI**.
+Complete backup, distribution, and cross-platform setup package (**Apple macOS**, **Windows**, and **Linux**) for the default **Swarm Coordinator**, **Google Research `Harness²` recursive adaptation engine**, **Tri-Model Cross-Family Governance Framework** (`Gemini 4 Argon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`), and **200 Curated Multi-Domain Golden Catalog Skills** for **Google Antigravity** and **Gemini CLI**.
 
-This repository contains the complete coordinator architecture—100% **path-independent** across users and machines—including the global configuration entry point prompt, immutable governance rules, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, 22 specialized skills, the ASW engine plugin (`antigravity-swarm`), and 29 automated verification tests.
+This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 200 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and 35 automated verification tests.
 
 ---
 
@@ -12,7 +12,7 @@ In Antigravity, the Swarm Coordinator functions under the **Single Orchestrator 
 
 ```text
                     ┌────────────────────────────────────────────────────────┐
-                    │                  ~/.gemini/GEMINI.md                   │
+                    │       ~/.gemini/GEMINI.md & ~/.agents/AGENTS.md        │
                     │     (Global Entry Point & Path-Independent Rules)      │
                     └───────────────────────────┬────────────────────────────┘
                                                 │
@@ -66,7 +66,7 @@ In Antigravity, the Swarm Coordinator functions under the **Single Orchestrator 
 
 ## 🧬 Harness² Recursive Adaptation Engine: What It Is & What It Does in Your Harness
 
-This coordinator integrates Google Research's **Harness²** (*Recursive Agent Harnessing for an Open World*, `.antigravity/harness2/`), hardened for cross-platform **Windows 11 + POSIX** and **Python 3.12–3.14** execution.
+This coordinator integrates Google Research's **Harness²** (*Recursive Agent Harnessing for an Open World*, `.antigravity/harness2/`), hardened for cross-platform **macOS + Windows 11 + Linux** and **Python 3.12–3.14** execution.
 
 ### Why Harness² Is Needed
 While foundation model weights are fixed at inference time, an agent's real-world reliability depends heavily on its **harness**—the surrounding system of standing instructions, tool guidance, on-demand skills, deterministic helper scripts, subagent roles, and tool-loop lifecycle hooks. When an agent fails repeatedly on a complex engineering or quantitative research task, retrying the same task with the exact same harness repeats the same failure mode.
@@ -103,26 +103,26 @@ To guarantee that recursive self-improvement can **never** weaken safety rules, 
 
 ### Key CLI Commands for Harness² & Claude Opus 5.5 Review Gates
 
-```powershell
-# 1. Verify Antigravity-native Claude Opus 5.5 runtime & subagent TOMLs
-python .antigravity/scripts/invoke_opus_reviewer.py --preflight
+```bash
+# 1. Verify Antigravity-native Claude Opus 5.5 runtime & subagent TOMLs (macOS / Windows / Linux)
+python3 .antigravity/scripts/invoke_opus_reviewer.py --preflight
 
 # 2. Run Pre-Execution Plan Opposition Audit (Claude Opus 5.5 reviews Gemini 4 Argon plan)
-python .antigravity/scripts/invoke_opus_reviewer.py --mode plan-review `
-  --plan .asw/plans/<slug>.md `
+python3 .antigravity/scripts/invoke_opus_reviewer.py --mode plan-review \
+  --plan .asw/plans/<slug>.md \
   --output .asw/reviews/<slug>-opus-plan-review.md
 
 # 3. Run Runtime Diff & QA Opposition Audit (Claude Opus 5.5 audits diff & 3-layer evidence)
-python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review `
-  --plan .asw/plans/<slug>.md `
-  --diff <path-to-diff> `
-  --evidence .asw/evidence `
+python3 .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review \
+  --plan .asw/plans/<slug>.md \
+  --diff <path-to-diff> \
+  --evidence .asw/evidence \
   --output .asw/reviews/<slug>-opus-diff-review.md
 
 # 4. Run Harness² Recursive Adaptation Loop + Automatic Obsidian Vault Experience Sync
-python .antigravity/scripts/run_harness_adapt.py --demo `
-  --project <project-name> `
-  --output .asw/evidence/adapt_run `
+python3 .antigravity/scripts/run_harness_adapt.py --demo \
+  --project <project-name> \
+  --output .asw/evidence/adapt_run \
   --sync-obsidian
 ```
 
@@ -146,18 +146,21 @@ python .antigravity/scripts/run_harness_adapt.py --demo `
 ```text
 antigravity_swarm_coordinator/
 ├── README.md                          # This documentation
-├── install.ps1                        # Automated PowerShell installation and restore script
+├── install.py                         # Universal cross-platform installer (macOS, Windows, Linux)
+├── install.sh                         # POSIX Bash/Zsh installer for Apple macOS & Linux
+├── install.ps1                        # PowerShell installer for Windows
+├── .gitattributes                     # Enforces LF on *.sh for macOS/Linux compatibility
 ├── .gitignore                         # Git ignore rules for caches and temporary artifacts
 │
 ├── global_entrypoint/
-│   └── GEMINI.md                      # Global instructions deployed to ~/.gemini/GEMINI.md
+│   └── GEMINI.md                      # Global instructions deployed to ~/.gemini/GEMINI.md & ~/.agents/AGENTS.md
 │
 ├── core_framework/                    # Long-Horizon V4.1 + Harness² Governance Framework
 │   ├── agents/                        # Native Antigravity Claude Opus 5.5 subagent TOMLs
 │   │   ├── asw-plan-audit.toml        # Pre-Execution Plan Opposition Auditor (claude-opus-5-5)
 │   │   ├── asw-opposition-reviewer.toml # Adversarial Diff & QA Reviewer (claude-opus-5-5)
 │   │   └── asw-reviewer.toml          # Release & Functional Reviewer (claude-opus-5-5)
-│   ├── harness2/                      # Vendored & Windows-hardened Google Research Harness² engine
+│   ├── harness2/                      # Vendored & cross-platform Google Research Harness² engine
 │   │   ├── core/                      # tree, recursion, selection, library, ledger, proposer, spec
 │   │   ├── substrate/                 # antigravity.py (ANTIGRAVITY_SURFACE), codex.py, opencode.py
 │   │   ├── adapter_swarm.py           # Git-worktree isolated rollout adapter with reuse_base=True
@@ -168,10 +171,11 @@ antigravity_swarm_coordinator/
 │   │   ├── V4_1_OPERATOR_GUIDE.md     # Operator guide for semantic integrity and 4-axis completion
 │   │   ├── ANTIGRAVITY_LONG_HORIZON_AUDIT_V4.md # Architecture audit and theoretical foundation
 │   │   └── RECOMMENDED_SKILLS.md      # Curated companion skills guide and budget rules
-│   ├── scripts/                       # Python validation, audit, and Harness² bridge scripts
+│   ├── scripts/                       # Python validation, audit, curation, and Harness² bridge scripts
 │   │   ├── invoke_opus_reviewer.py    # Claude Opus 5.5 Plan & Diff Opposition Review CLI
 │   │   ├── run_harness_adapt.py       # Harness² recursive adaptation CLI runner
 │   │   ├── sync_harness_experience.py # Path-independent Obsidian Vault experience sync
+│   │   ├── curate_skill_catalog.py    # Curates & normalizes the 200-skill Golden Catalog
 │   │   ├── validate_program_state.py  # Strict mechanical program state & task graph validator
 │   │   ├── validate_agent_setup.py    # Runtime environment setup verification
 │   │   ├── run_semantic_audit.py      # Semantic integrity audit runner
@@ -179,7 +183,7 @@ antigravity_swarm_coordinator/
 │   │   ├── run_report_consistency_audit.py # Cross-report contradiction detection runner
 │   │   └── migrate_v4_to_v4_1.py      # Migration script from V4 to V4.1
 │   ├── semantic/                      # Python semantic integrity engine (auditor, claims, memory, etc.)
-│   ├── skills/                        # All 22 specialized agent, auditor, and adaptation skills
+│   ├── skills/                        # All 200 curated Multi-Domain Golden Catalog skills (9 domains)
 │   └── templates/                     # Project control-plane templates (Modes 2, 3, and 5)
 │
 ├── plugins/
@@ -190,12 +194,14 @@ antigravity_swarm_coordinator/
 │       ├── scripts/                   # ESM/Node.js diagnostic and status scripts
 │       └── skills/                    # ASW utility skills (asw-plan, asw-loop, asw-harness-adapt, ...)
 │
-├── tests/                             # 29 automated unit, negative, and path-independence tests
-│   ├── test_harness2_windows.py       # Windows msvcrt locks, POSIX paths, symlink rejection
+├── tests/                             # 35 automated unit, negative, and cross-platform tests
+│   ├── test_harness2_windows.py       # Cross-platform locks, POSIX paths, symlink rejection
 │   ├── test_antigravity_substrate.py  # Immutable governance & 8-skill budget enforcement
 │   ├── test_swarm_adapter.py          # Tri-Model channel routing & git worktree isolation
 │   ├── test_opus_reviewer.py          # Claude Opus 5.5 plan-review & diff-review gates
 │   ├── test_experience_obsidian_sync.py # Continual learning & Obsidian Vault sync
+│   ├── test_skill_catalog_curation.py # 200-skill Golden Catalog & BOM/frontmatter bounds
+│   ├── test_cross_platform_installer.py # macOS/Windows/Linux installer & runtime discovery
 │   └── test_path_independence.py      # Zero hardcoded user paths across the repository
 │
 └── .antigravity/                      # Drop-in framework directory ready for any target repository
@@ -203,111 +209,65 @@ antigravity_swarm_coordinator/
 
 ---
 
-## 🛠️ Specialized Roles & Skills Catalog
+## 🛠️ Bundled 200-Skill Multi-Domain Golden Catalog (`core_framework/skills/`)
 
-This repository includes all **22 specialized skills** directly powering the coordinator, recursive harness adaptation, and cross-family auditors:
+This repository bundles **all 200 curated, deduplicated skills** across 9 domains directly in `core_framework/skills/`. Every `SKILL.md` is normalized without UTF-8 BOMs and with a concise single-line `description` (`<= 97` chars) so Antigravity IDE loads 100% of the catalog into `<skills>` without triggering context-budget truncation, while `skill-router` dynamically activates at most **8 active skills** per leaf task:
 
-1. **`swarm-coordinator`**: Global orchestration lead and state machine authority (`Gemini 4 Argon High`).
-2. **`skill-router`**: Catalog routing and strict active skill budget enforcement (max 8) across the Tri-Model tiers.
-3. **`asw-harness-adapt`**: Recursive `Harness²` adaptation (`Propose–Probe–Compose–Select–Reflect`) and continual Obsidian experience sync.
-4. **`program-state-controller`**: State machine, ledger, and task graph manager (`Gemini 4 Argon High`).
-5. **`spec-product-analyst`**: Requirements, acceptance criteria, and non-goals specification (`Gemini 4 Argon High`).
-6. **`software-architect`**: Technical architecture, component boundaries, and API design (`Gemini 4 Argon High`).
-7. **`ui-ux-designer`**: Interface workflows, design systems, and state-space specifications (`Gemini 4 Argon High`).
-8. **`implementation-developer`**: Bounded diff implementation under strict task contracts (`Gemini 3.8 Flash High`).
-9. **`interaction-e2e-tester`**: Interaction and end-to-end verification (`Gemini 3.8 Flash High`).
-10. **`validator-build-test-agent`**: Repository-native command discovery and state validation (`Gemini 3.8 Flash High`).
-11. **`compliance-maintainability-reviewer`**: Coding conventions, code quality, and blast radius auditing (`Gemini 4 Argon High`).
-12. **`opposition-reviewer`**: Cross-family adversarial falsification, plan auditing, and leakage detection (`Claude Opus 5.5`).
-13. **`acceptance-reviewer-product-qa`**: Empirical product requirements verification with direct evidence (`Gemini 4 Argon High`).
-14. **`security-reliability-reviewer`**: Trust boundaries, threat modeling, and security audits (`Gemini 4 Argon High`).
-15. **`research-experiment-auditor`**: Quant/ML governance, out-of-sample discipline, and fold safety (`Gemini 4 Argon High`).
-16. **`memory-state-curator`**: Secondary advisory memory synchronization (`~/Documents/AgentMemory`, Graphify) (`Gemini 3.8 Flash High`).
-17. **`completion-auditor`**: Independent mechanical closure and 100% completion verification (`Gemini 4 Argon High`).
-18. **`documentation-handoff-agent`**: Documentation impact and final handoff audit (`Gemini 3.8 Flash High`).
-19. **`invariant-auditor`**: Verification of non-negotiable program contracts (`Gemini 4 Argon High`).
-20. **`report-consistency-auditor`**: Cross-report claim reconciliation and arithmetic verification (`Gemini 4 Argon High`).
-21. **`research-validity-auditor`**: Scientific validity, causal data contracts, and ablation checks (`Gemini 4 Argon High`).
-22. **`semantic-completion-auditor`**: Independent semantic sign-off preventing goalpost drift (`Gemini 4 Argon High`).
+| # | Domain | Count | Included Skills (Highlights) |
+| :--- | :--- | :---: | :--- |
+| **1** | **Swarm Coordinator, ASW & Obsidian Memory (Core)** | **43** | All 21 Coordinator & V4.1 Semantic Auditor skills (`swarm-coordinator`, `skill-router`, `program-state-controller`, `opposition-reviewer`, `completion-auditor`, `invariant-auditor`, `report-consistency-auditor`, `research-validity-auditor`, `semantic-completion-auditor`, etc.), all 16 `asw-*` skills (including `asw-harness-adapt`), and 6 `obs-memory` / `obsidian-*` / `agent-memory` skills |
+| **2** | **Legal, Contracts, GDPR, Compliance & Regulatory** | **9** | `lex` (EU/US/CA legal analysis & contracts), `legal-advisor`, `employment-contract-templates`, `gdpr-data-handling`, `privacy-by-design`, `pci-compliance`, `fda-medtech-compliance-auditor`, `customs-trade-compliance`, `security-compliance-compliance-check` |
+| **3** | **Presentations, Slides, Office Documents & Diagrams** | **13** | `pptx-official`, `pptx-deck-creation`, `frontend-slides`, `docx-official`, `xlsx-official`, `pdf-official`, `document-extraction`, `writer`, `calc`, `mermaid-expert`, `c4-container`, `data-storytelling`, `professional-proofreader` |
+| **4** | **Project, Product, Strategy, Finance & Hardware Sourcing** | **17** | `product-manager-toolkit`, `concise-planning`, `planning-with-files`, `brain-to-docs`, `architecture-decision-records`, `osterwalder-canvas-architect`, `kotler-macro-analyzer`, `moatmri`, `market-sizing-analysis`, `startup-financial-modeling`, `kpi-dashboard-design`, `pricing-strategy`, `launch-strategy`, `linear-claude-skill`, `github`, `inventory-demand-planning`, `electronics-sourcing` |
+| **5** | **Marketing, SEO, GEO (AI Search), Copywriting & CRO** | **14** | `marketing-plan`, `content-creator`, `copywriting`, `copy-editing`, `page-cro`, `signup-flow-cro`, `seo-audit`, `seo-fundamentals`, `geo-fundamentals`, `schema-markup`, `competitor-analysis`, `customer-research`, `email-sequence`, `analytics-tracking` |
+| **6** | **UI/UX, Frontend, Web, 3D, Motion & Video** | **18** | `frontend-design`, `ui-ux-pro-max`, `web-design-guidelines`, `ux-audit`, `ux-flow`, `ui-a11y`, `design-system`, `tailwind-design-system`, `shadcn`, `react-patterns`, `nextjs-best-practices`, `3d-ui`, `threejs-skills`, `animejs-animation`, `remotion-best-practices`, `claude-d3js-skill`, `mobile-design`, `hig-foundations` |
+| **7** | **Software Engineering, Odoo ERP, Embedded & Databases** | **39** | **Odoo (9):** `odoo-module-developer`, `odoo-orm-expert`, `odoo-xml-views-builder`, `odoo-qweb-templates`, `odoo-security-rules`, `odoo-rpc-api`, `odoo-accounting-setup`, `odoo-docker-deployment`, `odoo-upgrade-advisor`<br>**Embedded & Systems (6):** `firmware-analyst`, `arm-cortex-expert`, `c-pro`, `cpp-pro`, `rust-pro`, `protocol-reverse-engineering`<br>**Languages, Backend, DB & Mobile (24):** `python-pro`, `fastapi-pro`, `django-pro`, `pydantic-models-py`, `typescript-pro`, `nodejs-backend-patterns`, `golang-pro`, `csharp-pro`, `java-pro`, `php-pro`, `sql-pro`, `postgres-best-practices`, `drizzle-orm-expert`, `prisma-expert`, `graphql-architect`, `zustand-store-ts`, `flutter-expert`, `react-native-architecture`, `swiftui-expert-skill`, `electron-development`, `senior-architect`, `domain-driven-design`, `code-reviewer`, `simplify-code` |
+| **8** | **Data Science, Quantitative Research, AI/LLM & Science** | **20** | `quant-analyst`, `backtesting-frameworks`, `risk-metrics-calculation`, `data-scientist`, `data-engineer`, `polars`, `scikit-learn`, `statsmodels`, `matplotlib`, `plotly`, `ml-pipeline-workflow`, `ai-agents-architect`, `rag-engineer`, `embedding-strategies`, `prompt-engineer`, `gemini-api-dev`, `claude-api`, `mcp-builder`, `deep-research`, `ii-commons` |
+| **9** | **Testing, Debugging, DevOps, Cloud, Security & Shell** | **27** | `systematic-debugging`, `test-driven-development`, `test-guard`, `playwright-skill`, `browser-harness`, `pytest-skill`, `vitest-skill`, `api-security-best-practices`, `security-auditor`, `differential-review`, `secrets-management`, `docker-expert`, `kubernetes-architect`, `terraform-skill`, `aws-skills`, `cloudflare`, `vercel-deployment`, `supabase`, `github-actions-templates`, `grafana-dashboards`, `vps-server-management`, `powershell-windows`, `windows-shell-reliability`, `bash-pro`, `jq`, `git-advanced-workflows`, `resolving-merge-conflicts` |
 
 ---
 
-## 🧩 Recommended Companion Skills (Curated Catalog)
+## 🚀 Cross-Platform Installation (Apple macOS, Windows & Linux)
 
-The Swarm Coordinator operates with a searchable library of installed skills, dynamically activating up to **8 active skills** per leaf task. Based on what is proven and installed in this Antigravity environment, the following companion skills are strongly recommended:
+Installing the repository automatically deploys the global `GEMINI.md` / `AGENTS.md` prompt, **all 200 curated Multi-Domain Golden Catalog skills**, the `antigravity-swarm` plugin, and the native `Claude Opus 5.5` reviewer subagent configurations.
 
-### 1. Antigravity Swarm (ASW) Execution Suite
-*Included in this repository under `plugins/antigravity-swarm` and registered in Antigravity.*
-- **`asw`**: Main Antigravity Swarm execution loop with automated tests, subagents, and manual QA receipts.
-- **`asw-plan`**: Pre-implementation decision-complete planning paired with the mandatory `Claude Opus 5.5` Plan Opposition Gate.
-- **`asw-loop`**: Autonomous RED ➔ GREEN ➔ real-surface QA loop.
-- **`asw-harness-adapt`**: Triggers `Harness²` recursive harness self-improvement when tasks fail repeatedly or require domain adaptation.
-- **`asw-goal`**: Converts ambiguous briefs into concrete, measurable evidence criteria.
-- **`asw-review`**: Post-change behavioral diff audit powered by `Claude Opus 5.5` (`asw-reviewer.toml`).
-- **`asw-debug`**: Hypothesis-driven debugging for crashes, hangs, and runtime drift.
-- **`asw-remove-ai-slops`**: Cleans AI clutter, unnecessary comments, and dead abstractions.
-- **`asw-lsp`**: Symbol safety and compiler diagnostics checking.
+### 🍎 Apple macOS (Apple Silicon M1/M2/M3/M4 & Intel) / Linux
 
-### 2. Task Planning & Disk-State Persistence
-- **`planning-with-files`**: Uses persistent Markdown files as working memory on disk (matches Manus-style durability).
-- **`subagent-driven-development`**: Coordinates bounded, parallel subagent dispatching.
-- **`executing-plans`**: Step-by-step plan execution with strict review gates.
-- **`writing-plans`**: Creates actionable, atomic implementation checklists.
+Run `install.sh` (or `python3 install.py` directly) from Terminal:
 
-### 3. Test-Driven Development (TDD) & Evidence Gates
-- **`test-driven-development`** / **`tdd-workflow`**: Enforces writing failing tests prior to production code.
-- **`verification-before-completion`**: Guarantees tasks are not marked complete without verified disk proof.
-- **`lint-and-validate`**: Mandatory post-change validation execution.
+```bash
+chmod +x install.sh
 
-### 4. Diagnostics & Code Auditing
-- **`systematic-debugging`**: 4-phase root-cause diagnosis before proposing fixes.
-- **`debugger`**: Dedicated diagnostic assistant for unexpected test failures and crashes.
-- **`vibe-code-auditor`**: Audits rapidly generated AI code for structural flaws, mocks, and fragility.
-- **`simplify-code`**: Safe, low-risk code simplification and minimal blast-radius enforcement.
-- **`code-reviewer`**: Comprehensive code review checking idiomatic design and security risks.
+# 1. Install global coordinator, all 200 skills, and ASW plugin (and prune any duplicate old skills):
+./install.sh --clean-skills
 
-### 5. Architecture & Security Governance
-- **`architect-review`** / **`senior-architect`**: Component boundary and architectural decision evaluation.
-- **`security-auditor`**: DevSecOps, privilege boundaries, and dependency vulnerability scanning.
-- **`database-design`**: Relational/NoSQL schema modeling and migration safety.
-
-### 6. Shell & Environment Reliability (Windows / Cross-Platform)
-- **`windows-shell-reliability`**: Escaping, paths, CRLF, and execution pitfalls for Windows PowerShell/CMD.
-- **`powershell-windows`**: Error handling and native syntax for robust automation.
-- **`posix-shell-pro`**: Defensive shell scripting for Linux/macOS environments.
-
-### 7. Quantitative Research & Data Science (Mode 5)
-- **`quant-analyst`**: Financial metrics, risk evaluation, and backtesting sanity auditing.
-- **`scikit-learn`**: Out-of-sample data splitting, pipeline hygiene, and model validation.
-
-> 📖 **Full Details:** See [`core_framework/docs/RECOMMENDED_SKILLS.md`](core_framework/docs/RECOMMENDED_SKILLS.md) for how the `skill-router` manages dynamic activation under the 8-skill budget.
-
----
-
-## 🚀 Installation & Restoration
-
-### Automatic Installation (Recommended)
-
-Run the included PowerShell script from a PowerShell prompt:
-
-```powershell
-# 1. Restore global Antigravity environment (GEMINI.md, skills, plugin)
-.\install.ps1
-
-# 2. Or restore globally and deploy .antigravity into a specific project repository:
-.\install.ps1 -TargetRepoPath "~/Projects/YourProject"
+# 2. Or install globally AND deploy .antigravity into a target project repository:
+./install.sh --clean-skills --target-repo ~/Projects/YourProject
 ```
 
-The script will:
-1. Back up any existing `~/.gemini/GEMINI.md` to `GEMINI.md.bak` and deploy the coordinator prompt.
-2. Install all 22 skills to `~/.gemini/config/skills/`.
-3. Deploy the ASW plugin (including native `Claude Opus 5.5` reviewer agents) to `~/.gemini/config/plugins/antigravity-swarm/`.
-4. (Optional) Copy `.antigravity/` (including `harness2/`) directly into your target repository root.
+### 🪟 Windows (PowerShell)
+
+Run `install.ps1` (or `python install.py` directly) from PowerShell:
+
+```powershell
+# 1. Install global coordinator, all 200 skills, and ASW plugin (and prune any duplicate old skills):
+.\install.ps1 -CleanSkills
+
+# 2. Or install globally AND deploy .antigravity into a target project repository:
+.\install.ps1 -CleanSkills -TargetRepoPath "~/Projects/YourProject"
+```
+
+### What the Installer Deploys
+1. Backs up any existing `~/.gemini/GEMINI.md` to `GEMINI.md.bak` and installs `~/.gemini/GEMINI.md` and `~/.agents/AGENTS.md`.
+2. Installs **all 200 curated skills** into `~/.gemini/config/skills/`, `~/.gemini/antigravity-ide/skills/`, and `~/.agents/skills/` (and removes old duplicate bloat when `--clean-skills` / `-CleanSkills` is passed).
+3. Deploys the ASW plugin and native `Claude Opus 5.5` reviewer subagent TOMLs to `~/.gemini/config/plugins/antigravity-swarm/`.
+4. Automatically resolves Antigravity's native runtime binary on both **macOS** (`/Applications/Antigravity.app/...`, `~/Applications/Antigravity.app/...`, `/opt/homebrew/bin/agy`) and **Windows** (`%LOCALAPPDATA%/Programs/antigravity/...`).
+5. (Optional) Copies `.antigravity/` (including `harness2/`) into your target project repository.
 
 ### Running the Verification Suite
 
-```powershell
-python -m unittest discover -s tests -v
+```bash
+python3 -m unittest discover -s tests -v
 ```
 
 ---
