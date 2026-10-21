@@ -1,6 +1,6 @@
 ---
 name: skill-router
-description: "Analyze incoming task requirements, select an optimal, bounded active skill set (maximum 8 skills per leaf task) from the installed skill catalog, and assign the mandatory Cognitive Model Tier across the Tri-Model Cross-Family Architecture (Gemini 4 Argon High, Claude Opus 5.5, Gemini 3.8 Flash High) to each dispatched role. Prevent context pollution, skill collisions, and routing entropy."
+description: Selects a bounded active skill set (max 8 skills) from the catalog per leaf task.
 ---
 
 # Skill Router

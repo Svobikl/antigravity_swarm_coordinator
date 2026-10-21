@@ -98,6 +98,71 @@ class TestSkillCatalogCuration(unittest.TestCase):
         self.assertEqual(bom_files, [], f"Skills with UTF-8 BOM: {bom_files[:10]}")
         self.assertEqual(bad_desc, [], f"Skills with invalid/long descriptions: {bad_desc[:10]}")
 
+    def test_repo_and_plugin_skills_frontmatter_rejects_invalid_and_edge(self):
+        """Every SKILL.md in .antigravity/skills, plugins/antigravity-swarm/skills, and deployed plugin skills must have valid YAML frontmatter, and normalize_skill_frontmatter repairs missing/BOM frontmatter."""
+        import importlib.util
+        import tempfile
+
+        repo_root = Path(__file__).resolve().parent.parent
+        roots = [
+            repo_root / "core_framework" / "skills",
+            repo_root / ".antigravity" / "skills",
+            repo_root / "plugins" / "antigravity-swarm" / "skills",
+            self.home / ".gemini" / "config" / "plugins" / "antigravity-swarm" / "skills",
+        ]
+        invalid = []
+        for root in roots:
+            if not root.is_dir():
+                continue
+            for d in sorted(root.iterdir()):
+                if not d.is_dir():
+                    continue
+                f = d / "SKILL.md"
+                if not f.is_file():
+                    continue
+                raw = f.read_bytes()
+                if raw.startswith(b"\xef\xbb\xbf"):
+                    invalid.append(f"{f}: UTF-8 BOM")
+                    continue
+                txt = raw.decode("utf-8", errors="replace")
+                m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", txt, re.S)
+                if not m:
+                    invalid.append(f"{f.relative_to(repo_root) if f.is_relative_to(repo_root) else f}: MISSING_FRONTMATTER")
+                    continue
+                fm_text = m.group(1)
+                if f"name: {d.name}" not in fm_text:
+                    invalid.append(f"{d.name}: missing name: {d.name}")
+                desc = None
+                for line in fm_text.splitlines():
+                    if line.strip().startswith("description:"):
+                        desc = line.split(":", 1)[1].strip().strip("\"'")
+                        break
+                if not desc or not (15 <= len(desc) <= 120):
+                    invalid.append(f"{d.name}: invalid description ({desc!r})")
+        self.assertEqual(invalid, [], "Found skills with invalid frontmatter:\n" + "\n".join(invalid[:25]))
+
+        # Negative & edge-case verification: normalize_skill_frontmatter repairs missing frontmatter & BOM
+        script_path = repo_root / ".antigravity" / "scripts" / "curate_skill_catalog.py"
+        spec = importlib.util.spec_from_file_location("curate_skill_catalog", script_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bad_skill_dir = Path(tmp) / "edge-broken-skill"
+            bad_skill_dir.mkdir(parents=True, exist_ok=True)
+            bad_md = bad_skill_dir / "SKILL.md"
+            bad_md.write_bytes(b"\xef\xbb\xbf# Edge Broken Skill\n\nProvides specialized verification for edge-case skills.\n")
+            self.assertFalse(bad_md.read_text(encoding="utf-8-sig").startswith("---"))
+            mod.normalize_skill_frontmatter(
+                bad_md,
+                "edge-broken-skill",
+                "Provides specialized verification for edge-case skills.",
+            )
+            repaired_raw = bad_md.read_bytes()
+            self.assertFalse(repaired_raw.startswith(b"\xef\xbb\xbf"))
+            repaired_txt = repaired_raw.decode("utf-8")
+            self.assertTrue(repaired_txt.startswith("---\nname: edge-broken-skill\ndescription: "))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 ---
 name: asw-debug
-description: Hypothesis-driven Antigravity Swarm debugging for crashes, hangs, wrong output, and runtime drift.
+description: Hypothesis-driven debugging workflow for crashes, hangs, wrong output, and runtime drift.
 ---
 
 # Antigravity Swarm Debug

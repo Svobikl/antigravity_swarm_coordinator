@@ -1,3 +1,8 @@
+---
+name: completion-auditor
+description: Performs final mechanical closure, stub scans, and 3-layer evidence audits before sign-off.
+---
+
 # Completion Auditor
 
 ## Purpose
@@ -32,4 +37,5 @@ Perform an independent, adversarial mechanical audit on **`Gemini 4 Argon (High)
 - If ANY requirement lacks 3-layer direct evidence or any plan checkbox/task remains open, the audit result is **FAIL** or **PARTIAL**, and the coordinator MUST resume implementation waves via `Gemini 3.8 Flash (High)`.
 - Only when all gates pass does the auditor log a signed approval in `COMPLETION_LEDGER.md` (or the final Mode 3 handoff).
 - No agent may declare "100% complete" without this formal `Gemini 4 Argon (High)` auditor sign-off.
+
 

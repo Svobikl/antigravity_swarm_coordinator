@@ -319,10 +319,20 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
             if ef.is_file():
                 evidence_text += ef.read_text(encoding="utf-8", errors="replace") + "\n"
 
+    # Extract added lines from code files (excluding markdown docs and deleted lines)
+    added_code_lines = []
+    in_md_file = False
+    for dline in diff_content.splitlines():
+        if dline.startswith("diff --git ") or dline.startswith("+++ "):
+            in_md_file = dline.strip().lower().endswith(".md")
+        elif dline.startswith("+") and not dline.startswith("+++") and not in_md_file:
+            added_code_lines.append(dline[1:])
+    added_code_text = "\n".join(added_code_lines).lower()
+
     # Attack Vector 2: Research & ML Falsification
     leakage_terms = ["lookahead", "train_test_split", "scaler.fit", "data_leak"]
     for term in leakage_terms:
-        if term in diff_content.lower() and "leak" in diff_content.lower():
+        if term in added_code_text and "leak" in added_code_text:
             findings.append({
                 "vector": "2. Research & ML Falsification",
                 "level": "CRITICAL",

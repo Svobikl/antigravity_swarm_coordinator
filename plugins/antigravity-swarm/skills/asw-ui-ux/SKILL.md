@@ -1,6 +1,6 @@
 ---
 name: asw-ui-ux
-description: Product-aware frontend and README presentation guidance for Antigravity Swarm work.
+description: Product-grade frontend UI/UX and README visual presentation workflow for ASW deliveries.
 ---
 
 # Antigravity Swarm UI UX

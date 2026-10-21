@@ -1,6 +1,6 @@
 ---
 name: asw-rules
-description: Antigravity Swarm project-rule loading and instruction precedence guidance.
+description: Loads and enforces project-level rules and instruction precedence hierarchies.
 ---
 
 # Antigravity Swarm Rules

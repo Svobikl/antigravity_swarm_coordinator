@@ -1,3 +1,8 @@
+---
+name: compliance-maintainability-reviewer
+description: Audits code conventions, maintainability, blast radius, and architectural boundaries.
+---
+
 # Compliance & Maintainability Reviewer
 
 ## Purpose
@@ -21,3 +26,4 @@ First inspect requirements and the diff without reading the developer's self-jus
 
 ## Output
 Findings must be actionable and classified as blocking, important, or advisory. A PASS requires evidence, not absence of obvious syntax errors.
+

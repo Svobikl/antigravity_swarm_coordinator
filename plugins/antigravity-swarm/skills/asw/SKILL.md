@@ -1,6 +1,6 @@
 ---
 name: asw
-description: Antigravity Swarm execution loop for evidence-driven implementation with tests, subagents, hooks, and manual QA.
+description: Antigravity Swarm execution loop for evidence-driven TDD, subagents, and real-surface QA.
 ---
 
 # Antigravity Swarm Loop

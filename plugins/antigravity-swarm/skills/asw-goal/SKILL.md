@@ -1,6 +1,6 @@
 ---
 name: asw-goal
-description: Durable Antigravity Swarm goal orchestration with explicit success criteria, evidence ledger, manual QA channels, and completion audit.
+description: Runs persistent goal-driven execution loops until all verifiable stop criteria pass.
 ---
 
 # Antigravity Swarm Goal

@@ -1,3 +1,8 @@
+---
+name: ui-ux-designer
+description: Specifies user workflows, layout hierarchy, and complete interactive UI state spaces.
+---
+
 # UI / UX Designer
 
 ## Purpose
@@ -15,3 +20,4 @@ Cover applicable normal, empty, loading, error, disabled, restricted, overflow, 
 
 ## Stop Rule
 If the same visual problem fails twice for the same root reason, reassess the assumption or narrow the target instead of iterating blindly.
+

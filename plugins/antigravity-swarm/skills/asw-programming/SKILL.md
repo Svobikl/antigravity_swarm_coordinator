@@ -1,6 +1,6 @@
 ---
 name: asw-programming
-description: Strict Antigravity implementation discipline for Python, TypeScript, JavaScript, Go, and Rust work.
+description: Enforces strict engineering discipline across Python, TypeScript, Go, Rust, and C/C++.
 ---
 
 # Antigravity Swarm Programming

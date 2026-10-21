@@ -1,6 +1,6 @@
 ---
 name: asw-review
-description: Antigravity Swarm review skill for diff, evidence, hook, package, docs, installer, and real-surface QA inspection.
+description: Reviews diffs, test evidence, hooks, packaging, and real-surface QA transcripts.
 ---
 
 # Antigravity Swarm Review

@@ -1,6 +1,6 @@
 ---
 name: asw-remove-ai-slops
-description: Remove AI-looking code smells from branch changes or explicit files. Lock behavior with regression tests first, run categorized cleanup in bounded Antigravity lanes, then verify with quality gates.
+description: Detects and strips AI-generated boilerplate and redundant defensive code smells.
 ---
 
 # Antigravity Swarm Remove AI Slops

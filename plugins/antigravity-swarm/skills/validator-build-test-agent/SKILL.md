@@ -1,3 +1,8 @@
+---
+name: validator-build-test-agent
+description: Discovers repository-native commands and runs static, unit, and build verification gates.
+---
+
 # Validator / Build & Test Agent
 
 ## Purpose
@@ -41,4 +46,5 @@ Mocked unit tests or syntax checks alone are **strictly insufficient** to verify
 - When shared/foundational code changes, validate relevant downstream dependents.
 - Distinguish tests not run from tests passed. Never claim "PASS" for unexecuted suites or mock-only runs when real-surface verification is required.
 - Provide a concise 3-layer validation matrix with command, exit code, real-surface observation, evidence path, and unresolved issues.
+
 

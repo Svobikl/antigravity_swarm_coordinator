@@ -1,6 +1,6 @@
 ---
 name: asw-comment-check
-description: Comment and documentation hygiene for Antigravity Swarm edits.
+description: Enforces high-signal comment and docstring hygiene across modified files.
 ---
 
 # Antigravity Swarm Comment Check

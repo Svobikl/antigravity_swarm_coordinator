@@ -1,3 +1,8 @@
+---
+name: invariant-auditor
+description: Verifies Mode 5 semantic invariants (PROGRAM_INVARIANTS.json) and blocks silent overrides.
+---
+
 # Invariant Auditor
 
 ## Purpose
@@ -20,3 +25,4 @@ Enforce non-negotiable program invariants and prevent silent contract drift acro
 ### 4. Continuous Invariant Gating
 - Execute before major campaign transitions, candidate promotions, and final reports.
 - Fails immediately if unauthorized drift is detected.
+

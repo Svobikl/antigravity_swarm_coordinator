@@ -1,6 +1,6 @@
 ---
 name: asw-plan
-description: Antigravity Swarm Plan creates a decision-complete plan before large or ambiguous work, gated by mandatory Claude Opus 5.5 opposition review.
+description: Generates decision-complete implementation plans audited by the Claude Opus 5.5 gate.
 ---
 
 # Antigravity Swarm Plan

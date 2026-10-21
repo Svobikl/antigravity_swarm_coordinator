@@ -1,6 +1,6 @@
 ---
 name: asw-lsp
-description: Antigravity Swarm language diagnostics and symbol-safety workflow.
+description: Runs language-server diagnostics and symbol-safety checks before and after code edits.
 ---
 
 # Antigravity Swarm LSP

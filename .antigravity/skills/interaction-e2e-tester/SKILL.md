@@ -1,3 +1,8 @@
+---
+name: interaction-e2e-tester
+description: Verifies realistic end-to-end user and system workflows across real runtime surfaces.
+---
+
 # Interaction / End-to-End Tester
 
 ## Purpose
@@ -13,3 +18,4 @@ Verify realistic user/system workflows rather than only isolated code paths.
 
 ## Principle
 A successful launch is not equivalent to a successful workflow. Validate the actual behavior the user asked for.
+

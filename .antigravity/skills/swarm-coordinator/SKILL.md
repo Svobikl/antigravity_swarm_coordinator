@@ -1,6 +1,6 @@
 ---
 name: swarm-coordinator
-description: "Classify the request, select the smallest valid workflow, enforce single-orchestrator control, govern execution modes (Mode 0 through Mode 5), route tasks across the **Tri-Model Cross-Family Cognitive Architecture (`Gemini 4 Argon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`)**, manage bounded subagents, enforce 3-layer functional verification, and guarantee 100% mechanical plan completion."
+description: Global orchestration lead enforcing Mode 0-5 routing, Tri-Model gates, and verification.
 ---
 
 # Swarm Coordinator

@@ -1,3 +1,8 @@
+---
+name: semantic-completion-auditor
+description: Verifies semantic goal achievement without post-hoc threshold relaxation or scope drift.
+---
+
 # Semantic Completion Auditor
 
 ## Purpose
@@ -26,3 +31,4 @@ Perform independent semantic verification before program closure (Antigravity V4
 - Enforce the mandatory 4-axis markdown header on all final reports.
 - Ban ambiguous summaries like "100% Validated" or "Production Ready".
 - Emit `SEMANTIC_AUDIT_REPORT.md` and sign `COMPLETION_LEDGER.md`.
+

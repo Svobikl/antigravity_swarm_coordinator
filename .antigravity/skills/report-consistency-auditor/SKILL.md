@@ -1,3 +1,8 @@
+---
+name: report-consistency-auditor
+description: Audits final reports and metrics against METRIC_REGISTRY.json and raw disk evidence.
+---
+
 # Report Consistency Auditor
 
 ## Purpose
@@ -20,3 +25,4 @@ Adversarially detect and prevent internal and cross-report contradictions, arith
 
 ### 4. Factorial Ablation Verification (§37)
 - Any claim that an interaction between factors adds value must present complete factorial ablation: Base, Base+X, Base+Y, Base+X+Y, Base+interaction.
+

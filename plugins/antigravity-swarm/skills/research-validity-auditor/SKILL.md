@@ -1,3 +1,8 @@
+---
+name: research-validity-auditor
+description: Audits experimental methodology, baseline fairness, and statistical validity in research.
+---
+
 # Research Validity Auditor
 
 ## Purpose
@@ -20,3 +25,4 @@ Adversarially evaluate scientific and empirical validity of quantitative and ML 
 ### 4. Scientific Verdict Standardization (§32)
 - Enforce standard scientific verdicts: `EXPLORATORY`, `SCREEN_PASS`, `INNER_VALIDATED`, `OUTER_VALIDATED`, `NESTED_VALIDATED`, `FORWARD_SHADOW`, `FORWARD_VALIDATED`, `REJECTED`, `INVALID`.
 - Prevent presenting `EXPLORATORY` findings as `VALIDATED`.
+

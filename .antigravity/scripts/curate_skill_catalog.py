@@ -278,7 +278,13 @@ def curate_catalog(*, dry_run: bool = False) -> dict[str, object]:
     cfg_dir = home / ".gemini" / "config" / "skills"
     ide_dir = home / ".gemini" / "antigravity-ide" / "skills"
     ag_dir = home / ".agents" / "skills"
-    local_dir = Path(__file__).resolve().parents[2] / "skills"
+    repo_root = Path(__file__).resolve().parents[2]
+    local_dir = repo_root / "core_framework" / "skills"
+    repo_skill_roots = (
+        local_dir,
+        repo_root / ".antigravity" / "skills",
+        repo_root / "plugins" / "antigravity-swarm" / "skills",
+    )
 
     # Step 1: Promote any Golden skills that currently live only in ide_dir or ag_dir into cfg_dir
     promoted: list[str] = []
@@ -315,9 +321,10 @@ def curate_catalog(*, dry_run: bool = False) -> dict[str, object]:
             if not skill_md.exists():
                 raise FileNotFoundError(f"Golden skill missing SKILL.md: {skill_md}")
             normalize_skill_frontmatter(skill_md, name, desc)
-            local_md = local_dir / name / "SKILL.md"
-            if local_md.exists():
-                normalize_skill_frontmatter(local_md, name, desc)
+            for r_root in repo_skill_roots:
+                local_md = r_root / name / "SKILL.md"
+                if local_md.exists():
+                    normalize_skill_frontmatter(local_md, name, desc)
 
         # Step 4: Synchronize all 200 normalized skills from cfg_dir into ide_dir and ag_dir
         for mirror_root in (ide_dir, ag_dir):

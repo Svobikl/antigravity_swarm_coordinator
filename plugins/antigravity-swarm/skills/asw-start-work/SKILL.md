@@ -1,6 +1,6 @@
 ---
 name: asw-start-work
-description: Execute an ASW plan after asw-plan, with subagents, verification, real-surface QA, continuation state, and cleanup receipts.
+description: Executes approved .asw/plans checklists wave-by-wave with persistent state tracking.
 ---
 
 # Antigravity Swarm Start Work

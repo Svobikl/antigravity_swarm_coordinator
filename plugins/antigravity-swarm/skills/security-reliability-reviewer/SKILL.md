@@ -1,3 +1,8 @@
+---
+name: security-reliability-reviewer
+description: Audits trust boundaries, authentication, secrets, and runtime failure resilience.
+---
+
 # Security & Reliability Reviewer
 
 ## Trigger
@@ -18,3 +23,4 @@ Use this role when the change touches trust boundaries, authentication/authoriza
 
 ## Output
 Provide concrete findings, threat/failure scenario, affected boundary, severity, evidence, and required remediation. Do not overstate speculative risks.
+

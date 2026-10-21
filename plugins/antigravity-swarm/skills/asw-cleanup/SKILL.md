@@ -1,6 +1,6 @@
 ---
 name: asw-cleanup
-description: Remove AI-looking clutter and temporary artifacts without changing behavior.
+description: Removes AI clutter and temporary QA artifacts without altering runtime behavior.
 ---
 
 # Antigravity Swarm Cleanup

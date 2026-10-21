@@ -1,6 +1,6 @@
 ---
 name: asw-refactor
-description: Behavior-preserving Antigravity Swarm refactoring with characterization, impact mapping, diagnostics, and real-surface verification.
+description: Performs behavior-preserving structural refactoring backed by regression tests.
 ---
 
 # Antigravity Swarm Refactor

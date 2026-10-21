@@ -1,6 +1,6 @@
 ---
 name: asw-loop
-description: Antigravity Swarm Loop executes RED to GREEN to real-surface QA with cleanup receipts.
+description: Executes strict RED-to-GREEN-to-Real-Surface QA implementation waves with cleanup receipts.
 ---
 
 # Antigravity Swarm Loop

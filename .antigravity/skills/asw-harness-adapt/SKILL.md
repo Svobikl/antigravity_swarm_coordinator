@@ -1,6 +1,6 @@
 ---
 name: asw-harness-adapt
-description: "Execute Harness² recursive self-improvement sweeps across Antigravity and Claude Code agent architectures. Coordinates Tri-Model routing (Gemini 4 Argon High proposer, Claude Opus 5.5 blind selector, Gemini 3.8 Flash High executor), runs Propose-Probe-Compose-Select-Reflect adaptation loops, and syncs verified transferable experiences into the Obsidian Knowledge Vault."
+description: Executes Harness2 recursive Propose-Probe-Compose-Select-Reflect adaptation sweeps.
 ---
 
 # ASW Harness² Adaptation Engine
