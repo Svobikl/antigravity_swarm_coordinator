@@ -16,6 +16,7 @@
       "start-work the generated plan",
       "asw-goal turn this brief into evidence criteria",
       "asw-loop finish this change with evidence",
+      "asw-test-gui physically verify the localhost or native GUI",
       "asw-remove-ai-slops clean this diff",
       "asw-review inspect the diff"
     ],

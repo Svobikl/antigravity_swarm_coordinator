@@ -419,6 +419,8 @@ Minimum checks:
 
 For user-facing visual or interaction changes, validation must cover the relevant state space (normal, empty, loading, error, disabled, long text, viewport variations, accessibility). Screenshots prove appearance only, not interaction correctness; use interactive validation where possible.
 
+When the user invokes `asw-test-gui` (standalone or chained with `asw-loop` / `asw-start-work`), execute physical GUI verification using `.antigravity/scripts/run_gui_test.py` and/or Playwright against the live localhost server or native GUI binary, verifying zero `console.error`/`pageerror` exceptions, rendered DOM elements, and clean process teardown in `.asw/evidence/gui-test-report.md`.
+
 ---
 
 ## 19. Git and Workspace Safety

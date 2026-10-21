@@ -11,6 +11,7 @@ const START_WORK_RE = new RegExp(`${WORD}(?:start-work|asw-start-work|swarmwork-
 const CLEANUP_RE = new RegExp(`${WORD}(?:asw-cleanup|asw-remove-ai-slops|swarmwork-cleanup|asw\\s+cleanup)${END}`);
 const LOOP_RE = new RegExp(`${WORD}(?:asw-loop|asw|swarmwork)${END}`);
 const REVIEW_RE = new RegExp(`${WORD}(?:asw-review|swarmwork-review|asw\\s+review)${END}`);
+const TEST_GUI_RE = new RegExp(`${WORD}(?:asw-test-gui|swarmwork-test-gui|asw\\s+test[-\\s]+gui)${END}`, "i");
 
 function readPayload() {
   try {
@@ -141,15 +142,28 @@ You are Antigravity Swarm's adversarial reviewer running on Gemini 4 Argon (High
 
 Lead with findings ordered by severity. Treat any unchecked plan item or missing Layer 3 real-surface QA evidence as a blocking issue.`;
 
+const TEST_GUI_DIRECTIVE = `ASW TEST-GUI MODE ENABLED! (Physical GUI & Localhost Verification: Gemini 3.8 Flash High -> Audit: Claude Opus 5.5 / Argon High)
+
+You MUST perform physical GUI and runtime verification of the implemented application surface (never rely on unit tests or mocks alone):
+- For Web / Full-Stack apps: Start the localhost dev/preview server (if not already running), run Playwright and/or \`python .antigravity/scripts/run_gui_test.py --mode web --start-cmd "<cmd>" --url "http://127.0.0.1:<port>" --assert-text "<expected>" --assert-selector "<selector>" --screenshot ".asw/evidence/gui-screenshot.png" --output ".asw/evidence/gui-test-report.md"\`, verify HTTP 200, inspect live DOM elements, confirm zero browser console.error / uncaught pageerror exceptions, and capture screenshot + report.
+- For Native Desktop / Mobile apps: Launch the actual application binary/window via \`python .antigravity/scripts/run_gui_test.py --mode native --app-cmd "<cmd>" --wait-seconds 3.0 --output ".asw/evidence/gui-test-report.md"\` (or emulator/device runner), verify startup stability with zero crash tracebacks, and inspect rendered UI state.
+- If Verdict: GUI_FAILED occurs, fix the underlying UI/runtime defect and re-run physical GUI verification until Verdict: GUI_VERIFIED passes.
+- Always terminate spawned dev servers, browsers, and GUI processes in cleanup before finishing.`;
+
 function directiveFor(prompt) {
   prompt = redactSecrets(stripIgnoredPromptRegions(prompt));
-  if (PLAN_RE.test(prompt)) return PLAN_DIRECTIVE;
-  if (GOAL_RE.test(prompt)) return GOAL_DIRECTIVE;
-  if (START_WORK_RE.test(prompt)) return START_WORK_DIRECTIVE;
-  if (CLEANUP_RE.test(prompt)) return CLEANUP_DIRECTIVE;
-  if (REVIEW_RE.test(prompt)) return REVIEW_DIRECTIVE;
-  if (LOOP_RE.test(prompt)) return LOOP_DIRECTIVE;
-  return "";
+  let base = "";
+  if (PLAN_RE.test(prompt)) base = PLAN_DIRECTIVE;
+  else if (GOAL_RE.test(prompt)) base = GOAL_DIRECTIVE;
+  else if (START_WORK_RE.test(prompt)) base = START_WORK_DIRECTIVE;
+  else if (CLEANUP_RE.test(prompt)) base = CLEANUP_DIRECTIVE;
+  else if (REVIEW_RE.test(prompt)) base = REVIEW_DIRECTIVE;
+  else if (LOOP_RE.test(prompt)) base = LOOP_DIRECTIVE;
+
+  if (TEST_GUI_RE.test(prompt)) {
+    return base ? `${base}\n\n${TEST_GUI_DIRECTIVE}` : TEST_GUI_DIRECTIVE;
+  }
+  return base;
 }
 
 function stripIgnoredPromptRegions(prompt) {

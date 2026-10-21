@@ -16,7 +16,7 @@ CORE_COORDINATOR_SKILLS = frozenset({
     "asw", "asw-cleanup", "asw-comment-check", "asw-debug", "asw-goal",
     "asw-harness-adapt", "asw-loop", "asw-lsp", "asw-plan", "asw-programming",
     "asw-refactor", "asw-remove-ai-slops", "asw-review", "asw-rules",
-    "asw-start-work", "asw-ui-ux", "obs-memory", "agent-memory", "agent-memory-mcp",
+    "asw-start-work", "asw-test-gui", "asw-ui-ux", "obs-memory", "agent-memory", "agent-memory-mcp",
     "obsidian-markdown", "obsidian-cli", "obsidian-bases",
 })
 
