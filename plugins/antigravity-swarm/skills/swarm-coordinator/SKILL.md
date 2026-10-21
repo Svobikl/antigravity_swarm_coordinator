@@ -58,3 +58,10 @@ Use **`Gemini 3.8 Flash (High)`** whenever delegating bounded execution waves:
   3. **Implementation (`Gemini 3.8 Flash High`)** -> bounded execution waves.
   4. **QA & Opposition Review (`Claude Opus 5.5` + `Argon High`)** -> 3-layer verification + diff opposition audit.
   5. **Handoff & Cleanup** -> final closure sign-off.
+
+## Continuous Self-Learning & Obsidian Project Memory (Mandatory)
+- **Pre-Task Recall & Auto-Indexing**: At task start, invoke `python .antigravity/scripts/memory_manager.py --recall --project-path . --task-type <code|presentation|research|general>` so `Gemini 4 Argon (High)` plans with full awareness of user/company profile, presentation/coding preferences, historical anti-patterns, and project architecture.
+- **Self-Learning Capture on User Feedback**:
+  - When the user shares company, personal, presentation, or coding preferences -> run `memory_manager.py --record-preference`.
+  - When the user corrects a mistake or rejects an implementation pattern -> run `memory_manager.py --record-lesson` so the mistake is never repeated across any project.
+- **Post-Wave Project Sync**: After implementation waves, run `memory_manager.py --index-project .` and `--update-project-note` to keep the project's Obsidian overview current.

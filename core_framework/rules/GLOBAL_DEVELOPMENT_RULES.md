@@ -250,7 +250,11 @@ When interacting with Obsidian vaults, Graphify graphs, memory MCP tools, or cro
    - **Secondary Advisory Cache:** Knowledge graphs, Obsidian markdown notes, and vector memory.
 2. **Never Proof of Completion:** A memory node or note stating "Feature X is complete" has ZERO evidential value for task acceptance. Only executable test results and verifiable artifacts on disk constitute proof.
 3. **Conflict Resolution:** If memory and repository state conflict, the repository state and git worktree win unconditionally.
-4. **Curation:** Export confirmed architectural decisions (`DECISION_LEDGER.md`), proven domain constraints, and failed hypotheses to memory for cross-session discoverability, but never rely on memory as an execution state machine.
+4. **Curation & Continuous Self-Learning (`memory_manager.py`):**
+   - **Pre-Task Auto-Recall & Project Auto-Indexing:** Run `python .antigravity/scripts/memory_manager.py --recall --project-path . --task-type <code|presentation|research|general>` before planning or executing work so user/company profiles, presentation styles, coding preferences, cross-project lessons, and project architecture maps are active in context.
+   - **Zero-Repeat Mistake Capture:** Whenever the user corrects an output or a bug root cause is isolated, persist the lesson via `python .antigravity/scripts/memory_manager.py --record-lesson --cue "..." --mistake "..." --rule "..." --project <name>`.
+   - **Preference Capture:** Whenever the user states company, personal, presentation, or coding preferences, persist them via `python .antigravity/scripts/memory_manager.py --record-preference --category <profile|presentations|coding> --topic "..." --preference "..."`.
+   - **Project Overview Maintenance:** Keep `~/Documents/AgentMemory/projects/<project-name>/` synchronized with repository architecture and ADRs via `--index-project` and `--update-project-note`.
 
 ---
 

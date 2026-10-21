@@ -77,11 +77,12 @@ Do not preload every skill. The installed catalog is a searchable on-disk refere
 
 ---
 
-# Obsidian Knowledge Vault
+# Obsidian Self-Learning Knowledge Vault
 
-Persistent knowledge vault located at `~/Documents/AgentMemory` (or `$OBSIDIAN_VAULT_PATH` if set).
+Persistent self-learning knowledge vault located at `~/Documents/AgentMemory` (or `$OBSIDIAN_VAULT_PATH` if set), managed via `.antigravity/scripts/memory_manager.py` and the `obs-memory` / `memory-state-curator` skills.
 
-## Agent Memory Protocol
-- **Session Start**: Use the `obs-memory` skill to orient yourself using the knowledge vault (check `todos/Active TODOs.md` and the matching project overview in `projects/{project-name}/{project-name}.md`).
-- **During Work**: Query and update component relationships, architectural decisions (ADRs), and cross-project domain knowledge in the vault.
-- **Session End**: When wrapping up, record session achievements via `recap` and archive completed tasks.
+## Continuous Self-Learning & Project Memory Protocol (Mandatory)
+- **Session Start & Pre-Task Auto-Recall**: Before planning or executing any non-trivial task (code, presentation, architecture, research), run `python .antigravity/scripts/memory_manager.py --recall --project-path . --task-type <code|presentation|research|general>` to load `profile/User and Company Profile.md`, domain preferences (`Presentations and Visual Style.md`, `Coding and Architecture Preferences.md`), `lessons/Engineering Lessons and Anti-Patterns.md`, and the project overview in `projects/{project-name}/` (auto-indexing the project if missing).
+- **Self-Learning Preference Capture**: Whenever the user provides personal, company, branding, presentation, or coding preferences, immediately persist them via `python .antigravity/scripts/memory_manager.py --record-preference --category <profile|presentations|coding> --topic "<topic>" --preference "<rule>"`.
+- **Self-Learning Mistake & Correction Capture (Zero-Repeat Rule)**: Whenever the user corrects an output, rejects an approach, or a bug root cause is isolated, immediately record a cross-project lesson via `python .antigravity/scripts/memory_manager.py --record-lesson --cue "<when>" --mistake "<what went wrong>" --rule "<mandatory future rule>" --project <project-name>`.
+- **Project Architecture & Decision Sync**: After completing implementation waves, refresh the project's Obsidian knowledge graph via `python .antigravity/scripts/memory_manager.py --index-project .` and `--update-project-note`.

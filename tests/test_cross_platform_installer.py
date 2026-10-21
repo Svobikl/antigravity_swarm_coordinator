@@ -110,6 +110,16 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
             self.assertTrue((fake_home / ".agents" / "AGENTS.md").is_file())
             self.assertTrue((fake_home / ".gemini" / "config" / "plugins" / "antigravity-swarm" / "agents" / "asw-plan-audit.toml").is_file())
             self.assertTrue((fake_target / ".antigravity" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md").is_file())
+            # Verify Obsidian Knowledge Vault is automatically enforced & target project indexed
+            vault_dir = fake_home / "Documents" / "AgentMemory"
+            self.assertTrue((vault_dir / "Home.md").is_file(), "install.py must enforce local Obsidian Vault initialization")
+            self.assertTrue((vault_dir / ".obsidian" / "graph.json").is_file(), "install.py must initialize .obsidian/graph.json")
+            self.assertTrue((vault_dir / "profile" / "User and Company Profile.md").is_file())
+            self.assertTrue((vault_dir / "lessons" / "Engineering Lessons and Anti-Patterns.md").is_file())
+            self.assertTrue(
+                (vault_dir / "projects" / "target_project" / "target_project.md").is_file(),
+                "install.py must index --target-repo into Obsidian Vault projects/",
+            )
 
 
 if __name__ == "__main__":
