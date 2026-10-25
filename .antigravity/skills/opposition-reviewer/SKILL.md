@@ -42,3 +42,7 @@ In the **Tri-Model Cross-Family Cognitive Architecture**, `opposition-reviewer` 
 ## Verdicts
 - `Verdict: ASW APPROVED`: Diff fulfills task contract, contains passing unit and negative/edge-case tests, direct evidence on disk, and safe blast radius.
 - `Verdict: ASW REJECTED`: Rejected due to missing negative tests, incomplete evidence, or invariant violations.
+
+### 5. Zero Heuristic Substitution & Prompt-to-Code Traceability
+- Reject any diff that replaces trained ML/GBDT/ONNX models with hand-coded logit/`_sigmoid` equations, emits `ENTER_LONG` in a catch-all `SCANNING` fallback, uses naive binary `"take_profit" if pnl >= 0 else "stop_loss"` labels without checking `stoploss_pct`, or uses tautological `assert res is not None` tests.
+- Verify a line-by-line **Prompt-to-Code Traceability Matrix** against the user's verbatim instructions.

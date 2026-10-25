@@ -66,3 +66,8 @@ Use **`Gemini 3.8 Flash (High)`** whenever delegating bounded execution waves:
   - When the user corrects a mistake or rejects an implementation pattern -> run `memory_manager.py --record-lesson` so the mistake is never repeated across any project.
 - **Post-Wave Project Sync**: After implementation waves, run `memory_manager.py --index-project .` and `--update-project-note` to keep the project's Obsidian overview current.
 - **On-Demand Physical GUI Verification (`asw-test-gui`)**: When requested by the user (standalone or combined with `asw-loop`), run `.antigravity/scripts/run_gui_test.py` / Playwright to physically verify the live localhost or native GUI surface and produce `.asw/evidence/gui-test-report.md`.
+
+## Zero Heuristic Substitution & Prompt-to-Code Traceability (Mandatory)
+- **User Intent & Anti-Shortcut Contract**: Every plan and execution loop must start by listing `Verbatim User Requirements (REQ-1..N)`, `Authoritative Source of Truth`, and `Forbidden Shortcuts & Heuristics`.
+- **Zero Heuristic Substitution**: Never allow implementation workers to replace trained ML/quantitative models, mathematical formulas, or external APIs with hand-coded `_sigmoid` / logit heuristics, catch-all `SCANNING -> ENTER_LONG` fallbacks, naive binary `"take_profit" if pnl >= 0 else "stop_loss"` sweepers, or synthetic fallback pools.
+- **Prompt-to-Code Traceability Matrix**: Before final sign-off, verify a line-by-line mapping from every user requirement to the actual diff, parity proof (`max_abs_diff < 1e-6`), and Layer 3 runtime evidence.

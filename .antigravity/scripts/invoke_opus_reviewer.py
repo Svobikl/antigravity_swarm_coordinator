@@ -17,7 +17,8 @@
 
 Executes Plan Opposition Audits (6 vectors) and Code Diff / Evidence Opposition Reviews (4 vectors)
 grounded in native Claude Opus 5.5 subagent configurations (.antigravity/agents/*.toml) and
-deterministic adversarial verification tripwires.
+deterministic adversarial verification tripwires (including Zero Heuristic Substitution,
+Anti-Shortcut Enforcement, and Prompt-to-Code Traceability).
 """
 
 import argparse
@@ -110,11 +111,12 @@ def sync_agents(repo_root: Path) -> int:
 
 
 def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
-    """Audit an implementation plan across the 6 mandatory adversarial vectors."""
+    """Audit an implementation plan across the 6 mandatory adversarial vectors and Anti-Shortcut Law."""
     if not plan_path.exists():
         return "PLAN_REVISION_REQUIRED", [{"vector": "Vector 1", "level": "CRITICAL", "message": f"Plan file does not exist: {plan_path}"}], "File not found."
 
     raw = plan_path.read_text(encoding="utf-8", errors="replace")
+    raw_lower = raw.lower()
     findings = []
 
     # Vector 1: Requirement & Scope Fidelity
@@ -133,15 +135,33 @@ def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
             "message": "Missing executable task breakdown or checklist."
         })
 
-    # Vector 2: 4-Axis Semantic & Governance Invariant Safety
+    # Vector 2: 4-Axis Semantic & Governance Invariant Safety (including Zero Heuristic Substitution Law)
     governance_refs = ["GLOBAL_DEVELOPMENT_RULES", "PROGRAM_INVARIANTS", "METRIC_REGISTRY", "governance", "invariants"]
-    has_gov = any(ref.lower() in raw.lower() for ref in governance_refs)
+    has_gov = any(ref.lower() in raw_lower for ref in governance_refs)
     if not has_gov:
         findings.append({
             "vector": "Vector 2: 4-Axis Semantic & Governance Invariant Safety",
             "level": "HIGH",
             "message": "Plan lacks explicit alignment with repository governance rules and invariants."
         })
+
+    # Anti-Shortcut & Zero-Heuristic Plan Tripwires:
+    # Block plans that propose heuristic approximations instead of real implementation
+    forbidden_plan_phrases = [
+        r"approximate\s+with\s+heuristic",
+        r"heuristic\s+sigmoid\s+(?:formula|instead|approximation)",
+        r"replace\s+trained\s+model\s+with\s+heuristic",
+        r"simulate\s+instead\s+of\s+real",
+        r"mock\s+in\s+production",
+        r"placeholder\s+implementation\s+for\s+production",
+    ]
+    for pat in forbidden_plan_phrases:
+        if re.search(pat, raw_lower):
+            findings.append({
+                "vector": "Vector 2: 4-Axis Semantic & Governance Invariant Safety",
+                "level": "CRITICAL",
+                "message": f"Plan proposes forbidden heuristic approximation or shortcut ({pat}) violating Zero Heuristic Substitution Law."
+            })
 
     # Vector 3: Path-Independence Verification
     user_dir_pattern = re.compile(r"[A-Za-z]:" + r"[\\/]+Users[\\/]+", re.IGNORECASE)
@@ -156,7 +176,6 @@ def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
                 "message": f"Line {line_no} contains hardcoded user directory: {line.strip()[:80]}"
             })
         elif username_pattern.search(line):
-            # Exclude copyright or general mentions if not a path, but in paths it's critical
             if "\\" in line or "/" in line:
                 findings.append({
                     "vector": "Vector 3: Path-Independence Verification",
@@ -165,7 +184,6 @@ def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
                 })
 
     # Vector 4: Parallel Wave File-Collision Serialization
-    # Extract tasks from TODOs or Execution Tasks section
     todos_match = re.search(r"##\s+(?:TODOs|Execution Tasks)(.*?)(?=\n##\s+[A-Z]|\Z)", raw, re.DOTALL | re.IGNORECASE)
     todos_text = todos_match.group(1) if todos_match else raw
     task_snippets = re.split(r"\n(?=-\s+\[[ xX]\])", todos_text)
@@ -186,7 +204,6 @@ def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
 
         task_file_map[task_id] = [f.replace("\\", "/").strip().lower() for f in files if "/" in f and not f.startswith("http")]
 
-    # Parse waves if defined
     waves_match = re.search(r"##\s+Parallel Execution Waves(.*?)(?=\n##\s+[A-Z]|\Z)", raw, re.DOTALL | re.IGNORECASE)
     wave_map = {}
     if waves_match:
@@ -227,9 +244,8 @@ def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
                 })
 
     # Vector 5: 3-Layer Verification Completeness
-    # Check that plan mandates RED, GREEN, Real-Surface QA, Evidence, Cleanup
     req_phases = ["red", "green", "qa", "evidence", "cleanup"]
-    missing_phases = [p.upper() for p in req_phases if p not in raw.lower()]
+    missing_phases = [p.upper() for p in req_phases if p not in raw_lower]
     if missing_phases:
         findings.append({
             "vector": "Vector 5: 3-Layer Verification Completeness",
@@ -239,7 +255,7 @@ def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
 
     # Vector 6: OS / Runtime Edge Cases
     os_keywords = ["windows", "lock", "posix", "runtime", "finally", "cleanup", "timeout", "worktree"]
-    has_os_consideration = any(k in raw.lower() for k in os_keywords)
+    has_os_consideration = any(k in raw_lower for k in os_keywords)
     if not has_os_consideration:
         findings.append({
             "vector": "Vector 6: OS / Runtime Edge Cases",
@@ -292,7 +308,7 @@ def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
 
 
 def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[str, list[dict], str]:
-    """Audit code diff and evidence across the 4 opposition-reviewer attack vectors."""
+    """Audit code diff and evidence across the 4 opposition-reviewer attack vectors and Anti-Shortcut tripwires."""
     findings = []
 
     diff_content = diff_path.read_text(encoding="utf-8", errors="replace") if diff_path.exists() else ""
@@ -312,6 +328,14 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
             "message": "Evidence directory is empty or missing on disk."
         })
 
+    # Enforce Zero-Unchecked-Plan Closure Gate if plan contains any open `- [ ]` checkboxes
+    if plan_content and re.search(r"^\s*-\s+\[\s\]\s+", plan_content, re.MULTILINE):
+        findings.append({
+            "vector": "1. Scope & Plan Integrity",
+            "level": "CRITICAL",
+            "message": "Plan still contains unchecked '- [ ]' items. Zero-Unchecked-Plan Closure Gate violated."
+        })
+
     # Read evidence files
     evidence_text = ""
     if evidence_dir.exists():
@@ -319,29 +343,118 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
             if ef.is_file():
                 evidence_text += ef.read_text(encoding="utf-8", errors="replace") + "\n"
 
-    # Extract added lines from code files (excluding markdown docs and deleted lines)
+    # Separate added lines into production code lines vs test code lines (excluding markdown docs and reviewer scripts)
     added_code_lines = []
+    added_prod_lines = []
+    added_test_lines = []
+    current_file = ""
     in_md_file = False
+    in_test_file = False
+    in_reviewer_self = False
+
     for dline in diff_content.splitlines():
         if dline.startswith("diff --git ") or dline.startswith("+++ "):
-            in_md_file = dline.strip().lower().endswith(".md")
+            low_line = dline.strip().lower().replace("\\", "/")
+            current_file = low_line
+            in_md_file = low_line.endswith((".md", ".toml"))
+            in_test_file = (
+                "/tests/" in low_line
+                or "b/tests/" in low_line
+                or "/test_" in low_line
+                or low_line.endswith("_test.py")
+                or low_line.endswith(".test.ts")
+                or low_line.endswith(".spec.ts")
+            )
+            in_reviewer_self = (
+                "invoke_opus_reviewer.py" in low_line
+                or "asw-hook.mjs" in low_line
+            )
         elif dline.startswith("+") and not dline.startswith("+++") and not in_md_file:
-            added_code_lines.append(dline[1:])
-    added_code_text = "\n".join(added_code_lines).lower()
+            code_line = dline[1:]
+            added_code_lines.append(code_line)
+            if in_test_file:
+                added_test_lines.append(code_line)
+            elif not in_reviewer_self:
+                added_prod_lines.append(code_line)
 
-    # Attack Vector 2: Research & ML Falsification
+    added_code_text = "\n".join(added_code_lines).lower()
+    added_prod_text = "\n".join(added_prod_lines).lower()
+    added_test_text = "\n".join(added_test_lines)
+
+    # Attack Vector 2: Research & ML Falsification (including Zero Heuristic Substitution & Anti-Shortcut Law)
     leakage_terms = ["lookahead", "train_test_split", "scaler.fit", "data_leak"]
     for term in leakage_terms:
-        if term in added_code_text and "leak" in added_code_text:
+        if term in added_prod_text and "leak" in added_prod_text:
             findings.append({
                 "vector": "2. Research & ML Falsification",
                 "level": "CRITICAL",
                 "message": f"Potential data leakage or split boundary violation detected: {term}"
             })
 
-    # Attack Vector 3: Edge Cases & Boundary Breakdown
+    # Tripwire 2A: Heuristic Substitution in Production Model Evaluation
+    heuristic_logit_markers = (
+        "v42_logit",
+        "v43_logit",
+        "orderflow_logit",
+        "raw_logit =",
+        "heuristic_score =",
+    )
+    has_manual_logit = any(m in added_prod_text for m in heuristic_logit_markers) or (
+        "_sigmoid(" in added_prod_text
+        and ("pred_score" in added_prod_text or "logit" in added_prod_text)
+    )
+    has_real_booster_loader = any(
+        b in added_prod_text
+        for b in (
+            "get_booster",
+            "xgbjsonbooster",
+            "lgbtextbooster",
+            "evaluate_trained_booster",
+            "onnxruntime",
+            "joblib.load",
+            "torch.load",
+        )
+    )
+    if has_manual_logit and not has_real_booster_loader:
+        findings.append({
+            "vector": "2. Research & ML Falsification",
+            "level": "CRITICAL",
+            "message": "Heuristic substitution detected in production code: hand-coded logit/_sigmoid equations used instead of real trained model artifact inference (Zero Heuristic Substitution Law violation)."
+        })
+
+    # Tripwire 2B: Dangerous Catch-All SCANNING -> ENTER_LONG Fallback
+    if re.search(
+        r"pathway\s*=\s*['\"]scanning[^'\"]*['\"][\s\S]{0,160}?action\s*=\s*['\"]enter_long['\"]",
+        added_prod_text,
+    ):
+        findings.append({
+            "vector": "2. Research & ML Falsification",
+            "level": "CRITICAL",
+            "message": "Dangerous catch-all fallback detected: SCANNING pathway branch emits ENTER_LONG instead of remaining flat/SCANNING."
+        })
+
+    # Tripwire 2C: Naive Binary Stop-Loss Ternary ('take_profit' if pnl >= 0 else 'stop_loss')
+    if re.search(
+        r"['\"]take_profit['\"]\s+if\s+[^\n]+?>=\s*0(?:\.0)?\s+else\s+['\"]stop_loss['\"]",
+        added_prod_text,
+    ):
+        findings.append({
+            "vector": "2. Research & ML Falsification",
+            "level": "CRITICAL",
+            "message": "Naive binary exit_reason ternary ('take_profit' if pnl >= 0 else 'stop_loss') detected without comparing against actual stoploss_pct threshold."
+        })
+
+    # Tripwire 2D: Leftover Stubs / Synthetic Fallback Pools in Production
+    if "raise notimplementederror" in added_prod_text or "synthetic_fallback_pool" in added_prod_text:
+        findings.append({
+            "vector": "2. Research & ML Falsification",
+            "level": "CRITICAL",
+            "message": "Production code introduces unimplemented stubs (NotImplementedError) or synthetic fallback pools."
+        })
+
+    # Attack Vector 3: Edge Cases & Boundary Breakdown (including Anti-Tautology Test Gate)
     has_negative_tests = bool(
-        re.search(r"def test_.*(negative|edge|bad|fail|error|invalid|reject|collision)", diff_content, re.IGNORECASE)
+        re.search(r"def test_.*(negative|edge|bad|fail|error|invalid|reject|collision|crash|tautolog|heuristic|fallback)", diff_content, re.IGNORECASE)
         or re.search(r"(assertNotEqual|assertRaises|assertFalse|assertIn\([\"']Verdict: PLAN_REVISION_REQUIRED[\"'])", diff_content)
     )
     has_evidence_negative = bool(
@@ -363,8 +476,24 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
             "message": "Evidence directory lacks empirical runtime proof of negative test execution."
         })
 
+    # Tripwire 3A: Anti-Tautology Test Gate
+    if added_test_text.strip():
+        # Strip 'is not None' assertions and check if any substantive value/comparison assertion exists
+        stripped_test_text = re.sub(r"assert\s+[^\n]+?\s+is\s+not\s+None", "", added_test_text)
+        has_substantive_assertion = bool(
+            re.search(
+                r"(assertEqual|assertNotEqual|assertAlmostEqual|assertRaises|assertTrue|assertFalse|assertIn|assertNotIn|==|!=|<=|>=|<|>)",
+                stripped_test_text,
+            )
+        )
+        if not has_substantive_assertion:
+            findings.append({
+                "vector": "3. Edge Cases & Boundary Breakdown",
+                "level": "CRITICAL",
+                "message": "Tautological test suite detected: added tests only assert 'is not None' without verifying concrete domain values or behavioral invariants."
+            })
+
     # Attack Vector 4: Downstream & Blast-Radius Safety
-    # Check for hardcoded user paths in diff
     user_dir_pattern = re.compile(r"[A-Za-z]:" + r"[\\/]+Users[\\/]+", re.IGNORECASE)
     if user_dir_pattern.search(diff_content):
         findings.append({

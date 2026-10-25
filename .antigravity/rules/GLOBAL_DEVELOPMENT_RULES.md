@@ -517,3 +517,25 @@ Final Handoff
 - Suggested commit message (only as text):
 - Recommended next action:
 ```
+
+
+---
+
+## 24. Zero Heuristic Substitution, Anti-Shortcut & Prompt-to-Code Traceability Law
+
+1. **Zero Heuristic Substitution (Artifact & API Parity Mandate):**
+   - Never replace a trained ML/quantitative model (e.g., XGBoost `.json`, LightGBM `.txt`, FinBERT/ONNX `.onnx`, PyTorch weights), mathematical specification, historical dataset, or external API integration with hand-coded heuristic equations (`_sigmoid(...)`, manual logit weights, synthetic interpolation, or mock local fallbacks).
+   - When integrating an offline/research model or specification into a live runtime, you MUST bundle or load the exact model artifact and prove numerical parity (`max_abs_diff < 1e-6`) via an automated parity test.
+2. **Mandatory `User Intent & Anti-Shortcut Contract` Before Coding:**
+   - Every implementation plan (`.asw/plans/<slug>.md`) and every `asw-loop` must begin by recording:
+     - `Verbatim User Requirements (REQ-1..N)`: exact breakdown of every user command without silent scope reduction;
+     - `Authoritative Source of Truth`: exact files, model binaries, datasets, or API endpoints that must be used;
+     - `Forbidden Shortcuts & Heuristics`: explicit list of prohibited approximations or fallbacks.
+3. **Zero Catch-All Execution Fallbacks & Zero Unintended Side Effects:**
+   - Never write catch-all `else:` branches that emit trade entries (`ENTER_LONG` / `BUY`) when `SCANNING`, or naive binary exit classifiers (`"take_profit" if pnl >= 0 else "stop_loss"`) that ignore configured thresholds (`stoploss_pct_override`).
+   - Configuration, profile, and CRUD save endpoints (`PUT`/`POST` settings or toggles) must NEVER unconditionally trigger live exchange orders or external side effects without an active, verified signal gate (`action == "ENTER_LONG"`).
+4. **End-to-End State Enforcement & Anti-Tautology Tests:**
+   - Database flags (e.g. `User.status == "SUSPENDED"`, tier delays, risk overrides) must be enforced across every runtime entrypoint, not merely stored as inert labels.
+   - Automated tests must assert concrete domain values, parity thresholds, and negative domain scenarios (e.g. falling-knife crash rejection) — never tautological `assert res is not None` checks.
+5. **Prompt-to-Code Traceability Matrix:**
+   - Before declaring completion, `completion-auditor` and `opposition-reviewer` must verify a line-by-line **Prompt-to-Code Traceability Matrix** mapping each user requirement (`REQ-1..N`) to the exact modified file:lines, anti-heuristic proof, and Layer 3 runtime evidence.

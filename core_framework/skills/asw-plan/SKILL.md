@@ -50,3 +50,9 @@ Split work into waves when tasks can proceed independently. Ensure zero overlapp
 - A plan that lacks a real-surface check is incomplete when users can observe the change.
 - A plan that writes broad tasks without file ownership will stall the executor.
 - A plan with hardcoded user paths or parallel file collisions will be rejected by Claude Opus 5.5.
+
+## User Intent & Anti-Shortcut Contract (Mandatory Section)
+- Every generated plan in `.asw/plans/<slug>.md` MUST include a `## User Intent & Anti-Shortcut Contract` section listing:
+  1. `Verbatim User Requirements (REQ-1..N)`
+  2. `Authoritative Source of Truth` (exact model artifacts, datasets, or API endpoints)
+  3. `Forbidden Shortcuts & Heuristics` (enforcing Zero Heuristic Substitution Law)

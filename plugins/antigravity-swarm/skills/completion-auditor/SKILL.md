@@ -39,3 +39,7 @@ Perform an independent, adversarial mechanical audit on **`Gemini 4 Argon (High)
 - No agent may declare "100% complete" without this formal `Gemini 4 Argon (High)` auditor sign-off.
 
 
+
+### Gate 5: Zero Heuristic Substitution & Prompt-to-Code Traceability Matrix
+- Verify a line-by-line **Prompt-to-Code Traceability Matrix** mapping each verbatim user requirement (`REQ-1..N`) to the exact modified file:lines, anti-heuristic parity proof (`max_abs_diff < 1e-6`), and Layer 3 runtime output.
+- Reject any implementation that substitutes trained models, formulas, or external APIs with hand-coded heuristics (`_sigmoid`, manual weights), catch-all `SCANNING -> ENTER_LONG` branches, naive binary stop-loss ternaries, or inert DB flags.

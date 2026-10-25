@@ -44,3 +44,8 @@ When executing as a subagent or bounded worker:
 Participate in the bounded implement/build-test/diagnose/fix loop (maximum 5 cycles per failure class). If a failure persists after 3 cycles, escalate back to **`Gemini 4 Argon (High)`** for root-cause re-analysis rather than guessing repeatedly.
 
 
+
+## Zero Heuristic Substitution Law (Strictly Enforced)
+- Never replace trained ML/quantitative models (XGBoost `.json`, LightGBM `.txt`, ONNX), mathematical specifications, or external REST APIs with hand-coded `_sigmoid` / logit heuristic formulas, synthetic data interpolations, or catch-all `SCANNING -> ENTER_LONG` fallbacks.
+- Never trigger live exchange orders or external side effects inside configuration/profile save endpoints without an active `ENTER_LONG` signal guard.
+- Always enforce new DB status flags (`SUSPENDED`, tier delays, stop-loss overrides) end-to-end across all runtime entrypoints.

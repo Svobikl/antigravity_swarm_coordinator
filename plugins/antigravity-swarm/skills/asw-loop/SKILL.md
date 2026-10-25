@@ -151,3 +151,8 @@ Cleanup:
 Reviewer:
 Final status:
 ```
+
+## User Intent & Anti-Shortcut Contract (Zero Heuristic Substitution Law)
+- Start every loop by locking `Verbatim User Requirements`, `Authoritative Source of Truth`, and `Forbidden Shortcuts & Heuristics`.
+- Never replace trained ML/quant models, formulas, or external APIs with hand-coded `_sigmoid` / logit heuristics, catch-all `SCANNING -> ENTER_LONG` fallbacks, or synthetic fallback pools.
+- Verify a **Prompt-to-Code Traceability Matrix** and numerical artifact parity (`max_abs_diff < 1e-6`) before closing the loop.
