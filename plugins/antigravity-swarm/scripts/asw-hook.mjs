@@ -140,6 +140,7 @@ Required behavior:
 - Run the smallest genuine implementation on Gemini 3.8 Flash (High) (Model="flash") that flips RED to GREEN.
 - Drive the real surface (Layer 3) through CLI, tmux, HTTP, browser, or computer-use QA — never rely on mocks alone.
 - Capture artifacts, cleanup receipts, and a Prompt-to-Code Traceability Matrix verifying every user requirement.
+- For final diff review, run \`python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --plan ".asw/plans/<slug>.md"\` directly (never use PowerShell \`>\`/\`>>\` diff redirection or \`Remove-Item -Force scratch\\*\` without \`-Recurse -Confirm:$false\`). When Claude Opus 5.5 credits are exhausted, \`invoke_opus_reviewer.py\` + Gemini 4 Argon (High) automatically serve as the non-blocking fallback gate.
 - Use subagents when work can proceed in parallel without shared-state conflicts.`;
 
 const REVIEW_DIRECTIVE = `ASW REVIEW MODE ENABLED! (Model Tier: Gemini 4 Argon High)

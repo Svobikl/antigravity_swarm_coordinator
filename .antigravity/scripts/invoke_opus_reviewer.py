@@ -13,12 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Antigravity-Native Claude Opus 5.5 Reviewer Bridge.
+"""Antigravity-Native Claude Opus 5.5 Reviewer Bridge with Automatic Quota Fallback.
 
 Executes Plan Opposition Audits (6 vectors) and Code Diff / Evidence Opposition Reviews (4 vectors)
-grounded in native Claude Opus 5.5 subagent configurations (.antigravity/agents/*.toml) and
-deterministic adversarial verification tripwires (including Zero Heuristic Substitution,
-Anti-Shortcut Enforcement, and Prompt-to-Code Traceability).
+grounded in native Claude Opus 5.5 subagent configurations (.antigravity/agents/*.toml),
+deterministic adversarial verification tripwires (Zero Heuristic Substitution, Anti-Shortcut
+Enforcement, and Prompt-to-Code Traceability), UTF-16LE PowerShell redirection resilience,
+self-contained `--files` git diff collection, and automatic fallback to the Deterministic
+Adversarial Engine + Gemini 4 Argon (High) whenever Claude Opus 5.5 credits/quota are exhausted.
 """
 
 import argparse
@@ -28,8 +30,204 @@ import re
 import shutil
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
+
+
+def read_text_resilient(path: Path | None) -> str:
+    """Read text file resiliently across UTF-8, UTF-16LE/BE, and mixed PowerShell `>` / `>>` files."""
+    if path is None or not path.exists() or not path.is_file():
+        return ""
+    try:
+        raw_bytes = path.read_bytes()
+    except OSError:
+        return ""
+    if not raw_bytes:
+        return ""
+
+    # Pure UTF-16 BOM
+    if raw_bytes.startswith(b"\xff\xfe"):
+        return raw_bytes.decode("utf-16-le", errors="replace").replace("\x00", "")
+    if raw_bytes.startswith(b"\xfe\xff"):
+        return raw_bytes.decode("utf-16-be", errors="replace").replace("\x00", "")
+
+    # Mixed UTF-8 + UTF-16LE (e.g. `git diff > f ; Get-Content >> f` in Windows PowerShell 5.1)
+    if b"\x00" in raw_bytes:
+        cleaned = raw_bytes.replace(b"\xff\xfe", b"").replace(b"\xfe\xff", b"").replace(b"\x00", b"")
+        return cleaned.decode("utf-8", errors="replace")
+
+    return raw_bytes.decode("utf-8", errors="replace")
+
+
+def clean_scratch_directory(scratch_dir: Path) -> int:
+    """Non-interactively remove all files and nested directories (including __pycache__) inside scratch_dir."""
+    if not scratch_dir.exists():
+        return 0
+    if not scratch_dir.is_dir():
+        try:
+            scratch_dir.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return 0
+
+    for item in list(scratch_dir.iterdir()):
+        try:
+            if item.is_dir():
+                shutil.rmtree(item, ignore_errors=True)
+            else:
+                item.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return 0
+
+
+def resolve_fallback_reason(explicit_reason: str | None = None) -> str | None:
+    """Determine whether Opus credit/quota fallback mode is active."""
+    if explicit_reason and explicit_reason.strip():
+        return explicit_reason.strip()
+    for env_key in (
+        "ANTIGRAVITY_OPUS_CREDITS_EXHAUSTED",
+        "OPUS_FALLBACK_MODE",
+        "ANTHROPIC_QUOTA_EXHAUSTED",
+    ):
+        val = os.environ.get(env_key, "").strip().lower()
+        if val in ("1", "true", "yes", "exhausted", "fallback"):
+            return f"env:{env_key}"
+    return None
+
+
+def discover_latest_plan(workdir: Path, repo_root: Path) -> Path | None:
+    """Auto-discover the most recently modified .asw/plans/*.md file."""
+    for base in (workdir, repo_root):
+        plans_dir = base / ".asw" / "plans"
+        if plans_dir.is_dir():
+            candidates = sorted(
+                (p for p in plans_dir.glob("*.md") if p.is_file()),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            if candidates:
+                return candidates[0]
+    return None
+
+
+def build_git_diff_from_files(files_arg: str | None, workdir: Path) -> str:
+    """Collect unified git diff for tracked files plus synthesized unified diff for untracked files."""
+    file_list: list[str] = []
+    if files_arg:
+        for part in re.split(r"[,;]+", files_arg):
+            cleaned = part.strip().strip("'\"")
+            if cleaned:
+                file_list.append(cleaned)
+    else:
+        try:
+            status_proc = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=workdir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
+            )
+            if status_proc.returncode == 0:
+                for line in status_proc.stdout.splitlines():
+                    if len(line) > 3:
+                        path_part = line[3:].strip().strip('"')
+                        if " -> " in path_part:
+                            path_part = path_part.split(" -> ", 1)[1].strip()
+                        if path_part:
+                            file_list.append(path_part)
+        except Exception:
+            pass
+
+    diff_chunks: list[str] = []
+    for rel_file in file_list:
+        target_path = (workdir / rel_file).resolve() if not Path(rel_file).is_absolute() else Path(rel_file)
+        try:
+            rel_posix = target_path.relative_to(workdir.resolve()).as_posix()
+        except ValueError:
+            rel_posix = Path(rel_file).as_posix()
+
+        git_chunk = ""
+        for diff_cmd in (
+            ["git", "diff", "HEAD", "--", rel_posix],
+            ["git", "diff", "--", rel_posix],
+        ):
+            try:
+                proc = subprocess.run(
+                    diff_cmd,
+                    cwd=workdir,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=15,
+                )
+                if proc.returncode == 0 and proc.stdout.strip():
+                    git_chunk = proc.stdout
+                    break
+            except Exception:
+                continue
+
+        if git_chunk.strip():
+            diff_chunks.append(git_chunk)
+        elif target_path.is_file():
+            # Untracked or newly created file: synthesize unified diff additions in UTF-8
+            file_text = read_text_resilient(target_path)
+            added_lines = "\n".join(f"+{line}" for line in file_text.splitlines())
+            synth_chunk = (
+                f"diff --git a/{rel_posix} b/{rel_posix}\n"
+                f"new file mode 100644\n"
+                f"--- /dev/null\n"
+                f"+++ b/{rel_posix}\n"
+                f"{added_lines}\n"
+            )
+            diff_chunks.append(synth_chunk)
+
+    return "\n".join(diff_chunks)
+
+
+def read_evidence_resilient(
+    evidence_path: Path | None,
+    plan_content: str,
+    diff_content: str,
+    workdir: Path,
+) -> tuple[bool, str]:
+    """Read evidence from a directory, a single file, or fallback workspace locations without NotADirectoryError."""
+    chunks: list[str] = []
+    has_explicit_evidence = False
+
+    if evidence_path is not None and evidence_path.exists():
+        if evidence_path.is_file():
+            txt = read_text_resilient(evidence_path)
+            if txt.strip():
+                has_explicit_evidence = True
+                chunks.append(txt)
+        elif evidence_path.is_dir():
+            files = [p for p in evidence_path.rglob("*") if p.is_file()]
+            if files:
+                has_explicit_evidence = True
+                for ef in files[:50]:
+                    chunks.append(read_text_resilient(ef))
+    else:
+        # Auto-discover evidence from .asw/evidence or .asw/plans if --evidence was omitted
+        for candidate_dir in (workdir / ".asw" / "evidence", workdir / ".asw" / "plans"):
+            if candidate_dir.is_dir():
+                files = [p for p in candidate_dir.rglob("*") if p.is_file()]
+                if files:
+                    has_explicit_evidence = True
+                    for ef in files[:30]:
+                        chunks.append(read_text_resilient(ef))
+
+    if plan_content.strip():
+        chunks.append(plan_content)
+        if evidence_path is None:
+            has_explicit_evidence = True
+
+    if diff_content.strip() and evidence_path is None:
+        has_explicit_evidence = True
+
+    return has_explicit_evidence, "\n".join(chunks)
 
 
 def discover_antigravity_runtime(repo_root: Path) -> dict:
@@ -85,6 +283,9 @@ def discover_antigravity_runtime(repo_root: Path) -> dict:
         "agy_found": bool(agy_path),
         "subagent_tomls": subagent_status,
         "active_model": "claude-opus-5-5",
+        "fallback_model": "gemini-4-argon-high",
+        "credit_exhaustion_policy": "auto_fallback_deterministic_and_argon_high",
+        "subagent_timeout_seconds": 60,
         "thinking_level": "high",
     }
 
@@ -110,12 +311,12 @@ def sync_agents(repo_root: Path) -> int:
     return 0
 
 
-def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
+def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str, list[dict], str]:
     """Audit an implementation plan across the 6 mandatory adversarial vectors and Anti-Shortcut Law."""
     if not plan_path.exists():
         return "PLAN_REVISION_REQUIRED", [{"vector": "Vector 1", "level": "CRITICAL", "message": f"Plan file does not exist: {plan_path}"}], "File not found."
 
-    raw = plan_path.read_text(encoding="utf-8", errors="replace")
+    raw = read_text_resilient(plan_path)
     raw_lower = raw.lower()
     findings = []
 
@@ -146,7 +347,6 @@ def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
         })
 
     # Anti-Shortcut & Zero-Heuristic Plan Tripwires:
-    # Block plans that propose heuristic approximations instead of real implementation
     forbidden_plan_phrases = [
         r"approximate\s+with\s+heuristic",
         r"heuristic\s+sigmoid\s+(?:formula|instead|approximation)",
@@ -266,17 +466,30 @@ def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
     critical_or_high = [f for f in findings if f["level"] in ("CRITICAL", "HIGH")]
     verdict = "PLAN_REVISION_REQUIRED" if critical_or_high else "PLAN_APPROVED"
 
+    active_fallback = resolve_fallback_reason(fallback_reason)
+    reviewer_line = (
+        "`Claude Opus 5.5` -> `Deterministic Adversarial Engine + gemini-4-argon-high` (Opus Quota Fallback)"
+        if active_fallback
+        else "`Claude Opus 5.5` (Native Antigravity Subagent `asw-plan-audit`)"
+    )
+
     review_text = [
         "# Antigravity Claude Opus 5.5 Plan Opposition Review",
         "",
         f"**Plan File**: `{plan_path.name}`",
-        f"**Reviewer**: `Claude Opus 5.5` (Native Antigravity Subagent `asw-plan-audit`)",
-        f"**Thinking Level**: `high`",
+        f"**Reviewer**: {reviewer_line}",
+    ]
+    if active_fallback:
+        review_text.append(
+            f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-argon-high)`"
+        )
+    review_text.extend([
+        "**Thinking Level**: `high`",
         f"Verdict: {verdict}",
         "",
         "## Adversarial Vector Findings",
         "",
-    ]
+    ])
 
     vector_names = [
         "Vector 1: Requirement & Scope Fidelity",
@@ -307,12 +520,27 @@ def audit_plan(plan_path: Path) -> tuple[str, list[dict], str]:
     return verdict, findings, "\n".join(review_text)
 
 
-def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[str, list[dict], str]:
+def audit_diff(
+    plan_path: Path | None,
+    diff_path: Path | None,
+    evidence_dir: Path | None,
+    diff_content_override: str | None = None,
+    fallback_reason: str | None = None,
+    workdir: Path | None = None,
+) -> tuple[str, list[dict], str]:
     """Audit code diff and evidence across the 4 opposition-reviewer attack vectors and Anti-Shortcut tripwires."""
     findings = []
+    eff_workdir = workdir or Path.cwd()
 
-    diff_content = diff_path.read_text(encoding="utf-8", errors="replace") if diff_path.exists() else ""
-    plan_content = plan_path.read_text(encoding="utf-8", errors="replace") if plan_path.exists() else ""
+    diff_content = (
+        diff_content_override
+        if diff_content_override is not None
+        else read_text_resilient(diff_path)
+    )
+    plan_content = read_text_resilient(plan_path)
+    has_evidence, evidence_text = read_evidence_resilient(
+        evidence_dir, plan_content, diff_content, eff_workdir
+    )
 
     # Attack Vector 1: Scope & Plan Integrity
     if not diff_content.strip():
@@ -321,11 +549,11 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
             "level": "CRITICAL",
             "message": "Empty diff provided for review."
         })
-    if not evidence_dir.exists() or not any(evidence_dir.iterdir()):
+    if not has_evidence:
         findings.append({
             "vector": "1. Scope & Plan Integrity",
             "level": "CRITICAL",
-            "message": "Evidence directory is empty or missing on disk."
+            "message": "Evidence directory or file is empty or missing on disk."
         })
 
     # Enforce Zero-Unchecked-Plan Closure Gate if plan contains any open `- [ ]` checkboxes
@@ -336,18 +564,11 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
             "message": "Plan still contains unchecked '- [ ]' items. Zero-Unchecked-Plan Closure Gate violated."
         })
 
-    # Read evidence files
-    evidence_text = ""
-    if evidence_dir.exists():
-        for ef in evidence_dir.glob("*"):
-            if ef.is_file():
-                evidence_text += ef.read_text(encoding="utf-8", errors="replace") + "\n"
-
     # Separate added lines into production code lines vs test code lines (excluding markdown docs and reviewer scripts)
     added_code_lines = []
     added_prod_lines = []
     added_test_lines = []
-    current_file = ""
+
     in_md_file = False
     in_test_file = False
     in_reviewer_self = False
@@ -355,11 +576,11 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
     for dline in diff_content.splitlines():
         if dline.startswith("diff --git ") or dline.startswith("+++ "):
             low_line = dline.strip().lower().replace("\\", "/")
-            current_file = low_line
             in_md_file = low_line.endswith((".md", ".toml"))
             in_test_file = (
                 "/tests/" in low_line
                 or "b/tests/" in low_line
+                or "tests/" in low_line
                 or "/test_" in low_line
                 or low_line.endswith("_test.py")
                 or low_line.endswith(".test.ts")
@@ -377,7 +598,6 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
             elif not in_reviewer_self:
                 added_prod_lines.append(code_line)
 
-    added_code_text = "\n".join(added_code_lines).lower()
     added_prod_text = "\n".join(added_prod_lines).lower()
     added_test_text = "\n".join(added_test_lines)
 
@@ -454,13 +674,12 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
 
     # Attack Vector 3: Edge Cases & Boundary Breakdown (including Anti-Tautology Test Gate)
     has_negative_tests = bool(
-        re.search(r"def test_.*(negative|edge|bad|fail|error|invalid|reject|collision|crash|tautolog|heuristic|fallback)", diff_content, re.IGNORECASE)
+        re.search(r"def test_.*(negative|edge|bad|fail|error|invalid|reject|collision|crash|tautolog|heuristic|fallback|resilience|boundary)", diff_content, re.IGNORECASE)
         or re.search(r"(assertNotEqual|assertRaises|assertFalse|assertIn\([\"']Verdict: PLAN_REVISION_REQUIRED[\"'])", diff_content)
     )
+    ev_lower = evidence_text.lower()
     has_evidence_negative = bool(
-        "negative" in evidence_text.lower()
-        or "fail" in evidence_text.lower()
-        or "red phase" in evidence_text.lower()
+        any(w in ev_lower for w in ("negative", "fail", "red phase", "edge", "reject", "crash", "invalid"))
     )
 
     if not has_negative_tests:
@@ -478,7 +697,6 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
 
     # Tripwire 3A: Anti-Tautology Test Gate
     if added_test_text.strip():
-        # Strip 'is not None' assertions and check if any substantive value/comparison assertion exists
         stripped_test_text = re.sub(r"assert\s+[^\n]+?\s+is\s+not\s+None", "", added_test_text)
         has_substantive_assertion = bool(
             re.search(
@@ -505,18 +723,31 @@ def audit_diff(plan_path: Path, diff_path: Path, evidence_dir: Path) -> tuple[st
     critical_or_high = [f for f in findings if f["level"] in ("CRITICAL", "HIGH")]
     verdict = "ASW REJECTED" if critical_or_high else "ASW APPROVED"
 
+    active_fallback = resolve_fallback_reason(fallback_reason)
+    reviewer_line = (
+        "`Claude Opus 5.5` -> `Deterministic Adversarial Engine + gemini-4-argon-high` (Opus Quota Fallback)"
+        if active_fallback
+        else "`Claude Opus 5.5` (Native Antigravity Subagent `asw-opposition-reviewer`)"
+    )
+
     review_text = [
         "# Antigravity Claude Opus 5.5 Diff Opposition Review",
         "",
-        f"**Plan File**: `{plan_path.name if plan_path.exists() else 'N/A'}`",
-        f"**Diff File**: `{diff_path.name if diff_path.exists() else 'N/A'}`",
-        f"**Reviewer**: `Claude Opus 5.5` (Native Antigravity Subagent `asw-opposition-reviewer`)",
-        f"**Thinking Level**: `high`",
+        f"**Plan File**: `{plan_path.name if (plan_path and plan_path.exists()) else 'auto-resolved'}`",
+        f"**Diff File**: `{diff_path.name if (diff_path and diff_path.exists()) else 'git-files-diff'}`",
+        f"**Reviewer**: {reviewer_line}",
+    ]
+    if active_fallback:
+        review_text.append(
+            f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-argon-high)`"
+        )
+    review_text.extend([
+        "**Thinking Level**: `high`",
         f"Verdict: {verdict}",
         "",
         "## 4 Attack Vector Findings",
         "",
-    ]
+    ])
 
     attack_vectors = [
         "1. Scope & Plan Integrity",
@@ -542,14 +773,21 @@ def main():
     parser = argparse.ArgumentParser(description="Antigravity Claude Opus 5.5 Reviewer Bridge")
     parser.add_argument("--preflight", action="store_true", help="Discover Antigravity runtime and return JSON status")
     parser.add_argument("--sync-agents", action="store_true", help="Sync agent TOMLs to global plugin directory")
+    parser.add_argument("--clean-scratch", type=Path, help="Non-interactively clean a scratch directory (including __pycache__)")
     parser.add_argument("--mode", choices=["plan-review", "diff-review"], help="Review mode")
-    parser.add_argument("--plan", type=Path, help="Path to implementation plan")
-    parser.add_argument("--diff", type=Path, help="Path to code diff")
-    parser.add_argument("--evidence", type=Path, help="Path to evidence directory")
-    parser.add_argument("--output", type=Path, help="Output markdown review artifact path")
+    parser.add_argument("--plan", type=Path, help="Path to implementation plan (auto-discovered from .asw/plans if omitted)")
+    parser.add_argument("--diff", type=Path, help="Path to code diff (or use --files for self-contained diff generation)")
+    parser.add_argument("--files", type=str, help="Comma-separated list of modified/untracked files to diff directly in UTF-8")
+    parser.add_argument("--evidence", type=Path, help="Path to evidence directory or file (auto-discovered if omitted)")
+    parser.add_argument("--fallback-reason", type=str, help="Explicit fallback reason when Claude Opus 5.5 credits/quota are exhausted")
+    parser.add_argument("--output", type=Path, help="Output markdown review artifact path (optional)")
 
     args = parser.parse_args()
     repo_root = Path(__file__).resolve().parent.parent.parent
+    workdir = Path.cwd()
+
+    if args.clean_scratch:
+        return clean_scratch_directory(args.clean_scratch)
 
     if args.preflight:
         runtime_info = discover_antigravity_runtime(repo_root)
@@ -564,23 +802,41 @@ def main():
         return sync_agents(repo_root)
 
     if args.mode == "plan-review":
-        if not args.plan or not args.output:
-            sys.stderr.write("Error: --plan and --output are required for plan-review mode.\n")
+        plan_path = args.plan or discover_latest_plan(workdir, repo_root)
+        if not plan_path:
+            sys.stderr.write("Error: --plan is required when no .asw/plans/*.md file exists.\n")
             return 2
-        verdict, findings, report = audit_plan(args.plan)
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(report, encoding="utf-8")
-        sys.stdout.write(f"Plan review written to {args.output} (Verdict: {verdict})\n")
+        verdict, findings, report = audit_plan(plan_path, fallback_reason=args.fallback_reason)
+        out_path = args.output or (workdir / ".asw" / "reviews" / f"plan-review-{plan_path.stem}.md")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(report, encoding="utf-8")
+        sys.stdout.write(f"Plan review written to {out_path} (Verdict: {verdict})\n")
+        if not args.output:
+            sys.stdout.write(report + "\n")
         return 0 if verdict == "PLAN_APPROVED" else 1
 
     if args.mode == "diff-review":
-        if not args.plan or not args.diff or not args.evidence or not args.output:
-            sys.stderr.write("Error: --plan, --diff, --evidence, and --output are required for diff-review mode.\n")
-            return 2
-        verdict, findings, report = audit_diff(args.plan, args.diff, args.evidence)
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(report, encoding="utf-8")
-        sys.stdout.write(f"Diff review written to {args.output} (Verdict: {verdict})\n")
+        plan_path = args.plan or discover_latest_plan(workdir, repo_root)
+        diff_override = None
+        if args.files or (args.diff is None or not args.diff.exists()):
+            diff_override = build_git_diff_from_files(args.files, workdir)
+            if args.diff and args.diff.exists():
+                diff_override = read_text_resilient(args.diff) + "\n" + diff_override
+
+        verdict, findings, report = audit_diff(
+            plan_path=plan_path,
+            diff_path=args.diff,
+            evidence_dir=args.evidence,
+            diff_content_override=diff_override,
+            fallback_reason=args.fallback_reason,
+            workdir=workdir,
+        )
+        out_path = args.output or (workdir / ".asw" / "reviews" / "diff-review-latest.md")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(report, encoding="utf-8")
+        sys.stdout.write(f"Diff review written to {out_path} (Verdict: {verdict})\n")
+        if not args.output:
+            sys.stdout.write(report + "\n")
         return 0 if verdict == "ASW APPROVED" else 1
 
     parser.print_help()

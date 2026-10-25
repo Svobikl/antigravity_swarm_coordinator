@@ -56,7 +56,8 @@ In PowerShell, if an executable path starts with a quote, you MUST use the `&` o
 
 | Action | ❌ CMD Style | ✅ PowerShell Choice |
 |--------|-------------|---------------------|
-| Delete | `del /f /q file` | `Remove-Item -Force file` |
+| Delete File | `del /f /q file` | `Remove-Item -Force file` |
+| Delete Dir / Wildcard | `rmdir /s /q folder` | `Remove-Item -Recurse -Force -Confirm:$false "folder\*"` |
 | Copy | `copy a b` | `Copy-Item a b` |
 | Move | `move a b` | `Move-Item a b` |
 | Make Dir | `mkdir folder` | `New-Item -ItemType Directory -Path folder` |

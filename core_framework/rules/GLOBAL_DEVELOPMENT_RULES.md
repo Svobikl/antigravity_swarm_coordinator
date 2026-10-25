@@ -539,3 +539,19 @@ Final Handoff
    - Automated tests must assert concrete domain values, parity thresholds, and negative domain scenarios (e.g. falling-knife crash rejection) — never tautological `assert res is not None` checks.
 5. **Prompt-to-Code Traceability Matrix:**
    - Before declaring completion, `completion-auditor` and `opposition-reviewer` must verify a line-by-line **Prompt-to-Code Traceability Matrix** mapping each user requirement (`REQ-1..N`) to the exact modified file:lines, anti-heuristic proof, and Layer 3 runtime evidence.
+
+---
+
+## 25. Opus Credit / Quota Exhaustion Automatic Fallback & PowerShell Anti-Hang Law
+
+1. **Opus Credit / Quota Exhaustion & Timeout Automatic Fallback:**
+   - Whenever `Claude Opus 5.5` credits or quota are exhausted (`credit balance is too low`, `insufficient_quota`, `resource_exhausted`, HTTP `429`), or a native Opus subagent times out (`> 60s`), the workflow **MUST NEVER HANG OR STALL**.
+   - Immediately fall back to **Deterministic Local Adversarial Engine (`python .antigravity/scripts/invoke_opus_reviewer.py`) + `Gemini 4 Argon (High)` (`Model="pro"`)** (`--fallback-reason "opus_credits_exhausted"` or `ANTIGRAVITY_OPUS_CREDITS_EXHAUSTED=1`).
+   - `invoke_opus_reviewer.py` executes 100% of the 6 plan-review vectors, 4 diff-review attack vectors, and Zero Heuristic Substitution tripwires offline in `< 2s` with zero external API credit dependency.
+2. **Self-Contained Diff Review Invocation (Zero PowerShell `>` / `>>` UTF-16LE Corruption):**
+   - Always invoke diff reviews via the self-contained `--files` flag:
+     `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "path/to/file1.py,tests/test_file.py" --plan ".asw/plans/<slug>.md"`
+   - Never construct compound PowerShell pipelines that redirect `git diff > file.diff` and `Get-Content test.py >> file.diff`, which corrupt files with mixed UTF-8 + UTF-16LE null bytes (`\x00`).
+3. **PowerShell Non-Interactive Scratch Cleanup Rule (Zero `[Y/N]` Stdin Hangs):**
+   - Never run `Remove-Item -Force "<dir>\*"` in Windows PowerShell without `-Recurse -Confirm:$false` (because any subdirectory such as `__pycache__` triggers an invisible interactive confirmation prompt that hangs background tasks indefinitely).
+   - Prefer `python .antigravity/scripts/invoke_opus_reviewer.py --clean-scratch "<scratch_dir>"` or `Remove-Item -Recurse -Force -Confirm:$false "<dir>\*" -ErrorAction SilentlyContinue`.

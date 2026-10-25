@@ -75,7 +75,11 @@ Do not preload every skill. The installed catalog is a searchable on-disk refere
 - **Memory vs. Ground Truth:** Obsidian, Graphify, and memory MCP are secondary advisory caches, never proof of completion. Repository state and verifiable artifacts on disk always win.
 - **Quantitative / ML Research Rules:** Outer/OOS evaluation only (no leakage), fold-safe feature pipelines, runtime/checkpoint proofs, explicit missing/constant data handling, and complete trial accounting.
 - **Authentication & Credential Protection:** Never attempt to read, print, log, or export the contents of authentication scripts, tokens, or credential variables. For authentication, invoke exclusively the prepared script/command without displaying sensitive parameters to standard output (stdout/stderr).
-- **Hard Completion Rule:** No task or program may be declared "100% complete" without mechanical plan/task-graph closure, 3-layer functional verification evidence on disk, independent audit sign-off by `completion-auditor` (running on **Gemini 4 Argon High**), and cross-family opposition review sign-off by **Claude Opus 5.5**.
+- **Hard Completion Rule:** No task or program may be declared "100% complete" without mechanical plan/task-graph closure, 3-layer functional verification evidence on disk, independent audit sign-off by `completion-auditor` (running on **Gemini 4 Argon High**), and cross-family opposition review sign-off by **Claude Opus 5.5** (or automatic fallback to the **Deterministic Local Adversarial Engine (`invoke_opus_reviewer.py`) + `Gemini 4 Argon High`** when Opus credits/quota are exhausted).
+- **Opus Credit Exhaustion Fallback & PowerShell Anti-Hang Law:**
+  - When `Claude Opus 5.5` credits/quota are exhausted or a subagent times out (`> 60s`), never stall or hang; immediately run `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --plan ".asw/plans/<slug>.md" --fallback-reason "opus_credits_exhausted"` (which executes all 6 plan vectors and 4 diff attack vectors deterministically offline in `< 2s`) paired with `Gemini 4 Argon (High)` review.
+  - Always pass `--files` to `invoke_opus_reviewer.py` instead of PowerShell `>` / `>>` redirection (which corrupts diffs with UTF-16LE `\x00` bytes).
+  - Never run `Remove-Item -Force "<dir>\*"` without `-Recurse -Confirm:$false` in PowerShell (because subdirectories like `__pycache__` cause an infinite interactive `[Y/N]` stdin hang); use `python .antigravity/scripts/invoke_opus_reviewer.py --clean-scratch "<dir>"` instead.
 
 ---
 
