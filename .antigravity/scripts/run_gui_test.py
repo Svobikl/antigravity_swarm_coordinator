@@ -17,11 +17,15 @@
 
 Executes real-surface GUI verification for:
   1. Web / Localhost applications (--mode web):
-     - Starts the local dev server (--start-cmd) or connects to a live localhost URL (--url).
+     - Starts the local dev server (--start-cmd) or connects to a live localhost/LAN URL (--url).
      - Drives Playwright (headless/headed Chromium) when available, with automatic fallback to
        deterministic HTTP + DOM structural inspection.
-     - Detects console.error, uncaught page exceptions, HTTP 4xx/5xx failures, missing UI text
-       (--assert-text), and missing interactive selectors (--assert-selector).
+     - Recursively traverses both Light DOM and open Shadow DOM roots (`shadowRoot`) to detect
+       Home Assistant / Web Component error cards (`<hui-error-card>`, `<hui-error-badge>`,
+       `"Configuration error"`, `"Custom element doesn't exist"`), console.error, uncaught
+       page exceptions, HTTP 4xx/5xx failures, missing UI text (--assert-text), missing
+       interactive selectors (--assert-selector), and forbidden states (--forbid-text,
+       --forbid-selector).
      - Captures screenshots (--screenshot) and writes a structured evidence report (--output).
      - Guarantees clean teardown of spawned server processes in `finally`.
   2. Native Desktop / Mobile GUI applications (--mode native):
@@ -34,7 +38,6 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import json
 import os
 import platform
 import subprocess
@@ -44,6 +47,23 @@ import urllib.error
 import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
+
+DEFAULT_FORBIDDEN_ERROR_SELECTORS: tuple[str, ...] = (
+    "hui-error-card",
+    "hui-error-badge",
+    "error-card",
+)
+
+DEFAULT_FORBIDDEN_ERROR_TEXTS: tuple[str, ...] = (
+    "Configuration error",
+    "Custom element doesn't exist",
+    "Custom element not found",
+    "Traceback (most recent call last)",
+    "Internal Server Error",
+    "ReferenceError:",
+    "SyntaxError:",
+    "TypeError: Cannot read",
+)
 
 
 class _DOMInspector(HTMLParser):
@@ -129,14 +149,51 @@ def _wait_for_http_ready(url: str, timeout_seconds: float) -> tuple[bool, int, s
     return False, 0, "", last_err
 
 
+_SHADOW_DOM_WALKER_JS = """
+() => {
+  const tags = new Set();
+  const ids = new Set();
+  const classes = new Set();
+  const texts = [];
+  const visit = (root) => {
+    if (!root) return;
+    const elements = root.querySelectorAll ? root.querySelectorAll('*') : [];
+    for (const el of elements) {
+      if (el.tagName) tags.add(el.tagName.toLowerCase());
+      if (el.id) ids.add(el.id);
+      if (el.classList) {
+        for (const c of el.classList) classes.add(c);
+      }
+      if (el.shadowRoot) {
+        if (el.shadowRoot.innerHTML) {
+          texts.push(el.shadowRoot.textContent || '');
+        }
+        visit(el.shadowRoot);
+      }
+    }
+  };
+  visit(document);
+  return {
+    tags: Array.from(tags),
+    ids: Array.from(ids),
+    classes: Array.from(classes),
+    shadowText: texts.join('\\n'),
+    bodyText: document.body ? (document.body.innerText || document.body.textContent || '') : ''
+  };
+}
+"""
+
+
 def _try_playwright_verification(
     url: str,
     assert_texts: list[str],
     assert_selectors: list[str],
+    forbid_texts: list[str],
+    forbid_selectors: list[str],
     click_selectors: list[str],
     screenshot_path: Path | None,
 ) -> dict[str, object] | None:
-    """Attempt physical browser verification via Playwright Python API if installed and provisioned."""
+    """Attempt physical browser verification via Playwright Python API (including Shadow DOM scanning)."""
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -173,15 +230,48 @@ def _try_playwright_verification(
             for click_sel in click_selectors:
                 page.locator(click_sel).first.click(timeout=5000)
 
-            body_text = page.inner_text("body")
+            dom_snapshot = page.evaluate(_SHADOW_DOM_WALKER_JS)
+            all_tags = set(dom_snapshot.get("tags") or [])
+            all_ids = set(dom_snapshot.get("ids") or [])
+            all_classes = set(dom_snapshot.get("classes") or [])
+            combined_text = (
+                (dom_snapshot.get("bodyText") or "")
+                + "\n"
+                + (dom_snapshot.get("shadowText") or "")
+                + "\n"
+                + page.content()
+            )
+
+            def _selector_present(sel: str) -> bool:
+                s = sel.strip()
+                if not s:
+                    return False
+                if s.startswith("#") and s[1:] in all_ids:
+                    return True
+                if s.startswith(".") and s[1:] in all_classes:
+                    return True
+                if s.lower() in all_tags:
+                    return True
+                try:
+                    return page.locator(s).count() > 0
+                except Exception:
+                    return False
+
             for expected_text in assert_texts:
-                if expected_text not in body_text:
+                if expected_text not in combined_text:
                     findings.append(f"Missing expected UI text: {expected_text!r}")
 
             for sel in assert_selectors:
-                count = page.locator(sel).count()
-                if count == 0:
+                if not _selector_present(sel):
                     findings.append(f"Missing expected UI selector: {sel!r}")
+
+            for err_sel in list(DEFAULT_FORBIDDEN_ERROR_SELECTORS) + list(forbid_selectors):
+                if _selector_present(err_sel):
+                    findings.append(f"Forbidden error/UI element detected in rendered DOM/Shadow DOM: <{err_sel}>")
+
+            for err_txt in list(DEFAULT_FORBIDDEN_ERROR_TEXTS) + list(forbid_texts):
+                if err_txt and err_txt.lower() in combined_text.lower():
+                    findings.append(f"Forbidden error/broken-state text detected in rendered DOM/Shadow DOM: {err_txt!r}")
 
             if page_errors:
                 findings.append(f"Uncaught page errors: {page_errors[:3]}")
@@ -215,13 +305,17 @@ def run_web_gui_test(
     start_cmd: str | None = None,
     assert_texts: list[str] | None = None,
     assert_selectors: list[str] | None = None,
+    forbid_texts: list[str] | None = None,
+    forbid_selectors: list[str] | None = None,
     click_selectors: list[str] | None = None,
     screenshot_path: Path | None = None,
     timeout_seconds: float = 15.0,
 ) -> dict[str, object]:
-    """Execute physical web GUI verification against a localhost URL."""
+    """Execute physical web GUI verification against a localhost/LAN URL."""
     texts = assert_texts or []
     selectors = assert_selectors or []
+    bad_texts = forbid_texts or []
+    bad_selectors = forbid_selectors or []
     clicks = click_selectors or []
 
     server_proc: subprocess.Popen | None = None
@@ -247,7 +341,9 @@ def run_web_gui_test(
                 "cleanup": "Spawned server process terminated" if server_proc else "No spawned server",
             }
 
-        pw_res = _try_playwright_verification(url, texts, selectors, clicks, screenshot_path)
+        pw_res = _try_playwright_verification(
+            url, texts, selectors, bad_texts, bad_selectors, clicks, screenshot_path
+        )
         if pw_res is not None:
             pw_res["mode"] = "web"
             pw_res["url"] = url
@@ -270,9 +366,14 @@ def run_web_gui_test(
             if not inspector.matches_selector(sel):
                 findings.append(f"Missing expected UI selector: {sel!r}")
 
-        for crash_marker in ("Traceback (most recent call last)", "Internal Server Error", "ReferenceError:", "SyntaxError:"):
-            if crash_marker in body:
-                findings.append(f"Error marker detected in rendered page: {crash_marker}")
+        for err_sel in list(DEFAULT_FORBIDDEN_ERROR_SELECTORS) + list(bad_selectors):
+            if inspector.matches_selector(err_sel):
+                findings.append(f"Forbidden error/UI element detected in rendered DOM: <{err_sel}>")
+
+        body_lower = body.lower()
+        for err_txt in list(DEFAULT_FORBIDDEN_ERROR_TEXTS) + list(bad_texts):
+            if err_txt and err_txt.lower() in body_lower:
+                findings.append(f"Forbidden error/broken-state text detected in rendered page: {err_txt!r}")
 
         return {
             "mode": "web",
@@ -385,6 +486,8 @@ def main() -> int:
     parser.add_argument("--app-cmd", type=str, default=None, help="Command to launch native GUI application in native mode")
     parser.add_argument("--assert-text", action="append", default=[], help="Text that must be visible in the GUI (repeatable)")
     parser.add_argument("--assert-selector", action="append", default=[], help="DOM selector/tag that must exist (repeatable)")
+    parser.add_argument("--forbid-text", action="append", default=[], help="Text that must NOT appear in rendered DOM/Shadow DOM (repeatable)")
+    parser.add_argument("--forbid-selector", action="append", default=[], help="DOM selector/tag that must NOT exist (repeatable)")
     parser.add_argument("--click", action="append", default=[], help="Selector to click in Playwright mode (repeatable)")
     parser.add_argument("--screenshot", type=Path, default=None, help="Optional path to save PNG screenshot")
     parser.add_argument("--wait-seconds", type=float, default=2.0, help="Observation window for native GUI startup")
@@ -408,6 +511,8 @@ def main() -> int:
             start_cmd=args.start_cmd,
             assert_texts=args.assert_text,
             assert_selectors=args.assert_selector,
+            forbid_texts=args.forbid_text,
+            forbid_selectors=args.forbid_selector,
             click_selectors=args.click,
             screenshot_path=args.screenshot,
             timeout_seconds=args.timeout_seconds,

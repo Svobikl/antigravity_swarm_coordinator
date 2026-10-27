@@ -555,3 +555,28 @@ Final Handoff
 3. **PowerShell Non-Interactive Scratch Cleanup Rule (Zero `[Y/N]` Stdin Hangs):**
    - Never run `Remove-Item -Force "<dir>\*"` in Windows PowerShell without `-Recurse -Confirm:$false` (because any subdirectory such as `__pycache__` triggers an invisible interactive confirmation prompt that hangs background tasks indefinitely).
    - Prefer `python .antigravity/scripts/invoke_opus_reviewer.py --clean-scratch "<scratch_dir>"` or `Remove-Item -Recurse -Force -Confirm:$false "<dir>\*" -ErrorAction SilentlyContinue`.
+
+---
+
+## 26. Cross-Session Failure Prevention Gates (Model Decision Parity, Shadow DOM Error Cards, Hardware Fidelity & 3-Strike Circuit Breaker)
+
+1. **Golden Reference & End-to-End Decision Parity Gate (Model & Algorithm Porting):**
+   - Whenever porting, integrating, or aligning a model, trading strategy, or mathematical pipeline with a reference system (e.g., Freqtrade strategies -> live production worker), isolated `.predict()` unit tests on synthetic arrays are strictly insufficient.
+   - You MUST verify **End-to-End Decision Lifecycle Parity** across the full production call chain (`worker -> evaluate_model_live(..., enforce_shield=True) -> evaluate_open_position_exit`) against the reference implementation across 4 mandatory regimes:
+     1. *Bull / Normal Entry Regime* (`action`, `pred_score`, `position_size` parity);
+     2. *Bear / Falling-Knife / Negative Sentiment Shock Regime* (`sem_shock_z >= 0.85` or `raw_pred <= 0.0` must stay flat/vetoed and never calibrate above `0.50`);
+     3. *Feature-Flag / Intrinsic Safety Gate Regime* (`enforce_shield=True` in live signal evaluation so `sem_safe` and `anti_hype` are never bypassed);
+     4. *Open Position Exit Lifecycle* (early 3-bar/12h exits restricted strictly to profitable `profit_harvest` positions, never closing losing trades prematurely via `model_signal_exit` before `max_hold_bars`).
+2. **Mandatory Rendered DOM & Shadow-Root Zero-Error-Card Gate (Web, Dashboards & Home Assistant Lovelace):**
+   - Writing a YAML/JSON configuration file (e.g., `.storage/lovelace`) or receiving `HTTP 200` from a REST endpoint NEVER proves that a web UI or dashboard works.
+   - Any change to frontend code (`.js`, `.ts`, `.tsx`, `.vue`, `.html`, `.css`) or dashboard configuration (`lovelace`, `www/*.js`) MUST verify the live rendered DOM and recursive `shadowRoot` trees (`python .antigravity/scripts/run_gui_test.py --mode web`), proving zero `<hui-error-card>`, `<hui-error-badge>`, `"Configuration error"`, `"Custom element doesn't exist"`, or frozen placeholder states (`0 USD`, `NaN`), and applying cache-busting query strings (`?v=...`) when updating cached static modules.
+3. **Boundary-to-Boundary Hardware / IoT / Voice Fidelity Gate (`BLOCKED_ON_HARDWARE_AUTH`):**
+   - Never substitute a synthetic mid-pipeline shortcut (e.g., `adb shell am start ...AssistActivity` or direct REST text injection) for a physical boundary trigger (physical remote `keyevent`, Bluetooth microphone stream `/dev/hidraw0`, MQTT hardware topic).
+   - Always inspect OS resource contention (`dumpsys audio`, `dumpsys media_session`, `dumpsys voiceinteraction`, `lsof`) to verify that competing system daemons (e.g., `com.google.android.katniss`) do not preempt the microphone or input device.
+   - If target hardware is offline or awaiting physical user authorization (`adb: device unauthorized`, `error: device unauthorized`, `device offline`), immediately pause in state **`BLOCKED_ON_HARDWARE_AUTH`** and instruct the user; NEVER mark the task complete (`- [x]`).
+4. **3-Strike Anti-Thrashing & Root-Cause Escalation Circuit Breaker:**
+   - If **3 consecutive repair attempts** on the same script, component, or hardware integration fail to pass end-to-end verification, **STOP all trial-and-error patching immediately**.
+   - Unapproved binary bytecode hot-patching of third-party packages (`classes.dex` inside `.apk` files) and endless scratch-script rewrites are strictly forbidden. Write a structured **Root-Cause & Architectural Blocker Report** and present clean architectural options to the user.
+   - Always capture an atomic configuration backup before modifying live daemons/services (`systemd`, ADB keymaps, `.storage/lovelace`) and automatically roll back to the working state if verification fails.
+5. **Feature-Flag & Negative-State Isolation Gate:**
+   - Every feature toggle or status flag (`semantic_shield_enabled`, `enforce_shield`, `User.status == "SUSPENDED"`, `PAPER vs LIVE`) must have an automated **negative-state isolation test** proving that when `OFF` or `SUSPENDED`, zero unintended side effects (zero Telegram veto alerts, zero live exchange orders) occur, and that default provisioning matches the model contract.

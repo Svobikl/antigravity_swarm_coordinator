@@ -203,6 +203,94 @@ class TestAswTestGui(unittest.TestCase):
             self.assertNotEqual(p_bad.returncode, 0)
             self.assertIn("Verdict: GUI_FAILED", report_native_bad.read_text(encoding="utf-8"))
 
+    def test_run_gui_test_rejects_hui_error_card_and_configuration_error_and_forbid_flags(self):
+        """Reproduces Home Assistant Step 853: run_gui_test.py must automatically reject <hui-error-card>, 'Configuration error', and custom --forbid-text / --forbid-selector."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            web_dir = tmp_path / "ha_web"
+            web_dir.mkdir(parents=True)
+
+            # Page 1: Contains <hui-error-card> and 'Configuration error' (even though HTTP is 200 and heading exists)
+            (web_dir / "lovelace.html").write_text(
+                "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>"
+                "<h1>Chytrý dům Klabava</h1>"
+                "<hui-error-card>Configuration error: Custom element doesn't exist: klabava-cockpit-card</hui-error-card>"
+                "</body></html>",
+                encoding="utf-8",
+            )
+            # Page 2: Healthy HTML but contains a forbidden placeholder ('0 USD' / '.stale-banner') tested via --forbid-text / --forbid-selector
+            (web_dir / "dashboard.html").write_text(
+                "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>"
+                "<h1>StrataRelay Dashboard</h1>"
+                "<div class='stale-banner'>Balance: 0 USD</div>"
+                "</body></html>",
+                encoding="utf-8",
+            )
+
+            port1 = _find_free_port()
+            start_cmd1 = f'"{sys.executable}" -m http.server {port1} --bind 127.0.0.1 --directory "{web_dir.as_posix()}"'
+            report_ha = tmp_path / "ha-error-report.md"
+
+            proc_ha = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.script_path),
+                    "--mode",
+                    "web",
+                    "--start-cmd",
+                    start_cmd1,
+                    "--url",
+                    f"http://127.0.0.1:{port1}/lovelace.html",
+                    "--assert-text",
+                    "Chytrý dům Klabava",
+                    "--output",
+                    str(report_ha),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(tmp_path),
+            )
+            self.assertNotEqual(
+                proc_ha.returncode,
+                0,
+                "Page containing <hui-error-card> / 'Configuration error' must fail GUI verification automatically!",
+            )
+            ha_report_text = report_ha.read_text(encoding="utf-8")
+            self.assertIn("Verdict: GUI_FAILED", ha_report_text)
+            self.assertTrue(
+                "hui-error-card" in ha_report_text.lower() or "configuration error" in ha_report_text.lower()
+            )
+
+            port2 = _find_free_port()
+            start_cmd2 = f'"{sys.executable}" -m http.server {port2} --bind 127.0.0.1 --directory "{web_dir.as_posix()}"'
+            report_forbid = tmp_path / "forbid-report.md"
+            proc_forbid = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.script_path),
+                    "--mode",
+                    "web",
+                    "--start-cmd",
+                    start_cmd2,
+                    "--url",
+                    f"http://127.0.0.1:{port2}/dashboard.html",
+                    "--assert-text",
+                    "StrataRelay Dashboard",
+                    "--forbid-text",
+                    "Balance: 0 USD",
+                    "--forbid-selector",
+                    ".stale-banner",
+                    "--output",
+                    str(report_forbid),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(tmp_path),
+            )
+            self.assertNotEqual(proc_forbid.returncode, 0)
+            forbid_text = report_forbid.read_text(encoding="utf-8")
+            self.assertIn("Verdict: GUI_FAILED", forbid_text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -43,6 +43,9 @@ In the **Tri-Model Cross-Family Cognitive Architecture**, `opposition-reviewer` 
 - `Verdict: ASW APPROVED`: Diff fulfills task contract, contains passing unit and negative/edge-case tests, direct evidence on disk, and safe blast radius.
 - `Verdict: ASW REJECTED`: Rejected due to missing negative tests, incomplete evidence, or invariant violations.
 
-### 5. Zero Heuristic Substitution & Prompt-to-Code Traceability
-- Reject any diff that replaces trained ML/GBDT/ONNX models with hand-coded logit/`_sigmoid` equations, emits `ENTER_LONG` in a catch-all `SCANNING` fallback, uses naive binary `"take_profit" if pnl >= 0 else "stop_loss"` labels without checking `stoploss_pct`, or uses tautological `assert res is not None` tests.
+### 5. Zero Heuristic Substitution, Cross-Session Gates & Prompt-to-Code Traceability
+- Reject any diff that replaces trained ML/GBDT/ONNX models with hand-coded logit/`_sigmoid` equations, emits `ENTER_LONG` in a catch-all `SCANNING` fallback, bypasses intrinsic model gates via `evaluate_model_live(..., enforce_shield=False)`, uses naive binary `"take_profit" if pnl >= 0 else "stop_loss"` labels without checking `stoploss_pct`, or uses tautological `assert res is not None` tests.
+- Reject any UI/Lovelace/dashboard completion claim if rendered DOM/Shadow DOM evidence contains `<hui-error-card>`, `"Configuration error"`, or `"Custom element doesn't exist"`.
+- Reject any hardware/IoT/ADB completion claim if target hardware was `unauthorized` or `offline` (`BLOCKED_ON_HARDWARE_AUTH`), or if production code performs unapproved binary `classes.dex` APK bytecode hot-patching (violating the 3-Strike Anti-Thrashing Circuit Breaker).
 - Verify a line-by-line **Prompt-to-Code Traceability Matrix** against the user's verbatim instructions.
+- **Opus Credit Exhaustion Fallback & Self-Contained Diff Review**: Always run `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>"` directly (never redirect diffs via PowerShell `>`/`>>` or run `Remove-Item -Force scratch\*` without `-Recurse -Confirm:$false`). If Claude Opus 5.5 credits are exhausted, automatically fall back to the deterministic `invoke_opus_reviewer.py` engine + `Gemini 4 Argon (High)` without stalling.

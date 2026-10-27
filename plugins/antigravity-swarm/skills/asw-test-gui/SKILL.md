@@ -51,7 +51,7 @@ python .antigravity/scripts/run_gui_test.py \
 
 ### 3. Mandatory Physical GUI Checks
 1. **Liveness & HTTP/Window Readiness:** Server binds and responds with HTTP 200..399 (or native window initializes without exiting non-zero).
-2. **Zero Runtime / Console Exceptions:** Zero uncaught `pageerror`, zero `console.error`, zero HTTP 500 responses, and zero `Traceback` / `Segmentation fault` outputs.
+2. **Zero Runtime / Console Exceptions & Shadow DOM Error-Card Scan:** Zero uncaught `pageerror`, zero `console.error`, zero HTTP 500 responses, zero `Traceback` / `Segmentation fault` outputs, and zero `<hui-error-card>`, `<hui-error-badge>`, `"Configuration error"`, or `"Custom element doesn't exist"` across both Light DOM and recursive `shadowRoot` trees (plus `--forbid-text` and `--forbid-selector` support).
 3. **Interactive DOM & State Verification:** Expected headings, views, buttons, forms, and newly implemented UI features are physically present and interactive in the rendered DOM.
 4. **Self-Correction Loop:** If `Verdict: GUI_FAILED` is returned, fix the underlying UI/runtime bug and re-run `asw-test-gui` until `Verdict: GUI_VERIFIED` is achieved.
 5. **Guaranteed Teardown & Cleanup:** Always terminate any spawned localhost dev servers, browser contexts, or native GUI processes before finishing the turn.

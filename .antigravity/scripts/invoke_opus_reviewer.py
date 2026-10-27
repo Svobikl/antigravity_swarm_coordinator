@@ -672,6 +672,14 @@ def audit_diff(
             "message": "Production code introduces unimplemented stubs (NotImplementedError) or synthetic fallback pools."
         })
 
+    # Tripwire 2E / 3B: Live Model Signal Evaluation Bypassing Intrinsic Safety Gates (enforce_shield=False)
+    if re.search(r"evaluate_model_live\s*\([\s\S]{0,240}?enforce_shield\s*=\s*false", added_prod_text):
+        findings.append({
+            "vector": "2. Research & ML Falsification",
+            "level": "CRITICAL",
+            "message": "Live model evaluation disables intrinsic safety/semantic gates (evaluate_model_live(..., enforce_shield=False)), violating Golden Reference & End-to-End Decision Parity Gate."
+        })
+
     # Attack Vector 3: Edge Cases & Boundary Breakdown (including Anti-Tautology Test Gate)
     has_negative_tests = bool(
         re.search(r"def test_.*(negative|edge|bad|fail|error|invalid|reject|collision|crash|tautolog|heuristic|fallback|resilience|boundary)", diff_content, re.IGNORECASE)
@@ -718,6 +726,78 @@ def audit_diff(
             "vector": "4. Downstream & Blast-Radius Safety",
             "level": "CRITICAL",
             "message": "Diff introduces forbidden hardcoded user directories."
+        })
+
+    # Collect runtime-only evidence files (excluding plan markdown) for Tripwires 4B & 4C
+    runtime_ev_chunks: list[str] = []
+    if evidence_dir is not None and evidence_dir.exists():
+        if evidence_dir.is_file() and (plan_path is None or evidence_dir.resolve() != plan_path.resolve()):
+            runtime_ev_chunks.append(read_text_resilient(evidence_dir))
+        elif evidence_dir.is_dir():
+            for ef in sorted(evidence_dir.rglob("*"))[:50]:
+                if ef.is_file():
+                    runtime_ev_chunks.append(read_text_resilient(ef))
+    runtime_ev_lower = "\n".join(runtime_ev_chunks).lower()
+
+    # Filter out meta-lines describing passing negative tests (e.g. "rejecting <hui-error-card>", "GREEN Phase: 4 passed")
+    non_test_ev_lines = [
+        line
+        for line in runtime_ev_lower.splitlines()
+        if not any(
+            meta in line
+            for meta in (
+                "green phase:",
+                "red phase:",
+                "rejecting ",
+                "test_run_gui_test_rejects",
+                "test_diff_review_rejects",
+            )
+        )
+    ]
+    filtered_runtime_ev = "\n".join(non_test_ev_lines)
+
+    # Tripwire 4B: Mandatory Rendered DOM & Zero-Error-Card Gate (Home Assistant Lovelace / Web UI)
+    ui_error_markers = (
+        "<hui-error-card",
+        "<hui-error-badge",
+        "configuration error:",
+        "custom element doesn't exist",
+        "custom element not found",
+        "verdict: gui_failed",
+    )
+    matched_ui_err = next((m for m in ui_error_markers if m in filtered_runtime_ev), None)
+    if matched_ui_err:
+        findings.append({
+            "vector": "4. Downstream & Blast-Radius Safety",
+            "level": "CRITICAL",
+            "message": f"Rendered UI / DOM evidence contains unresolved error card or failed GUI check ({matched_ui_err!r}). Mandatory Rendered DOM & Zero-Error-Card Gate violated."
+        })
+
+    # Tripwire 4C: Boundary-to-Boundary Hardware / ADB Auth & Offline Device Gate
+    hw_auth_markers = (
+        "error: device unauthorized",
+        "\tunauthorized",
+        "adb: device offline",
+        "error: device offline",
+        "blocked_on_hardware_auth",
+    )
+    matched_hw_err = next((m for m in hw_auth_markers if m in filtered_runtime_ev), None)
+    if matched_hw_err:
+        findings.append({
+            "vector": "4. Downstream & Blast-Radius Safety",
+            "level": "CRITICAL",
+            "message": f"Target hardware/ADB device was unauthorized or offline in verification evidence ({matched_hw_err.strip()!r}). Workflow must pause in BLOCKED_ON_HARDWARE_AUTH instead of claiming completion."
+        })
+
+    # Tripwire 4D: 3-Strike Anti-Thrashing & Unapproved Binary .dex APK Patching Circuit Breaker
+    if any(
+        dex_marker in added_prod_text
+        for dex_marker in ("classes.dex", "classes2.dex", "ha-patched-signed.apk", "baksmali")
+    ):
+        findings.append({
+            "vector": "4. Downstream & Blast-Radius Safety",
+            "level": "CRITICAL",
+            "message": "Unapproved binary .dex APK bytecode hot-patching ('classes.dex') detected in production code, violating the 3-Strike Anti-Thrashing & Architectural Escalation Circuit Breaker."
         })
 
     critical_or_high = [f for f in findings if f["level"] in ("CRITICAL", "HIGH")]
