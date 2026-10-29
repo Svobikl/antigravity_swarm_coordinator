@@ -126,12 +126,19 @@ def _kill_process_tree(proc: subprocess.Popen) -> None:
 
 
 def _wait_for_http_ready(url: str, timeout_seconds: float) -> tuple[bool, int, str, str]:
-    """Poll a localhost URL until it responds or timeout expires."""
+    """Poll a localhost URL with uncached headers until it responds or timeout expires."""
     deadline = time.time() + max(timeout_seconds, 1.0)
     last_err = "No response"
     while time.time() < deadline:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Antigravity-ASW-Test-GUI/1.0"})
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Antigravity-ASW-Test-GUI/1.0",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                },
+            )
             with urllib.request.urlopen(req, timeout=3.0) as resp:
                 status = int(resp.status)
                 body = resp.read().decode("utf-8", errors="replace")
@@ -188,6 +195,7 @@ def _try_playwright_verification(
     url: str,
     assert_texts: list[str],
     assert_selectors: list[str],
+    assert_asset_versions: list[str],
     forbid_texts: list[str],
     forbid_selectors: list[str],
     click_selectors: list[str],
@@ -207,7 +215,13 @@ def _try_playwright_verification(
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            context = browser.new_context(viewport={"width": 1280, "height": 800})
+            context = browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                extra_http_headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                },
+            )
             page = context.new_page()
 
             page.on(
@@ -265,6 +279,13 @@ def _try_playwright_verification(
                 if not _selector_present(sel):
                     findings.append(f"Missing expected UI selector: {sel!r}")
 
+            raw_html = page.content()
+            for ver_token in assert_asset_versions:
+                if ver_token and ver_token not in raw_html and ver_token not in combined_text:
+                    findings.append(
+                        f"Missing expected asset/module version token in served HTML (stale cache or un-restarted container): {ver_token!r}"
+                    )
+
             for err_sel in list(DEFAULT_FORBIDDEN_ERROR_SELECTORS) + list(forbid_selectors):
                 if _selector_present(err_sel):
                     findings.append(f"Forbidden error/UI element detected in rendered DOM/Shadow DOM: <{err_sel}>")
@@ -305,6 +326,7 @@ def run_web_gui_test(
     start_cmd: str | None = None,
     assert_texts: list[str] | None = None,
     assert_selectors: list[str] | None = None,
+    assert_asset_versions: list[str] | None = None,
     forbid_texts: list[str] | None = None,
     forbid_selectors: list[str] | None = None,
     click_selectors: list[str] | None = None,
@@ -314,6 +336,7 @@ def run_web_gui_test(
     """Execute physical web GUI verification against a localhost/LAN URL."""
     texts = assert_texts or []
     selectors = assert_selectors or []
+    asset_versions = assert_asset_versions or []
     bad_texts = forbid_texts or []
     bad_selectors = forbid_selectors or []
     clicks = click_selectors or []
@@ -342,7 +365,7 @@ def run_web_gui_test(
             }
 
         pw_res = _try_playwright_verification(
-            url, texts, selectors, bad_texts, bad_selectors, clicks, screenshot_path
+            url, texts, selectors, asset_versions, bad_texts, bad_selectors, clicks, screenshot_path
         )
         if pw_res is not None:
             pw_res["mode"] = "web"
@@ -365,6 +388,12 @@ def run_web_gui_test(
         for sel in selectors:
             if not inspector.matches_selector(sel):
                 findings.append(f"Missing expected UI selector: {sel!r}")
+
+        for ver_token in asset_versions:
+            if ver_token and ver_token not in body:
+                findings.append(
+                    f"Missing expected asset/module version token in served HTML (stale cache or un-restarted container): {ver_token!r}"
+                )
 
         for err_sel in list(DEFAULT_FORBIDDEN_ERROR_SELECTORS) + list(bad_selectors):
             if inspector.matches_selector(err_sel):
@@ -486,6 +515,7 @@ def main() -> int:
     parser.add_argument("--app-cmd", type=str, default=None, help="Command to launch native GUI application in native mode")
     parser.add_argument("--assert-text", action="append", default=[], help="Text that must be visible in the GUI (repeatable)")
     parser.add_argument("--assert-selector", action="append", default=[], help="DOM selector/tag that must exist (repeatable)")
+    parser.add_argument("--assert-asset-version", action="append", default=[], help="Asset/module version token (e.g. '?v=20261028') that must appear in served HTML (repeatable)")
     parser.add_argument("--forbid-text", action="append", default=[], help="Text that must NOT appear in rendered DOM/Shadow DOM (repeatable)")
     parser.add_argument("--forbid-selector", action="append", default=[], help="DOM selector/tag that must NOT exist (repeatable)")
     parser.add_argument("--click", action="append", default=[], help="Selector to click in Playwright mode (repeatable)")
@@ -511,6 +541,7 @@ def main() -> int:
             start_cmd=args.start_cmd,
             assert_texts=args.assert_text,
             assert_selectors=args.assert_selector,
+            assert_asset_versions=args.assert_asset_version,
             forbid_texts=args.forbid_text,
             forbid_selectors=args.forbid_selector,
             click_selectors=args.click,

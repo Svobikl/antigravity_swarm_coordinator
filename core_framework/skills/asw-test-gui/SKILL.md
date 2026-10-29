@@ -55,3 +55,4 @@ python .antigravity/scripts/run_gui_test.py \
 3. **Interactive DOM & State Verification:** Expected headings, views, buttons, forms, and newly implemented UI features are physically present and interactive in the rendered DOM.
 4. **Self-Correction Loop:** If `Verdict: GUI_FAILED` is returned, fix the underlying UI/runtime bug and re-run `asw-test-gui` until `Verdict: GUI_VERIFIED` is achieved.
 5. **Guaranteed Teardown & Cleanup:** Always terminate any spawned localhost dev servers, browser contexts, or native GUI processes before finishing the turn.
+6. **Uncached HTML & Asset Cache-Buster Verification (`--assert-asset-version`):** When updating static JS/CSS bundles or Home Assistant `extra_module_url`, pass `--assert-asset-version "<new_version>"` to `run_gui_test.py` (which sends `Cache-Control: no-cache, no-store, must-revalidate`) to verify the live container actually serves the updated bundle URL after restart.

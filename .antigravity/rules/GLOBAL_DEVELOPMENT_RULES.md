@@ -580,3 +580,24 @@ Final Handoff
    - Always capture an atomic configuration backup before modifying live daemons/services (`systemd`, ADB keymaps, `.storage/lovelace`) and automatically roll back to the working state if verification fails.
 5. **Feature-Flag & Negative-State Isolation Gate:**
    - Every feature toggle or status flag (`semantic_shield_enabled`, `enforce_shield`, `User.status == "SUSPENDED"`, `PAPER vs LIVE`) must have an automated **negative-state isolation test** proving that when `OFF` or `SUSPENDED`, zero unintended side effects (zero Telegram veto alerts, zero live exchange orders) occur, and that default provisioning matches the model contract.
+
+---
+
+## 27. Production Reliability, Multi-Tenant Safety, Public-Repo Privacy & Baseline Survival Gates
+
+1. **Multi-Tenant State Isolation & Pre-Exchange Idempotency Gate (`Tripwire 3C`):**
+   - In any multi-user or multi-tenant system (`tenant_id`, `user_id`, `profile_id`), every uniqueness or idempotency key (`Trade.idempotency_key`, `Signal.uid`, cache keys) MUST be explicitly scoped by tenant (`{tenant_id}:{signal_key}`). Setting `idempotency_key = signal_key` globally across tenants is strictly forbidden.
+   - Before dispatching any irreversible external side effect (live exchange market/limit order, payment capture, webhook dispatch), persist a `PENDING` database record (or verify uniqueness constraints) **before** calling the external API so a database `IntegrityError` can never roll back the local record after a live order has already filled on the exchange.
+   - Every multi-tenant execution test MUST run with **at least 2 concurrent tenants** (`Tenant A` paper + `Tenant B` live) on the exact same signal bar, asserting both database rows commit and `exchange_position == db_open_position`.
+2. **Production-Volume Distribution & Non-Degenerate Curve Gate (`Tripwire 2F`):**
+   - Never normalize a rolling sum of scores/counts by a capped constant (`sum(scores) / min(8.0, len(scores))`); when production feeds deliver `N=50..100` items instead of a 3-item unit-test array, capped denominators inflate z-scores (`sem_shock_z`) by $10\times$ and lock all models in `SHIELD_HOLD`. Always test feature extractors across both sparse (`N=3`) and realistic production batch sizes (`N=75+`).
+   - Any historical equity, PnL, or `drawdownPct` curve generator must compute **intra-trade mark-to-market unrealized drawdown** across all bars and reject degenerate flat `0.0%` drawdown series (`min(drawdownPct) < 0` required whenever price moves against open positions).
+3. **Public-Repo IP, Secret & PII Sanitization Gate (`--scan-public-repo` / `Tripwire 4E`):**
+   - Before staging, committing, or pushing to any public GitHub repository (or generating public documentation/examples), run `python .antigravity/scripts/invoke_opus_reviewer.py --scan-public-repo "<repo_dir>" --forbid-terms "<custom_pii_terms>"`.
+   - Zero RFC1918 private LAN IPs (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`), live API tokens (`AIzaSy...`, `ghp_...`, `sk-...`), personal names, or private home/location identifiers may ever appear in tracked files or commit messages; always use placeholders (`<DEVICE_IP>`, `YOUR_API_KEY`) and environment variables.
+4. **Baseline Feature Survival & Dual-Mode Regression Matrix Gate:**
+   - Adding a new interaction mode (e.g., long-press dictation vs. short-press voice command, multilingual STT prompt, or Android TV package debloat) MUST include a **Dual-Mode Regression Matrix** verifying that the previously working baseline mode (normal voice command `"rozsviť na chodbě"`, English technical terms `"LLM inference"`, or third-party app dependencies like Kodi + Stream Cinema) still passes end-to-end on real hardware.
+   - Network daemons on embedded Linux/RPi hosts must verify IPv4 binding/resolution (`AF_INET`) when IPv6 (`AF_INET6`) causes connection timeouts.
+5. **Stale Asset & Browser Cache-Buster Verification Gate (`--assert-asset-version`):**
+   - When updating static JS/CSS bundles or Home Assistant `extra_module_url` / Lovelace resources, `homeassistant.reload_all` does NOT reload `frontend` HTML templates; a full container/service restart is required when `configuration.yaml` changes.
+   - Verify live uncached HTML (`Cache-Control: no-cache`) via `python .antigravity/scripts/run_gui_test.py --mode web --url "<live_url>" --assert-asset-version "<new_version>"` to prove the live server actually serves the new `?v=<new_version>` bundle URL.

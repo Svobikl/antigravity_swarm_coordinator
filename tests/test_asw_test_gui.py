@@ -291,6 +291,80 @@ class TestAswTestGui(unittest.TestCase):
             forbid_text = report_forbid.read_text(encoding="utf-8")
             self.assertIn("Verdict: GUI_FAILED", forbid_text)
 
+    def test_run_gui_test_assert_asset_version_detects_stale_cached_module_url(self):
+        """Reproduces Home Assistant Step 896 (Oct 28): container served stale extra_module_url '?v=20261026_fixed' instead of '?v=20261028_hist_v2'."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            web_dir = tmp_path / "ha_cache_web"
+            (web_dir / "local").mkdir(parents=True)
+            (web_dir / "local" / "energy-cockpit-card.js").write_text(
+                "window.__cockpit_loaded = true;\n",
+                encoding="utf-8",
+            )
+            (web_dir / "index.html").write_text(
+                "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+                "<script type='module' src='/local/energy-cockpit-card.js?v=20261026_fixed'></script>"
+                "</head><body><h1>Chytrý dům</h1></body></html>",
+                encoding="utf-8",
+            )
+
+            port = _find_free_port()
+            start_cmd = f'"{sys.executable}" -m http.server {port} --bind 127.0.0.1 --directory "{web_dir.as_posix()}"'
+            report_stale = tmp_path / "stale-asset-report.md"
+
+            # Negative case: expecting new version 20261028_hist_v2, but server still serves 20261026_fixed
+            proc_stale = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.script_path),
+                    "--mode",
+                    "web",
+                    "--start-cmd",
+                    start_cmd,
+                    "--url",
+                    f"http://127.0.0.1:{port}/index.html",
+                    "--assert-asset-version",
+                    "20261028_hist_v2",
+                    "--output",
+                    str(report_stale),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(tmp_path),
+            )
+            self.assertNotEqual(
+                proc_stale.returncode,
+                0,
+                "--assert-asset-version must fail when live HTML serves stale module URL!",
+            )
+            self.assertIn("Verdict: GUI_FAILED", report_stale.read_text(encoding="utf-8"))
+
+            # Positive case: matching asset version 20261026_fixed passes
+            port_ok = _find_free_port()
+            start_cmd_ok = f'"{sys.executable}" -m http.server {port_ok} --bind 127.0.0.1 --directory "{web_dir.as_posix()}"'
+            report_ok = tmp_path / "fresh-asset-report.md"
+            proc_ok = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.script_path),
+                    "--mode",
+                    "web",
+                    "--start-cmd",
+                    start_cmd_ok,
+                    "--url",
+                    f"http://127.0.0.1:{port_ok}/index.html",
+                    "--assert-asset-version",
+                    "20261026_fixed",
+                    "--output",
+                    str(report_ok),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(tmp_path),
+            )
+            self.assertEqual(proc_ok.returncode, 0)
+            self.assertIn("Verdict: GUI_VERIFIED", report_ok.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

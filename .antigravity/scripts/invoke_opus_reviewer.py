@@ -311,6 +311,73 @@ def sync_agents(repo_root: Path) -> int:
     return 0
 
 
+def scan_public_repo_privacy(repo_dir: Path, forbid_terms_csv: str | None = None) -> int:
+    """Scan a repository or directory for RFC1918 private LAN IPs, live API keys, and forbidden PII/location terms before public push."""
+    if not repo_dir.exists():
+        sys.stderr.write(f"Error: scan target does not exist: {repo_dir}\n")
+        return 2
+
+    raw_terms = []
+    if forbid_terms_csv:
+        raw_terms.extend([t.strip() for t in forbid_terms_csv.split(",") if t.strip()])
+    env_terms = os.environ.get("ANTIGRAVITY_FORBID_PUBLIC_TERMS", "")
+    if env_terms:
+        raw_terms.extend([t.strip() for t in env_terms.split(",") if t.strip()])
+
+    private_ip_re = re.compile(
+        r"\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b"
+    )
+    secret_re = re.compile(
+        r"\b(?:AIzaSy[A-Za-z0-9_-]{33}|ghp_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9]{20,})\b"
+    )
+
+    candidate_files = [repo_dir] if repo_dir.is_file() else sorted(repo_dir.rglob("*"))
+    violations: list[str] = []
+
+    for fpath in candidate_files:
+        if not fpath.is_file():
+            continue
+        rel_parts = fpath.relative_to(repo_dir if repo_dir.is_dir() else repo_dir.parent).parts
+        if any(p in (".git", "__pycache__", "node_modules", ".venv", "venv") for p in rel_parts):
+            continue
+        if fpath.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".whl", ".pyc"):
+            continue
+        text = read_text_resilient(fpath)
+        if not text:
+            continue
+        rel_str = str(fpath.relative_to(repo_dir if repo_dir.is_dir() else repo_dir.parent))
+        for line_no, line in enumerate(text.splitlines(), 1):
+            for ip_m in private_ip_re.finditer(line):
+                ip_val = ip_m.group(0)
+                if ip_val not in (
+                    "10.0.0.0",
+                    "10.0.2.2",
+                    "10.0.1.5",
+                    "10.0.1.50",
+                    "10.1.0.0",
+                    "172.16.0.0",
+                    "192.168.0.0",
+                    "192.168.1.1",
+                    "192.168.1.10",
+                    "192.168.1.100",
+                ):
+                    violations.append(f"{rel_str}:{line_no}: Private RFC1918 LAN IP {ip_val!r} detected")
+            for sec_m in secret_re.finditer(line):
+                violations.append(f"{rel_str}:{line_no}: Live API/token secret {sec_m.group(0)[:10]}... detected")
+            for term in raw_terms:
+                if re.search(re.escape(term), line, re.IGNORECASE):
+                    violations.append(f"{rel_str}:{line_no}: Forbidden PII/location term {term!r} detected")
+
+    if violations:
+        sys.stdout.write("Verdict: PUBLIC_REPO_PRIVACY_REJECTED\n")
+        for v in violations:
+            sys.stdout.write(f" - [CRITICAL] {v}\n")
+        return 1
+
+    sys.stdout.write("Verdict: PUBLIC_REPO_PRIVACY_APPROVED (0 private IPs, secrets, or forbidden PII terms found)\n")
+    return 0
+
+
 def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str, list[dict], str]:
     """Audit an implementation plan across the 6 mandatory adversarial vectors and Anti-Shortcut Law."""
     if not plan_path.exists():
@@ -680,6 +747,22 @@ def audit_diff(
             "message": "Live model evaluation disables intrinsic safety/semantic gates (evaluate_model_live(..., enforce_shield=False)), violating Golden Reference & End-to-End Decision Parity Gate."
         })
 
+    # Tripwire 2F: Production-Volume Capped-Denominator Inflation (sum / min(8.0, len(...))) & Degenerate Flat 0.0% Drawdown Series
+    if re.search(r"/\s*min\s*\(\s*\d+(?:\.\d+)?\s*,\s*(?:float\s*\()?\s*len\s*\(", added_prod_text):
+        findings.append({
+            "vector": "2. Research & ML Falsification",
+            "level": "CRITICAL",
+            "message": "Production-volume denominator inflation detected: dividing sum by min(cap, len(items)) explodes z-scores when real batch count exceeds the cap (use true sample mean or rate)."
+        })
+    zero_dd_matches = re.findall(r"['\"]?drawdown_?pct['\"]?\s*:\s*0(?:\.0+)?\b", added_prod_text)
+    neg_dd_matches = re.findall(r"['\"]?drawdown_?pct['\"]?\s*:\s*-[0-9]", added_prod_text)
+    if len(zero_dd_matches) >= 5 and not neg_dd_matches:
+        findings.append({
+            "vector": "2. Research & ML Falsification",
+            "level": "CRITICAL",
+            "message": "Degenerate all-zero drawdownPct series detected (>= 5 points at 0.0% with no negative intra-trade drawdown). Compute mark-to-market unrealized drawdown across all bars."
+        })
+
     # Attack Vector 3: Edge Cases & Boundary Breakdown (including Anti-Tautology Test Gate)
     has_negative_tests = bool(
         re.search(r"def test_.*(negative|edge|bad|fail|error|invalid|reject|collision|crash|tautolog|heuristic|fallback|resilience|boundary)", diff_content, re.IGNORECASE)
@@ -718,6 +801,17 @@ def audit_diff(
                 "level": "CRITICAL",
                 "message": "Tautological test suite detected: added tests only assert 'is not None' without verifying concrete domain values or behavioral invariants."
             })
+
+    # Tripwire 3C: Non-Tenant-Scoped idempotency_key in Multi-Tenant Execution (Orphaned Live Fill / UNIQUE Rollback Prevention)
+    has_tenant_context = any(t in added_prod_text for t in ("tenant_id", "tenant", "user_id", "profile_id"))
+    if has_tenant_context and re.search(
+        r"idempotency_key\s*=\s*(?:signal_key|trade_uid|order_key)\b", added_prod_text
+    ):
+        findings.append({
+            "vector": "3. Edge Cases & Boundary Breakdown",
+            "level": "CRITICAL",
+            "message": "Non-tenant-scoped idempotency_key (e.g. idempotency_key=signal_key) in multi-tenant execution path: causes UNIQUE constraint DB rollback and orphaned live exchange fills when multiple tenants execute the same signal."
+        })
 
     # Attack Vector 4: Downstream & Blast-Radius Safety
     user_dir_pattern = re.compile(r"[A-Za-z]:" + r"[\\/]+Users[\\/]+", re.IGNORECASE)
@@ -800,6 +894,24 @@ def audit_diff(
             "message": "Unapproved binary .dex APK bytecode hot-patching ('classes.dex') detected in production code, violating the 3-Strike Anti-Thrashing & Architectural Escalation Circuit Breaker."
         })
 
+    # Tripwire 4E: Public-Repo Private LAN IP & PII Sanitization Gate
+    plan_low = plan_content.lower() if plan_content else ""
+    is_public_repo_context = any(
+        p in plan_low
+        for p in ("public github", "public repo", "veřejný github", "veřejný repozitář", "open-source")
+    )
+    if is_public_repo_context:
+        priv_ip_match = re.search(
+            r"\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b",
+            added_prod_text,
+        )
+        if priv_ip_match and priv_ip_match.group(0) not in ("192.168.0.0", "10.0.0.0"):
+            findings.append({
+                "vector": "4. Downstream & Blast-Radius Safety",
+                "level": "CRITICAL",
+                "message": f"Private LAN IP ({priv_ip_match.group(0)}) introduced in a public GitHub repository diff. Use placeholders (<DEVICE_IP>) or environment variables."
+            })
+
     critical_or_high = [f for f in findings if f["level"] in ("CRITICAL", "HIGH")]
     verdict = "ASW REJECTED" if critical_or_high else "ASW APPROVED"
 
@@ -854,6 +966,8 @@ def main():
     parser.add_argument("--preflight", action="store_true", help="Discover Antigravity runtime and return JSON status")
     parser.add_argument("--sync-agents", action="store_true", help="Sync agent TOMLs to global plugin directory")
     parser.add_argument("--clean-scratch", type=Path, help="Non-interactively clean a scratch directory (including __pycache__)")
+    parser.add_argument("--scan-public-repo", type=Path, help="Scan a target repo/directory for RFC1918 LAN IPs, API secrets, and forbidden PII terms")
+    parser.add_argument("--forbid-terms", type=str, help="Comma-separated list of custom PII/location terms to block in --scan-public-repo")
     parser.add_argument("--mode", choices=["plan-review", "diff-review"], help="Review mode")
     parser.add_argument("--plan", type=Path, help="Path to implementation plan (auto-discovered from .asw/plans if omitted)")
     parser.add_argument("--diff", type=Path, help="Path to code diff (or use --files for self-contained diff generation)")
@@ -868,6 +982,9 @@ def main():
 
     if args.clean_scratch:
         return clean_scratch_directory(args.clean_scratch)
+
+    if args.scan_public_repo:
+        return scan_public_repo_privacy(args.scan_public_repo, args.forbid_terms)
 
     if args.preflight:
         runtime_info = discover_antigravity_runtime(repo_root)

@@ -179,7 +179,7 @@ class TestCrossSessionFailureGates(unittest.TestCase):
                 "diff --git a/scripts/setup_tv.py b/scripts/setup_tv.py\n"
                 "+++ b/scripts/setup_tv.py\n"
                 "+def connect_tv():\n"
-                "+    return '192.168.10.203:5555'\n"
+                "+    return '<TV_IP>:5555'\n"
                 "diff --git a/tests/test_tv.py b/tests/test_tv.py\n"
                 "+++ b/tests/test_tv.py\n"
                 "+def test_negative_invalid_ip():\n"
@@ -189,7 +189,7 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             (ev_dir / "adb_output.log").write_text(
                 "RED phase fail -> GREEN phase pass, negative edge verified\n"
                 "List of devices attached\n"
-                "192.168.10.203:5555\tunauthorized\n"
+                "emulator-5554\tunauthorized\n"
                 "error: device unauthorized.\n",
                 encoding="utf-8",
             )
@@ -286,6 +286,11 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             "Feature-Flag & Negative-State Isolation Gate",
             "BLOCKED_ON_HARDWARE_AUTH",
             "hui-error-card",
+            "Multi-Tenant State Isolation & Pre-Exchange Idempotency Gate",
+            "Production-Volume Distribution & Non-Degenerate Curve Gate",
+            "Public-Repo IP, Secret & PII Sanitization Gate",
+            "Baseline Feature Survival & Dual-Mode Regression Matrix Gate",
+            "Stale Asset & Browser Cache-Buster Verification Gate",
         ):
             self.assertIn(required_term, rules_text, f"Missing {required_term!r} in GLOBAL_DEVELOPMENT_RULES.md")
 
@@ -301,6 +306,9 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             "Mandatory Rendered DOM & Shadow-Root Zero-Error-Card Gate",
             "3-Strike Anti-Thrashing",
             "BLOCKED_ON_HARDWARE_AUTH",
+            "Multi-Tenant State Isolation & Pre-Exchange Idempotency Gate",
+            "Public-Repo IP, Secret & PII Sanitization Gate",
+            "Stale Asset & Browser Cache-Buster Verification Gate",
         ):
             self.assertIn(term, gemini_text, f"Missing {term!r} in GEMINI.md")
 
@@ -310,6 +318,8 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             "hui-error-card",
             "BLOCKED_ON_HARDWARE_AUTH",
             "3-Strike",
+            "--scan-public-repo",
+            "--assert-asset-version",
         ):
             self.assertIn(term, hook_text, f"Missing {term!r} in asw-hook.mjs")
 
@@ -321,6 +331,177 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             self.gui_script.read_text(encoding="utf-8"),
             self.core_gui_script.read_text(encoding="utf-8"),
         )
+
+    def test_diff_review_rejects_non_tenant_idempotency_key_in_multi_tenant_worker(self):
+        """Reproduces EdgeRelay Step 6617 (Oct 29): global idempotency_key = signal_key without tenant_id scoping caused DB rollback after live Binance fill for user shadius."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            plan_file = tmp_path / "plan.md"
+            diff_file = tmp_path / "worker_idempotency.diff"
+            ev_dir = tmp_path / "evidence"
+            ev_dir.mkdir()
+            out_file = tmp_path / "review.md"
+
+            plan_file.write_text(self._closed_plan("Execute multi-tenant trades"), encoding="utf-8")
+            diff_file.write_text(
+                "diff --git a/services/execution/worker.py b/services/execution/worker.py\n"
+                "+++ b/services/execution/worker.py\n"
+                "+def _execute_tenant_trade(tenant_id: str, signal_key: str):\n"
+                "+    trade = Trade(tenant_id=tenant_id, idempotency_key=signal_key)\n"
+                "+    return trade\n"
+                "diff --git a/tests/test_worker.py b/tests/test_worker.py\n"
+                "+++ b/tests/test_worker.py\n"
+                "+def test_negative_duplicate_rejected():\n"
+                "+    assert 1 == 1\n",
+                encoding="utf-8",
+            )
+            (ev_dir / "test.log").write_text(
+                "RED phase fail -> GREEN phase pass, negative edge verified\n",
+                encoding="utf-8",
+            )
+
+            res = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.reviewer_script),
+                    "--mode",
+                    "diff-review",
+                    "--plan",
+                    str(plan_file),
+                    "--diff",
+                    str(diff_file),
+                    "--evidence",
+                    str(ev_dir),
+                    "--output",
+                    str(out_file),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            self.assertNotEqual(
+                res.returncode,
+                0,
+                "Non-tenant-scoped idempotency_key=signal_key in multi-tenant code must be rejected!",
+            )
+            report = out_file.read_text(encoding="utf-8")
+            self.assertIn("Verdict: ASW REJECTED", report)
+            self.assertIn("idempotency_key", report.lower())
+
+    def test_diff_review_rejects_capped_denominator_shock_explosion_and_flat_zero_drawdown(self):
+        """Reproduces EdgeRelay Steps 6126 & 6617: sum divided by min(8.0, len(scores_24h)) and degenerate all-zero drawdownPct series."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            plan_file = tmp_path / "plan.md"
+            diff_file = tmp_path / "bad_quant.diff"
+            ev_dir = tmp_path / "evidence"
+            ev_dir.mkdir()
+            out_file = tmp_path / "review.md"
+
+            plan_file.write_text(self._closed_plan("Compute semantic shock and drawdown series"), encoding="utf-8")
+            diff_file.write_text(
+                "diff --git a/services/market/v43_semantic_engine.py b/services/market/v43_semantic_engine.py\n"
+                "+++ b/services/market/v43_semantic_engine.py\n"
+                "+def compute_shock(scores_24h):\n"
+                "+    shock_density = sum(scores_24h) / min(8.0, float(len(scores_24h) or 1))\n"
+                "+    pts = [\n"
+                "+        {'date': '2022-01', 'drawdownPct': 0.0},\n"
+                "+        {'date': '2023-01', 'drawdownPct': 0.0},\n"
+                "+        {'date': '2024-01', 'drawdownPct': 0.0},\n"
+                "+        {'date': '2025-01', 'drawdownPct': 0.0},\n"
+                "+        {'date': '2026-01', 'drawdownPct': 0.0},\n"
+                "+    ]\n"
+                "+    return shock_density, pts\n"
+                "diff --git a/tests/test_quant.py b/tests/test_quant.py\n"
+                "+++ b/tests/test_quant.py\n"
+                "+def test_negative_empty_scores():\n"
+                "+    assert compute_shock([])[0] == 0.0\n",
+                encoding="utf-8",
+            )
+            (ev_dir / "test.log").write_text(
+                "RED phase fail -> GREEN phase pass, negative edge verified\n",
+                encoding="utf-8",
+            )
+
+            res = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.reviewer_script),
+                    "--mode",
+                    "diff-review",
+                    "--plan",
+                    str(plan_file),
+                    "--diff",
+                    str(diff_file),
+                    "--evidence",
+                    str(ev_dir),
+                    "--output",
+                    str(out_file),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            self.assertNotEqual(res.returncode, 0)
+            report = out_file.read_text(encoding="utf-8")
+            self.assertIn("Verdict: ASW REJECTED", report)
+            self.assertTrue("min(" in report.lower() or "drawdown" in report.lower())
+
+    def test_scan_public_repo_and_diff_review_reject_private_ips_api_keys_and_forbid_terms(self):
+        """Reproduces Deye/TCL TV Step 4818 (Oct 28): pushing private LAN IPs, API keys, or location PII to a public GitHub repo."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo_dir = tmp_path / "public_repo"
+            repo_dir.mkdir()
+            sample_lan_ip = ".".join(["192", "168", "99", "203"])
+            (repo_dir / "setup_tv.py").write_text(
+                f"TV_HOST = '{sample_lan_ip}:5555'\n"
+                "HOME_NAME = 'MySecretLocationSmartHome'\n",
+                encoding="utf-8",
+            )
+
+            # 1. Standalone --scan-public-repo CLI mode must fail and report both the LAN IP and forbidden term
+            scan_res = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.reviewer_script),
+                    "--scan-public-repo",
+                    str(repo_dir),
+                    "--forbid-terms",
+                    "SecretLocation,PrivateOwner",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            self.assertNotEqual(
+                scan_res.returncode,
+                0,
+                "--scan-public-repo must fail when private LAN IPs or forbidden PII terms exist!",
+            )
+            self.assertIn(sample_lan_ip, scan_res.stdout)
+            self.assertIn("SecretLocation", scan_res.stdout)
+
+            # 2. Clean repo with placeholders passes --scan-public-repo
+            (repo_dir / "setup_tv.py").write_text(
+                "TV_HOST = '<TV_IP_ADDRESS>:5555'\n"
+                "HOME_NAME = 'MySmartHome'\n",
+                encoding="utf-8",
+            )
+            scan_ok = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.reviewer_script),
+                    "--scan-public-repo",
+                    str(repo_dir),
+                    "--forbid-terms",
+                    "SecretLocation,PrivateOwner",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            self.assertEqual(scan_ok.returncode, 0, f"Sanitized public repo should pass:\n{scan_ok.stdout}")
 
 
 if __name__ == "__main__":
