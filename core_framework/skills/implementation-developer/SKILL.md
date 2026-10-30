@@ -46,6 +46,6 @@ Participate in the bounded implement/build-test/diagnose/fix loop (maximum 5 cyc
 
 
 ## Zero Heuristic Substitution Law (Strictly Enforced)
-- Never replace trained ML/quantitative models (XGBoost `.json`, LightGBM `.txt`, ONNX), mathematical specifications, or external REST APIs with hand-coded `_sigmoid` / logit heuristic formulas, synthetic data interpolations, or catch-all `SCANNING -> ENTER_LONG` fallbacks.
-- Never trigger live exchange orders or external side effects inside configuration/profile save endpoints without an active `ENTER_LONG` signal guard.
-- Always enforce new DB status flags (`SUSPENDED`, tier delays, stop-loss overrides) end-to-end across all runtime entrypoints.
+- Never replace trained ML/quantitative models (`.json`, `.txt`, `.onnx`, `.pt`), mathematical specifications, or external REST APIs with hand-coded `_sigmoid` / linear heuristic formulas, synthetic data interpolations, or catch-all idle-to-action fallbacks.
+- Never trigger live external mutations or orders inside configuration/profile save endpoints without an active execution guard.
+- Always enforce new DB status flags (`SUSPENDED`, rate-limit tiers, threshold overrides) end-to-end across all runtime entrypoints.

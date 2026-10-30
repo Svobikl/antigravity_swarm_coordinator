@@ -49,12 +49,18 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 DEFAULT_FORBIDDEN_ERROR_SELECTORS: tuple[str, ...] = (
+    "vite-error-overlay",
+    "error-boundary",
+    "error-card",
     "hui-error-card",
     "hui-error-badge",
-    "error-card",
 )
 
 DEFAULT_FORBIDDEN_ERROR_TEXTS: tuple[str, ...] = (
+    "Unhandled Runtime Error",
+    "Application error: a client-side exception has occurred",
+    "ChunkLoadError",
+    "Hydration failed",
     "Configuration error",
     "Custom element doesn't exist",
     "Custom element not found",

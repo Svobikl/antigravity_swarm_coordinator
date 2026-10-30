@@ -523,20 +523,20 @@ Final Handoff
 
 ## 24. Zero Heuristic Substitution, Anti-Shortcut & Prompt-to-Code Traceability Law
 
-1. **Zero Heuristic Substitution (Artifact & API Parity Mandate):**
-   - Never replace a trained ML/quantitative model (e.g., XGBoost `.json`, LightGBM `.txt`, FinBERT/ONNX `.onnx`, PyTorch weights), mathematical specification, historical dataset, or external API integration with hand-coded heuristic equations (`_sigmoid(...)`, manual logit weights, synthetic interpolation, or mock local fallbacks).
-   - When integrating an offline/research model or specification into a live runtime, you MUST bundle or load the exact model artifact and prove numerical parity (`max_abs_diff < 1e-6`) via an automated parity test.
+1. **Zero Heuristic Substitution (Artifact, Specification & API Parity Mandate):**
+   - Never replace a trained ML/quantitative model (e.g., `.json`, `.txt`, `.onnx`, `.pt`, `.pkl` weights), formal mathematical specification, protocol schema, or external API integration with hand-coded heuristic equations (`_sigmoid(...)`, manual linear weights, synthetic interpolation, or mock local fallbacks).
+   - When integrating an offline/research model, algorithm, or specification into a live runtime, you MUST load or execute the authoritative artifact/implementation and prove numerical and functional parity (`max_abs_diff < 1e-6`) via an automated parity test.
 2. **Mandatory `User Intent & Anti-Shortcut Contract` Before Coding:**
    - Every implementation plan (`.asw/plans/<slug>.md`) and every `asw-loop` must begin by recording:
-     - `Verbatim User Requirements (REQ-1..N)`: exact breakdown of every user command without silent scope reduction;
-     - `Authoritative Source of Truth`: exact files, model binaries, datasets, or API endpoints that must be used;
-     - `Forbidden Shortcuts & Heuristics`: explicit list of prohibited approximations or fallbacks.
-3. **Zero Catch-All Execution Fallbacks & Zero Unintended Side Effects:**
-   - Never write catch-all `else:` branches that emit trade entries (`ENTER_LONG` / `BUY`) when `SCANNING`, or naive binary exit classifiers (`"take_profit" if pnl >= 0 else "stop_loss"`) that ignore configured thresholds (`stoploss_pct_override`).
-   - Configuration, profile, and CRUD save endpoints (`PUT`/`POST` settings or toggles) must NEVER unconditionally trigger live exchange orders or external side effects without an active, verified signal gate (`action == "ENTER_LONG"`).
+      - `Verbatim User Requirements (REQ-1..N)`: exact breakdown of every user command without silent scope reduction;
+      - `Authoritative Source of Truth`: exact files, model binaries, datasets, or API endpoints that must be used;
+      - `Forbidden Shortcuts & Heuristics`: explicit list of prohibited approximations or fallbacks.
+3. **Zero Catch-All Side-Effect Fallbacks & Zero Unintended Mutations:**
+   - Never write catch-all `else:` branches that emit active execution/mutation actions when the system is in an idle/scanning/error state, or naive binary classifiers (`"success" if delta >= 0 else "failure"`) that ignore configured domain thresholds.
+   - Configuration, profile, and CRUD save endpoints (`PUT`/`POST` settings or toggles) must NEVER unconditionally trigger external side effects (orders, payments, webhooks, hardware actuation) without an active, verified execution gate.
 4. **End-to-End State Enforcement & Anti-Tautology Tests:**
-   - Database flags (e.g. `User.status == "SUSPENDED"`, tier delays, risk overrides) must be enforced across every runtime entrypoint, not merely stored as inert labels.
-   - Automated tests must assert concrete domain values, parity thresholds, and negative domain scenarios (e.g. falling-knife crash rejection) — never tautological `assert res is not None` checks.
+   - Persisted state flags (e.g., `status == "SUSPENDED"`, rate-limit tiers, risk/permission overrides) must be enforced across every runtime entrypoint, not merely stored as inert database labels.
+   - Automated tests must assert concrete domain values, parity thresholds, and negative failure scenarios — never tautological `assert res is not None` checks.
 5. **Prompt-to-Code Traceability Matrix:**
    - Before declaring completion, `completion-auditor` and `opposition-reviewer` must verify a line-by-line **Prompt-to-Code Traceability Matrix** mapping each user requirement (`REQ-1..N`) to the exact modified file:lines, anti-heuristic proof, and Layer 3 runtime evidence.
 
@@ -558,46 +558,45 @@ Final Handoff
 
 ---
 
-## 26. Cross-Session Failure Prevention Gates (Model Decision Parity, Shadow DOM Error Cards, Hardware Fidelity & 3-Strike Circuit Breaker)
+## 26. Cross-Session Failure Prevention Gates (End-to-End Pipeline Parity, Rendered DOM/Shadow-DOM, Boundary Fidelity & 3-Strike Circuit Breaker)
 
-1. **Golden Reference & End-to-End Decision Parity Gate (Model & Algorithm Porting):**
-   - Whenever porting, integrating, or aligning a model, trading strategy, or mathematical pipeline with a reference system (e.g., Freqtrade strategies -> live production worker), isolated `.predict()` unit tests on synthetic arrays are strictly insufficient.
-   - You MUST verify **End-to-End Decision Lifecycle Parity** across the full production call chain (`worker -> evaluate_model_live(..., enforce_shield=True) -> evaluate_open_position_exit`) against the reference implementation across 4 mandatory regimes:
-     1. *Bull / Normal Entry Regime* (`action`, `pred_score`, `position_size` parity);
-     2. *Bear / Falling-Knife / Negative Sentiment Shock Regime* (`sem_shock_z >= 0.85` or `raw_pred <= 0.0` must stay flat/vetoed and never calibrate above `0.50`);
-     3. *Feature-Flag / Intrinsic Safety Gate Regime* (`enforce_shield=True` in live signal evaluation so `sem_safe` and `anti_hype` are never bypassed);
-     4. *Open Position Exit Lifecycle* (early 3-bar/12h exits restricted strictly to profitable `profit_harvest` positions, never closing losing trades prematurely via `model_signal_exit` before `max_hold_bars`).
-2. **Mandatory Rendered DOM & Shadow-Root Zero-Error-Card Gate (Web, Dashboards & Home Assistant Lovelace):**
-   - Writing a YAML/JSON configuration file (e.g., `.storage/lovelace`) or receiving `HTTP 200` from a REST endpoint NEVER proves that a web UI or dashboard works.
-   - Any change to frontend code (`.js`, `.ts`, `.tsx`, `.vue`, `.html`, `.css`) or dashboard configuration (`lovelace`, `www/*.js`) MUST verify the live rendered DOM and recursive `shadowRoot` trees (`python .antigravity/scripts/run_gui_test.py --mode web`), proving zero `<hui-error-card>`, `<hui-error-badge>`, `"Configuration error"`, `"Custom element doesn't exist"`, or frozen placeholder states (`0 USD`, `NaN`), and applying cache-busting query strings (`?v=...`) when updating cached static modules.
+1. **Golden Reference & End-to-End Decision Parity Gate (Algorithm, Service & Model Porting):**
+   - Whenever porting, integrating, or aligning a model, algorithm, or business-logic pipeline with a reference implementation, isolated unit tests on helper functions or synthetic arrays are strictly insufficient.
+   - You MUST verify **End-to-End Decision Lifecycle Parity** across the full production call chain (`worker/handler -> live evaluator(safety_gates_enabled=True) -> state transition / lifecycle exit`) against the reference implementation across 4 mandatory regimes:
+     1. *Normal / Happy-Path Execution Regime* (output action, score, and payload parity);
+     2. *Adverse / Extreme Boundary / Shock Regime* (verifying safety vetoes block invalid actions under extreme inputs);
+     3. *Intrinsic Safety / Policy Gate Regime* (verifying production callers never pass flags like `enforce_safety=False` or `skip_validation=True` that bypass built-in guards);
+     4. *Stateful Lifecycle & Termination Regime* (verifying state transitions, hold/timeout limits, and cleanup conditions).
+2. **Mandatory Rendered DOM & Shadow-Root Zero-Error-Card Gate (Web, SPA & Component Dashboards):**
+   - Writing a YAML/JSON configuration file or receiving `HTTP 200` from a REST endpoint NEVER proves that a web UI or dashboard works.
+   - Any change to frontend code (`.js`, `.ts`, `.tsx`, `.vue`, `.html`, `.css`) or dashboard configuration MUST verify the live rendered DOM and recursive Web Component `shadowRoot` trees (`python .antigravity/scripts/run_gui_test.py --mode web`), proving zero framework error overlays, error cards, `"Configuration error"`, `"Custom element doesn't exist"`, `"Unhandled Runtime Error"`, or frozen placeholder states (`NaN`, `undefined`), and applying cache-busting query strings (`?v=...`) when updating static modules.
 3. **Boundary-to-Boundary Hardware / IoT / Voice Fidelity Gate (`BLOCKED_ON_HARDWARE_AUTH`):**
-   - Never substitute a synthetic mid-pipeline shortcut (e.g., `adb shell am start ...AssistActivity` or direct REST text injection) for a physical boundary trigger (physical remote `keyevent`, Bluetooth microphone stream `/dev/hidraw0`, MQTT hardware topic).
-   - Always inspect OS resource contention (`dumpsys audio`, `dumpsys media_session`, `dumpsys voiceinteraction`, `lsof`) to verify that competing system daemons (e.g., `com.google.android.katniss`) do not preempt the microphone or input device.
-   - If target hardware is offline or awaiting physical user authorization (`adb: device unauthorized`, `error: device unauthorized`, `device offline`), immediately pause in state **`BLOCKED_ON_HARDWARE_AUTH`** and instruct the user; NEVER mark the task complete (`- [x]`).
+   - Never substitute a synthetic mid-pipeline shortcut (e.g., invoking an internal activity/handler directly or injecting mock text mid-stream) for a true external boundary trigger (physical input event, hardware/audio stream, webhook, or network socket).
+   - Always inspect OS and system resource contention (audio/input handles, bound ports, file locks, competing background daemons) to verify that system services do not preempt the target device or stream.
+   - If target hardware or an external host is offline or awaiting physical user authorization (`device unauthorized`, `device offline`), immediately pause in state **`BLOCKED_ON_HARDWARE_AUTH`** and instruct the user; NEVER mark the task complete (`- [x]`).
 4. **3-Strike Anti-Thrashing & Root-Cause Escalation Circuit Breaker:**
-   - If **3 consecutive repair attempts** on the same script, component, or hardware integration fail to pass end-to-end verification, **STOP all trial-and-error patching immediately**.
-   - Unapproved binary bytecode hot-patching of third-party packages (`classes.dex` inside `.apk` files) and endless scratch-script rewrites are strictly forbidden. Write a structured **Root-Cause & Architectural Blocker Report** and present clean architectural options to the user.
-   - Always capture an atomic configuration backup before modifying live daemons/services (`systemd`, ADB keymaps, `.storage/lovelace`) and automatically roll back to the working state if verification fails.
+   - If **3 consecutive repair attempts** on the same script, component, or integration fail to pass end-to-end verification, **STOP all trial-and-error patching immediately**.
+   - Unapproved binary bytecode hot-patching of third-party packages (`.dex`, `.so`, `.dll`, compiled vendor archives) and endless scratch-script rewrites are strictly forbidden. Write a structured **Root-Cause & Architectural Blocker Report** and present clean architectural options to the user.
+   - Always capture an atomic configuration backup before modifying live daemons/services and automatically roll back to the working state if verification fails.
 5. **Feature-Flag & Negative-State Isolation Gate:**
-   - Every feature toggle or status flag (`semantic_shield_enabled`, `enforce_shield`, `User.status == "SUSPENDED"`, `PAPER vs LIVE`) must have an automated **negative-state isolation test** proving that when `OFF` or `SUSPENDED`, zero unintended side effects (zero Telegram veto alerts, zero live exchange orders) occur, and that default provisioning matches the model contract.
+   - Every feature toggle, permission role, or status flag (`enabled=False`, `status == "SUSPENDED"`, `DRY_RUN vs LIVE`) must have an automated **negative-state isolation test** proving that when `OFF` or `SUSPENDED`, zero unintended side effects (zero external alerts, zero live mutations/orders) occur, and that default provisioning matches the contract.
 
 ---
 
 ## 27. Production Reliability, Multi-Tenant Safety, Public-Repo Privacy & Baseline Survival Gates
 
 1. **Multi-Tenant State Isolation & Pre-Exchange Idempotency Gate (`Tripwire 3C`):**
-   - In any multi-user or multi-tenant system (`tenant_id`, `user_id`, `profile_id`), every uniqueness or idempotency key (`Trade.idempotency_key`, `Signal.uid`, cache keys) MUST be explicitly scoped by tenant (`{tenant_id}:{signal_key}`). Setting `idempotency_key = signal_key` globally across tenants is strictly forbidden.
-   - Before dispatching any irreversible external side effect (live exchange market/limit order, payment capture, webhook dispatch), persist a `PENDING` database record (or verify uniqueness constraints) **before** calling the external API so a database `IntegrityError` can never roll back the local record after a live order has already filled on the exchange.
-   - Every multi-tenant execution test MUST run with **at least 2 concurrent tenants** (`Tenant A` paper + `Tenant B` live) on the exact same signal bar, asserting both database rows commit and `exchange_position == db_open_position`.
+   - In any multi-user, multi-tenant, or multi-account system (`tenant_id`, `user_id`, `account_id`, `profile_id`), every uniqueness or idempotency key (`idempotency_key`, `dedup_key`, cache keys) MUST be explicitly scoped by the owning principal (`{principal_id}:{operation_key}`). Setting an unscoped global key across tenants/users is strictly forbidden.
+   - **Persist-Before-Side-Effect (Outbox Pattern):** Before dispatching any irreversible external side effect (external API order, payment capture, webhook dispatch), persist a `PENDING` database record (or verify uniqueness constraints) **before** calling the external API so a database `IntegrityError` can never roll back the local record after the external action has already executed.
+   - Every multi-principal execution test MUST run with **at least 2 concurrent principals** (`Principal A` + `Principal B`) on the exact same input event, asserting both database records commit cleanly and external state matches local database state.
 2. **Production-Volume Distribution & Non-Degenerate Curve Gate (`Tripwire 2F`):**
-   - Never normalize a rolling sum of scores/counts by a capped constant (`sum(scores) / min(8.0, len(scores))`); when production feeds deliver `N=50..100` items instead of a 3-item unit-test array, capped denominators inflate z-scores (`sem_shock_z`) by $10\times$ and lock all models in `SHIELD_HOLD`. Always test feature extractors across both sparse (`N=3`) and realistic production batch sizes (`N=75+`).
-   - Any historical equity, PnL, or `drawdownPct` curve generator must compute **intra-trade mark-to-market unrealized drawdown** across all bars and reject degenerate flat `0.0%` drawdown series (`min(drawdownPct) < 0` required whenever price moves against open positions).
+   - Never normalize a rolling sum of scores/counts by a hardcoded capped constant (`sum(items) / min(K, len(items))`); when production feeds deliver `N=50..500+` items instead of a small unit-test array (`N=3`), capped denominators distort normalized metrics by orders of magnitude. Always test data/feature pipelines across both sparse (`N=3`) and realistic production batch sizes (`N=75+`).
+   - Any time-series, performance, or risk curve generator must compute **intra-period mark-to-market values** across all intervals and reject degenerate flat `0.0` series whenever underlying inputs vary.
 3. **Public-Repo IP, Secret & PII Sanitization Gate (`--scan-public-repo` / `Tripwire 4E`):**
-   - Before staging, committing, or pushing to any public GitHub repository (or generating public documentation/examples), run `python .antigravity/scripts/invoke_opus_reviewer.py --scan-public-repo "<repo_dir>" --forbid-terms "<custom_pii_terms>"`.
-   - Zero RFC1918 private LAN IPs (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`), live API tokens (`AIzaSy...`, `ghp_...`, `sk-...`), personal names, or private home/location identifiers may ever appear in tracked files or commit messages; always use placeholders (`<DEVICE_IP>`, `YOUR_API_KEY`) and environment variables.
+   - Before staging, committing, or pushing to any public repository (or generating public documentation/examples), run `python .antigravity/scripts/invoke_opus_reviewer.py --scan-public-repo "<repo_dir>" --forbid-terms "<custom_pii_terms>"`.
+   - Zero RFC1918 private LAN IPs (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`), live API tokens (`AIzaSy...`, `ghp_...`, `sk-...`, `AKIA...`), personal names, or private location identifiers may ever appear in tracked files or commit messages; always use placeholders (`<DEVICE_IP>`, `YOUR_API_KEY`) and environment variables.
 4. **Baseline Feature Survival & Dual-Mode Regression Matrix Gate:**
-   - Adding a new interaction mode (e.g., long-press dictation vs. short-press voice command, multilingual STT prompt, or Android TV package debloat) MUST include a **Dual-Mode Regression Matrix** verifying that the previously working baseline mode (normal voice command `"rozsviť na chodbě"`, English technical terms `"LLM inference"`, or third-party app dependencies like Kodi + Stream Cinema) still passes end-to-end on real hardware.
-   - Network daemons on embedded Linux/RPi hosts must verify IPv4 binding/resolution (`AF_INET`) when IPv6 (`AF_INET6`) causes connection timeouts.
+   - Adding a new interaction mode, localization profile, or system package cleanup/debloat MUST include a **Dual-Mode Regression Matrix** verifying that previously working baseline modes, shared third-party application dependencies, and network resolution protocols (e.g., IPv4 `AF_INET` fallback when IPv6 `AF_INET6` times out) still pass end-to-end.
 5. **Stale Asset & Browser Cache-Buster Verification Gate (`--assert-asset-version`):**
-   - When updating static JS/CSS bundles or Home Assistant `extra_module_url` / Lovelace resources, `homeassistant.reload_all` does NOT reload `frontend` HTML templates; a full container/service restart is required when `configuration.yaml` changes.
+   - When updating static JS/CSS bundles, module URLs, or server startup configurations, partial service reloads often leave HTML templates serving stale cached asset URLs; perform a full container/service restart when entrypoint asset URLs change.
    - Verify live uncached HTML (`Cache-Control: no-cache`) via `python .antigravity/scripts/run_gui_test.py --mode web --url "<live_url>" --assert-asset-version "<new_version>"` to prove the live server actually serves the new `?v=<new_version>` bundle URL.

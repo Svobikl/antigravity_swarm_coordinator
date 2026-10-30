@@ -285,7 +285,6 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             "3-Strike Anti-Thrashing & Root-Cause Escalation Circuit Breaker",
             "Feature-Flag & Negative-State Isolation Gate",
             "BLOCKED_ON_HARDWARE_AUTH",
-            "hui-error-card",
             "Multi-Tenant State Isolation & Pre-Exchange Idempotency Gate",
             "Production-Volume Distribution & Non-Degenerate Curve Gate",
             "Public-Repo IP, Secret & PII Sanitization Gate",
@@ -315,13 +314,54 @@ class TestCrossSessionFailureGates(unittest.TestCase):
         hook_text = hook_path.read_text(encoding="utf-8")
         for term in (
             "Golden Reference",
-            "hui-error-card",
+            "Shadow-Root",
             "BLOCKED_ON_HARDWARE_AUTH",
             "3-Strike",
             "--scan-public-repo",
             "--assert-asset-version",
         ):
             self.assertIn(term, hook_text, f"Missing {term!r} in asw-hook.mjs")
+
+        # Enforce that global rules, GEMINI.md, hooks, and core skills remain 100% project-agnostic
+        forbidden_project_jargon = (
+            "freqtrade",
+            "sem_shock_z",
+            "profit_harvest",
+            "katniss",
+            "stream cinema",
+            "rozsvi",
+            "klabava",
+            "stratarelay",
+            "edgerelay",
+            "deye",
+            "lovelace",
+            "extra_module_url",
+            "enter_long",
+            "v42_logit",
+            "v43_logit",
+            "evaluate_model_live",
+        )
+        doc_targets = [
+            rules_path,
+            core_rules_path,
+            gemini_path,
+            hook_path,
+            self.repo_root / "core_framework" / "skills" / "swarm-coordinator" / "SKILL.md",
+            self.repo_root / "core_framework" / "skills" / "opposition-reviewer" / "SKILL.md",
+            self.repo_root / "core_framework" / "skills" / "asw-test-gui" / "SKILL.md",
+            self.repo_root / "core_framework" / "skills" / "asw-loop" / "SKILL.md",
+            self.repo_root / "core_framework" / "skills" / "asw" / "SKILL.md",
+            self.repo_root / "core_framework" / "skills" / "completion-auditor" / "SKILL.md",
+            self.repo_root / "core_framework" / "skills" / "implementation-developer" / "SKILL.md",
+        ]
+        for doc_file in doc_targets:
+            low_doc = doc_file.read_text(encoding="utf-8").lower()
+            for jargon in forbidden_project_jargon:
+                self.assertNotIn(
+                    jargon,
+                    low_doc,
+                    f"Project-specific term {jargon!r} found in {doc_file.relative_to(self.repo_root)}; rules/skills must be universal and domain-agnostic!",
+                )
 
         self.assertEqual(
             self.reviewer_script.read_text(encoding="utf-8"),
@@ -502,6 +542,81 @@ class TestCrossSessionFailureGates(unittest.TestCase):
                 timeout=15,
             )
             self.assertEqual(scan_ok.returncode, 0, f"Sanitized public repo should pass:\n{scan_ok.stdout}")
+
+    def test_universal_multi_domain_tripwires_catch_saas_web_and_cloud_secret_bugs(self):
+        """Verify generalized tripwires catch non-trading SaaS (account_id + dedup_key=event_id, skip_validation=True), React/Vite error overlays (<vite-error-overlay>), and AWS/PEM secrets."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            plan_file = tmp_path / "plan.md"
+            diff_file = tmp_path / "saas_billing.diff"
+            ev_dir = tmp_path / "evidence"
+            ev_dir.mkdir()
+            out_file = tmp_path / "review.md"
+
+            plan_file.write_text(self._closed_plan("Implement SaaS billing webhook and React dashboard"), encoding="utf-8")
+            diff_file.write_text(
+                "diff --git a/services/billing/webhook.py b/services/billing/webhook.py\n"
+                "+++ b/services/billing/webhook.py\n"
+                "+def handle_webhook(account_id: str, event_id: str):\n"
+                "+    record = Payment(account_id=account_id, dedup_key=event_id)\n"
+                "+    res = verify_and_charge(record, skip_validation=True)\n"
+                "+    return res\n"
+                "diff --git a/tests/test_webhook.py b/tests/test_webhook.py\n"
+                "+++ b/tests/test_webhook.py\n"
+                "+def test_negative_invalid_webhook():\n"
+                "+    assert 1 != 0\n",
+                encoding="utf-8",
+            )
+            (ev_dir / "gui.log").write_text(
+                "RED phase fail -> GREEN phase pass, negative edge verified\n"
+                "DOM dump: <vite-error-overlay>Unhandled Runtime Error: ChunkLoadError</vite-error-overlay>\n",
+                encoding="utf-8",
+            )
+
+            res = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.reviewer_script),
+                    "--mode",
+                    "diff-review",
+                    "--plan",
+                    str(plan_file),
+                    "--diff",
+                    str(diff_file),
+                    "--evidence",
+                    str(ev_dir),
+                    "--output",
+                    str(out_file),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            self.assertNotEqual(res.returncode, 0)
+            report = out_file.read_text(encoding="utf-8").lower()
+            self.assertIn("verdict: asw rejected", report)
+            self.assertIn("skip_validation", report)
+            self.assertIn("dedup_key", report)
+            self.assertTrue("vite-error-overlay" in report or "unhandled runtime error" in report)
+
+            # Verify universal cloud/PEM secret detection in --scan-public-repo
+            cloud_repo = tmp_path / "cloud_repo"
+            cloud_repo.mkdir()
+            fake_aws_key = "AKIA" + "IOSFODNN7EXAMPLE"
+            (cloud_repo / "config.py").write_text(f"AWS_KEY = '{fake_aws_key}'\n", encoding="utf-8")
+            scan_aws = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.reviewer_script),
+                    "--scan-public-repo",
+                    str(cloud_repo),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            self.assertNotEqual(scan_aws.returncode, 0, "--scan-public-repo must detect AWS AKIA keys!")
+            self.assertIn("AKIA", scan_aws.stdout)
 
 
 if __name__ == "__main__":

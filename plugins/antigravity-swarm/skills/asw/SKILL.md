@@ -164,5 +164,5 @@ Residual risk:
 
 ## User Intent & Anti-Shortcut Contract (Zero Heuristic Substitution Law)
 - Every ASW execution must begin by declaring `Verbatim User Requirements`, `Authoritative Source of Truth`, and `Forbidden Shortcuts & Heuristics`.
-- Never replace trained ML/quant models, mathematical specifications, or external APIs with hand-coded `_sigmoid` / logit heuristics, catch-all `SCANNING -> ENTER_LONG` fallbacks, naive binary stop-loss labels, or synthetic fallback pools.
+- Never replace trained ML/quant models, mathematical specifications, or external APIs with hand-coded `_sigmoid` / linear heuristics, catch-all idle-to-action fallbacks, naive binary threshold labels, or synthetic fallback pools.
 - Include a **Prompt-to-Code Traceability Matrix** in the final ASW REPORT.

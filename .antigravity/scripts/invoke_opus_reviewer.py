@@ -328,7 +328,7 @@ def scan_public_repo_privacy(repo_dir: Path, forbid_terms_csv: str | None = None
         r"\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b"
     )
     secret_re = re.compile(
-        r"\b(?:AIzaSy[A-Za-z0-9_-]{33}|ghp_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9]{20,})\b"
+        r"(?:\b(?:AIzaSy[A-Za-z0-9_-]{33}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,})\b|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)"
     )
 
     candidate_files = [repo_dir] if repo_dir.is_file() else sorted(repo_dir.rglob("*"))
@@ -739,28 +739,38 @@ def audit_diff(
             "message": "Production code introduces unimplemented stubs (NotImplementedError) or synthetic fallback pools."
         })
 
-    # Tripwire 2E / 3B: Live Model Signal Evaluation Bypassing Intrinsic Safety Gates (enforce_shield=False)
-    if re.search(r"evaluate_model_live\s*\([\s\S]{0,240}?enforce_shield\s*=\s*false", added_prod_text):
+    # Tripwire 2E / 3B: Live Caller Bypassing Intrinsic Safety / Validation Gates
+    safety_bypass_match = re.search(
+        r"\b(?:enforce_shield|enforce_safety|verify_signature|check_permissions)\s*=\s*false\b|\b(?:skip_validation|bypass_auth|ignore_safety_gates)\s*=\s*true\b",
+        added_prod_text,
+    )
+    if safety_bypass_match:
         findings.append({
             "vector": "2. Research & ML Falsification",
             "level": "CRITICAL",
-            "message": "Live model evaluation disables intrinsic safety/semantic gates (evaluate_model_live(..., enforce_shield=False)), violating Golden Reference & End-to-End Decision Parity Gate."
+            "message": f"Production caller disables intrinsic safety/validation gate ({safety_bypass_match.group(0)}), violating Golden Reference & End-to-End Decision Parity Gate."
         })
 
-    # Tripwire 2F: Production-Volume Capped-Denominator Inflation (sum / min(8.0, len(...))) & Degenerate Flat 0.0% Drawdown Series
+    # Tripwire 2F: Production-Volume Capped-Denominator Inflation (sum / min(K, len(...))) & Degenerate Flat 0.0 Series
     if re.search(r"/\s*min\s*\(\s*\d+(?:\.\d+)?\s*,\s*(?:float\s*\()?\s*len\s*\(", added_prod_text):
         findings.append({
             "vector": "2. Research & ML Falsification",
             "level": "CRITICAL",
-            "message": "Production-volume denominator inflation detected: dividing sum by min(cap, len(items)) explodes z-scores when real batch count exceeds the cap (use true sample mean or rate)."
+            "message": "Production-volume denominator inflation detected: dividing sum by min(cap, len(items)) distorts metrics when real batch count exceeds the cap (use true sample mean or rate)."
         })
-    zero_dd_matches = re.findall(r"['\"]?drawdown_?pct['\"]?\s*:\s*0(?:\.0+)?\b", added_prod_text)
-    neg_dd_matches = re.findall(r"['\"]?drawdown_?pct['\"]?\s*:\s*-[0-9]", added_prod_text)
-    if len(zero_dd_matches) >= 5 and not neg_dd_matches:
+    zero_series_matches = re.findall(
+        r"['\"]?(?:drawdown_?pct|drawdown|error_rate|variance|loss_pct)['\"]?\s*:\s*0(?:\.0+)?\b",
+        added_prod_text,
+    )
+    nonzero_series_matches = re.findall(
+        r"['\"]?(?:drawdown_?pct|drawdown|error_rate|variance|loss_pct)['\"]?\s*:\s*-?[1-9]",
+        added_prod_text,
+    )
+    if len(zero_series_matches) >= 5 and not nonzero_series_matches:
         findings.append({
             "vector": "2. Research & ML Falsification",
             "level": "CRITICAL",
-            "message": "Degenerate all-zero drawdownPct series detected (>= 5 points at 0.0% with no negative intra-trade drawdown). Compute mark-to-market unrealized drawdown across all bars."
+            "message": "Degenerate all-zero metric/drawdown series detected (>= 5 points hardcoded at 0.0 with no non-zero variation). Compute real intra-period values across all intervals."
         })
 
     # Attack Vector 3: Edge Cases & Boundary Breakdown (including Anti-Tautology Test Gate)
@@ -802,15 +812,20 @@ def audit_diff(
                 "message": "Tautological test suite detected: added tests only assert 'is not None' without verifying concrete domain values or behavioral invariants."
             })
 
-    # Tripwire 3C: Non-Tenant-Scoped idempotency_key in Multi-Tenant Execution (Orphaned Live Fill / UNIQUE Rollback Prevention)
-    has_tenant_context = any(t in added_prod_text for t in ("tenant_id", "tenant", "user_id", "profile_id"))
-    if has_tenant_context and re.search(
-        r"idempotency_key\s*=\s*(?:signal_key|trade_uid|order_key)\b", added_prod_text
-    ):
+    # Tripwire 3C: Unscoped Idempotency / Deduplication Key in Multi-Principal Execution
+    has_principal_context = any(
+        t in added_prod_text
+        for t in ("tenant_id", "tenant", "user_id", "account_id", "org_id", "profile_id", "client_id")
+    )
+    unscoped_key_match = re.search(
+        r"\b(idempotency_key|dedup_key|unique_key)\s*=\s*(?:signal_key|trade_uid|order_key|event_id|request_id|job_id|item_id|payload_hash)\b",
+        added_prod_text,
+    )
+    if has_principal_context and unscoped_key_match:
         findings.append({
             "vector": "3. Edge Cases & Boundary Breakdown",
             "level": "CRITICAL",
-            "message": "Non-tenant-scoped idempotency_key (e.g. idempotency_key=signal_key) in multi-tenant execution path: causes UNIQUE constraint DB rollback and orphaned live exchange fills when multiple tenants execute the same signal."
+            "message": f"Non-principal-scoped uniqueness key ({unscoped_key_match.group(0)}) in multi-tenant/multi-user execution path: causes UNIQUE constraint DB rollback and orphaned external side effects when multiple principals process the same event."
         })
 
     # Attack Vector 4: Downstream & Blast-Radius Safety
@@ -850,8 +865,13 @@ def audit_diff(
     ]
     filtered_runtime_ev = "\n".join(non_test_ev_lines)
 
-    # Tripwire 4B: Mandatory Rendered DOM & Zero-Error-Card Gate (Home Assistant Lovelace / Web UI)
+    # Tripwire 4B: Mandatory Rendered DOM & Zero-Error-Card Gate (Web / SPA / Dashboards / Web Components)
     ui_error_markers = (
+        "<vite-error-overlay",
+        "unhandled runtime error",
+        "application error: a client-side exception has occurred",
+        "chunkloaderror",
+        "hydration failed",
         "<hui-error-card",
         "<hui-error-badge",
         "configuration error:",
