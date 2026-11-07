@@ -136,11 +136,29 @@ def run_install(
         plugin_src = repo_root / "plugins" / "antigravity-swarm"
         if plugin_src.is_dir():
             for item in plugin_src.iterdir():
+                # Avoid 2x duplicate slash-command registration in Antigravity UI:
+                # When global skills are installed into ~/.gemini/config/skills, do NOT install a
+                # second copy into ~/.gemini/config/plugins/antigravity-swarm/skills (Antigravity
+                # deduplicates skills by file path, not by skill name).
+                if item.name == "skills" and not skip_skills:
+                    stale_plugin_skills = plugin_dst / "skills"
+                    if stale_plugin_skills.exists():
+                        shutil.rmtree(stale_plugin_skills, onerror=_remove_readonly)
+                    continue
                 target = plugin_dst / item.name
                 if item.is_dir():
                     copy_tree_clean(item, target)
                 else:
                     shutil.copy2(item, target)
+            if not skip_skills:
+                deployed_manifest = plugin_dst / "plugin.json"
+                if deployed_manifest.is_file():
+                    try:
+                        manifest_data = json.loads(deployed_manifest.read_text(encoding="utf-8"))
+                        manifest_data.pop("skills", None)
+                        deployed_manifest.write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8")
+                    except Exception:
+                        pass
             summary["plugin_installed"] = True
 
         # Ensure Claude Opus 5.5 subagent TOMLs from .antigravity/agents are synced

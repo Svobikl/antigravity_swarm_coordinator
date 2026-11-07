@@ -336,6 +336,22 @@ def curate_catalog(*, dry_run: bool = False) -> dict[str, object]:
                     shutil.rmtree(dst, onerror=_remove_readonly)
                 shutil.copytree(src, dst)
 
+        # Step 5: Remove duplicate skills from deployed ~/.gemini/config/plugins/antigravity-swarm/skills
+        # so Antigravity UI never shows 2x slash commands for asw, asw-plan, swarm-coordinator, etc.
+        deployed_plugin_dir = home / ".gemini" / "config" / "plugins" / "antigravity-swarm"
+        deployed_plugin_skills = deployed_plugin_dir / "skills"
+        if deployed_plugin_skills.exists():
+            shutil.rmtree(deployed_plugin_skills, onerror=_remove_readonly)
+        deployed_manifest = deployed_plugin_dir / "plugin.json"
+        if deployed_manifest.is_file():
+            try:
+                m_data = json.loads(deployed_manifest.read_text(encoding="utf-8"))
+                if "skills" in m_data:
+                    m_data.pop("skills", None)
+                    deployed_manifest.write_text(json.dumps(m_data, indent=2) + "\n", encoding="utf-8")
+            except Exception:
+                pass
+
     return {
         "golden_target": len(GOLDEN_CATALOG),
         "promoted": promoted,

@@ -60,6 +60,33 @@ class TestSkillCatalogCuration(unittest.TestCase):
         self.assertEqual(cfg_skills, ide_skills, "antigravity-ide/skills must match curated config/skills")
         self.assertEqual(cfg_skills, ag_skills, ".agents/skills must match curated config/skills")
 
+    def test_no_duplicate_skills_between_config_skills_and_installed_plugin(self):
+        """Installed antigravity-swarm plugin must not duplicate skills already present in .gemini/config/skills (which causes 2x slash commands in Antigravity UI)."""
+        import json
+
+        cfg_skills = {d.name for d in self.cfg_dir.iterdir() if d.is_dir()}
+        plugin_dir = self.home / ".gemini" / "config" / "plugins" / "antigravity-swarm"
+        plugin_skills_dir = plugin_dir / "skills"
+        plugin_skills = (
+            {d.name for d in plugin_skills_dir.iterdir() if d.is_dir()}
+            if plugin_skills_dir.is_dir()
+            else set()
+        )
+        overlap = sorted(cfg_skills & plugin_skills)
+        self.assertEqual(
+            overlap,
+            [],
+            f"Duplicate skills found in both .gemini/config/skills and .gemini/config/plugins/antigravity-swarm/skills (causes 2x slash commands): {overlap}",
+        )
+        deployed_manifest = plugin_dir / "plugin.json"
+        if deployed_manifest.is_file():
+            manifest_data = json.loads(deployed_manifest.read_text(encoding="utf-8"))
+            self.assertNotIn(
+                "skills",
+                manifest_data,
+                "Deployed antigravity-swarm/plugin.json must not mount duplicate './skills' when global .gemini/config/skills is installed",
+            )
+
     def test_core_and_multi_domain_coverage_preserved(self):
         """All 39 Swarm Coordinator/ASW/Obsidian skills and all 9 domain representatives must exist."""
         cfg_skills = {d.name for d in self.cfg_dir.iterdir() if d.is_dir()}
