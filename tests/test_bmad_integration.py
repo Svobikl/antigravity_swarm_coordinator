@@ -259,6 +259,11 @@ class TestBMADMethodIntegration(unittest.TestCase):
             skill_txt = (cf_skills / skill_name / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("## BMAD-METHOD V7", skill_txt, f"Missing BMAD-METHOD V7 section in {skill_name}")
 
+        readme_txt = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("How to Use the Swarm Coordinator Effectively", readme_txt)
+        for cmd_name in ("/asw-plan", "/asw-start-work", "/asw-test-gui", "/asw-debug", "/asw-review", "/asw-goal", "/asw-cleanup"):
+            self.assertIn(cmd_name, readme_txt)
+
 
 if __name__ == "__main__":
     unittest.main()

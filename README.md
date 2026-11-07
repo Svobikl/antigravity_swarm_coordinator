@@ -1,8 +1,8 @@
-# Antigravity Swarm Coordinator (Long-Horizon V4.1 + Harness² + Claude Opus 5.5 + 200 Multi-Domain Skills)
+# Antigravity Swarm Coordinator (Long-Horizon V4.1 + BMAD-METHOD V7 + Harness² + Claude Opus 5.5 + 200 Multi-Domain Skills)
 
 Complete backup, distribution, and cross-platform setup package (**Apple macOS**, **Windows**, and **Linux**) for the default **Swarm Coordinator**, **Google Research `Harness²` recursive adaptation engine**, **Tri-Model Cross-Family Governance Framework** (`Gemini 4 Argon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`), and **200 Curated Multi-Domain Golden Catalog Skills** for **Google Antigravity** and **Gemini CLI**.
 
-This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 200 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and 35 automated verification tests.
+This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 200 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **71 automated verification tests**.
 
 ---
 
@@ -138,6 +138,59 @@ python3 .antigravity/scripts/run_harness_adapt.py --demo \
 | **Mode 3** | Complex Delivery | Complex features: specification & design ➔ Opus 5.5 Plan Review ➔ user approval ➔ autonomous Flash waves ➔ Opus 5.5 Diff Review & Argon QA ➔ handoff. |
 | **Mode 4** | Emergency Restore | Minimal restoration of working state only; no opportunistic refactoring or feature additions. |
 | **Mode 5** | Long-Horizon Program / Research | Multi-campaign programs: immutable `SOURCE_PLAN.md` freeze, `REQUIREMENT_COVERAGE.csv`, `TASK_GRAPH.json`, Harness² domain adaptation, multi-auditor sign-off. |
+
+---
+
+## 🎯 How to Use the Swarm Coordinator Effectively (ASW Command Guide & Best Practices)
+
+With the integration of **BMAD-METHOD V7** (Section 28) alongside our **Tri-Model Routing** and **Section 26–27 Universal Reliability Gates**, the Swarm Coordinator enforces strict structural guardrails against instruction amnesia, silent test-expectation tampering, and missed caller updates. Follow the principles and command guide below to get maximum reliability out of every session.
+
+### 🏆 3 Golden Operating Principles
+
+1. **Separate Planning (`/asw-plan`) from Execution (`/asw-start-work`) on Medium & Large Tasks:**
+   - When asked to design and code a complex feature in a single prompt, models tend to write loose self-serving acceptance criteria.
+   - Running `/asw-plan` first produces an audited `.asw/plans/<slug>.md` file containing a human-owned **`<!-- <frozen-after-approval> -->`** block (`Intent`, `Boundaries & Constraints` with `Always:` / `Never:`, and a concrete **`I/O & Edge-Case Matrix`** `M1..Mn`).
+   - Once you approve the plan and run `/asw-start-work`, **agents are mechanically forbidden from modifying `<frozen-after-approval>`** (`BMAD_FROZEN_CONTRACT_VIOLATION`). If a test fails, the agent cannot rewrite the matrix expectation to match broken code—it must fix the code.
+2. **Enforce Single-Goal Scope (`900–1600` Token Plan Ceiling):**
+   - Each plan focuses on **one coherent goal**. Secondary or follow-up ideas are automatically split into `.asw/plans/deferred-work.md`.
+   - Implementation subagents (`Gemini 3.8 Flash High`) are dispatched **context-free**, receiving only `{plan_file}` and its **`## Code Map`** (exact files, symbols, and callers), eliminating conversation-history bloat.
+3. **Always Combine `asw-test-gui` Whenever Modifying Web, SPA, Dashboard, or Native UI:**
+   - Config file writes or HTTP 200 responses never prove a UI works. Appending `asw-test-gui` (e.g., `/asw asw-test-gui fix dashboard chart...`) forces physical browser/app launch via `run_gui_test.py` (Playwright), inspecting the live rendered DOM and nested Web Component `shadowRoot` trees for error cards (`<hui-error-card>`, `"Configuration error"`, `"Custom element doesn't exist"`, `"Unhandled Runtime Error"`) and verifying cache-busting asset versions (`?v=...`).
+
+### ⌨️ Complete `ASW` Slash Command Reference (When to Use Which Command)
+
+| Command | When to Use It | What Happens Under the Hood (Tri-Model + BMAD V7 Engine) |
+| :--- | :--- | :--- |
+| **`/asw-plan <request>`** | **Complex features, refactors, architecture changes, or model integrations** where you want to inspect and approve the contract before any code is touched. | Runs **Gemini 4 Argon (High)** through `step-01-clarify-and-route` and `step-02-plan`. Maps `## Code Map`, locks `<!-- <frozen-after-approval> -->` (`I/O & Edge-Case Matrix`), validates via `bmad_lint_spine.py --mode plan-contract`, and audits via **Claude Opus 5.5 Plan Gate** (`--mode plan-review`). Zero production code is edited during this step. |
+| **`/asw-start-work [plan_slug]`** | **Immediately after approving an `/asw-plan`**, or when resuming an unfinished plan in `.asw/plans/`. | Runs `step-03-implement` ➔ `step-04-review` ➔ `step-05-present`. Records `baseline_revision` (Git SHA), dispatches context-free **Gemini 3.8 Flash (High)** subagents, runs the **Matrix Test Audit**, executes **5 orthogonal review lenses**, and blocks completion (`asw-stop-check.mjs`) until 100% of `- [x]` tasks and `## Review Triage Log` items are resolved. |
+| **`/asw <request>`** *(or `/asw-loop`)* | **End-to-end features, bugfixes, or improvements** that you want delivered and verified in a single autonomous run without stopping for manual plan sign-off. | Executes the full autonomous loop: Argon High defines the `User Intent & Anti-Shortcut Contract` ➔ Flash High writes failing RED tests ➔ implements GREEN code ➔ runs Layer 3 Real-Surface QA (CLI/API) ➔ runs the **5-Lens BMAD + Opus Diff Review** (`invoke_opus_reviewer.py --mode diff-review`). |
+| **`/asw-test-gui`** *(standalone or combined: `/asw asw-test-gui ...`)* | **Any task touching frontend code, web apps, Home Assistant dashboards, SPAs, or desktop/mobile UI.** | Launches the real server/app via `python .antigravity/scripts/run_gui_test.py`, verifies live DOM + recursive `shadowRoot` trees, checks zero `console.error` / `pageerror`, validates `--assert-asset-version`, captures screenshots in `.asw/evidence/`, and cleanly tears down spawned servers. |
+| **`/asw-debug <issue>`** | **Crashes, hangs, flaky tests, hardware/IoT/ADB failures, or bugs where previous fixes failed.** | Enforces hypothesis-driven root-cause isolation on **Gemini 4 Argon (High)** before any fix. Checks OS resource/port locks, halts in `BLOCKED_ON_HARDWARE_AUTH` if external hardware/ADB is offline or unauthorized, and enforces the **3-Strike Anti-Thrashing Circuit Breaker** (stops after 3 failed attempts instead of guessing in circles). |
+| **`/asw-review`** | **Auditing an existing branch, PR, or uncommitted diff** for subtle bugs, fake tests, or missed call sites. | Runs all **5 Orthogonal Context-Free Review Lenses**:<br>1. `blind-hunter` (diff-only, mandatory finding floor $N = \min(\lfloor\sqrt{\text{kB}} + 1\rfloor, 10)$)<br>2. `edge-case-hunter` (branch walkthrough + `deletion-check` + `claims-check` falsification)<br>3. `verification-gap` (1–3 hop caller trace catching `missing-adoption` & mock-only `broken-verification`)<br>4. `intent-alignment` (verbatim user prompt vs. diff surface)<br>5. `opus-cross-family` (`invoke_opus_reviewer.py --mode diff-review`). |
+| **`/asw-goal <objective>`** | **Long-horizon, multi-wave programs or quantitative research (Mode 5)** that must run persistently until measurable stop criteria pass. | Establishes durable control-plane state, vertical story slices, append-only working memory (`.memlog.md` via `bmad_memlog.py`), and 3-layer verification across every wave. |
+| **`/asw-cleanup`** | **Post-implementation code hygiene** to strip AI boilerplate, dead branches, and temporary artifacts without altering behavior. | Runs **Gemini 3.8 Flash (High)** under regression test protection to simplify code and verify zero leftover scratch state. |
+
+### 🔍 How the 5-Lens Review & 4-Route Cascading Triage (`step-04-review`) Works
+
+Whenever `/asw-start-work`, `/asw`, or `/asw-review` audits a change since `baseline_revision`, every verified finding is recorded in `## Review Triage Log` and routed by blast radius:
+- **`[intent_gap]`** ➔ Code built the wrong surface or missed user intent. Reverts to `baseline_revision`, clarifies with the user, and returns to `step-02-plan`.
+- **`[bad_plan]`** ➔ The technical approach hit a dead-end. Extracts `KEEP` notes (what worked), reverts code to `baseline_revision`, logs the dead-end in `## Plan Change Log` (so it is never repeated), updates the non-frozen plan, and re-runs `step-03-implement`.
+- **`[patch]`** ➔ Localized code or test defect. Re-engages the warmed `step-03` subagent `conversationId` for a targeted fix, re-runs 3-layer verification, and marks `-> RESOLVED`.
+- **`[defer]`** ➔ Valid out-of-scope observation moved to `.asw/plans/deferred-work.md`.
+
+### 💡 Practical Copy-Paste Workflow Examples
+
+```text
+# 1. Complex Feature or Model Porting (Plan first -> Approve -> Execute):
+/asw-plan Integrate the trained model evaluator into the live worker pipeline with full reference decision parity
+/asw-start-work
+
+# 2. Web / Dashboard / UI Fix with Physical Browser & Shadow-DOM Verification:
+/asw asw-test-gui Fix the telemetry dashboard cards and verify zero error overlays or shadowRoot configuration errors on localhost
+
+# 3. Deep Adversarial Audit of Current Changes Before Commit:
+/asw-review
+```
 
 ---
 
