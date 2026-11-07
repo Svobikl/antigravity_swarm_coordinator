@@ -414,3 +414,13 @@ Approve only after:
 - manual QA reran when a fix touched user-visible behavior,
 - cleanup receipts exist,
 - working tree state is understood.
+
+## BMAD-METHOD V7 5 Orthogonal Review Lenses & 4-Route Triage Loopback
+
+Execute the 5 context-isolated lenses defined in `references/bmad-review-lenses.md`:
+1. **`blind-hunter`:** Diff-only review with mandatory finding floor $N = \min(\lfloor\sqrt{\text{kB}} + 1\rfloor, 10)$.
+2. **`edge-case-hunter`:** Exhaustive branch/lifetime walkthrough *before* reading `## Implementation Notes`, followed by `deletion-check` and `claims-check` falsification.
+3. **`verification-gap`:** 1-3 hop caller/consumer trace catching `missing-adoption` (`BMAD_DELETION_OR_ADOPTION_GAP`) and mock-only `broken-verification` tests.
+4. **`intent-alignment`:** Verbatim user intent vs. diff surface comparison.
+5. **`opus-cross-family`:** `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --plan ".asw/plans/<slug>.md"`.
+Route every verified finding in `## Review Triage Log` to `[intent_gap]`, `[bad_plan]` (extract `KEEP`, revert to `baseline_revision`, log in `## Plan Change Log`), `[patch]`, or `[defer]`.

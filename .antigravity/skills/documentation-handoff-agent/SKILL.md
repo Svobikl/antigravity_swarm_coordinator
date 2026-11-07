@@ -34,3 +34,7 @@ Summarize:
 
 Never claim staging, commit, push, release, deployment, or external publication unless it actually happened with authorization.
 
+## BMAD-METHOD V7 Structured Walkthrough & Architecture Spine Sync
+
+1. **Interactive Walkthrough Structure:** Organize handoff documentation around the verified user journey, `I/O & Edge-Case Matrix` results, and `## Code Map` entrypoints rather than raw file-by-file change lists.
+2. **Spine & Pitfall Sync:** Ensure any new `AD-n` (`Binds / Prevents / Rule`) decisions pass `bmad_lint_spine.py` and any newly discovered operational pitfalls are recorded in `<!-- bmad:context -->` and Obsidian project memory.

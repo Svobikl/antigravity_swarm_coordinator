@@ -156,3 +156,10 @@ Final status:
 - Start every loop by locking `Verbatim User Requirements`, `Authoritative Source of Truth`, and `Forbidden Shortcuts & Heuristics`.
 - Never replace trained ML/quant models, formulas, or external APIs with hand-coded `_sigmoid` / linear heuristics, catch-all idle-to-action fallbacks, or synthetic fallback pools.
 - Verify a **Prompt-to-Code Traceability Matrix** and numerical artifact parity (`max_abs_diff < 1e-6`) before closing the loop.
+
+## BMAD-METHOD V7 5-Step Just-In-Time (JIT) Loop & Matrix Test Audit
+
+Follow `references/bmad-steps.md` across every execution wave:
+1. **`step-01-clarify-and-route` -> `step-02-plan`:** Bound to a single goal, freeze `<frozen-after-approval>` (`Intent`, `Boundaries`, `I/O & Edge-Case Matrix`), and map `## Code Map`.
+2. **`step-03-implement` (Matrix Test Audit):** Capture `baseline_revision`, dispatch context-free `Gemini 3.8 Flash (High)` subagents with `{plan_file}`, and verify every row `M1..Mn` in `I/O & Edge-Case Matrix` has a passing test. Never edit `<frozen-after-approval>` to make a failing test pass.
+3. **`step-04-review` -> `step-05-present`:** Run the 5 orthogonal review lenses and resolve all `[intent_gap]`, `[bad_plan]`, and `[patch]` items in `## Review Triage Log` before completion.

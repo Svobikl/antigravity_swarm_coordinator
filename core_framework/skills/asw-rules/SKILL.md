@@ -23,3 +23,8 @@ Use this skill when project instructions, rule files, or hook-injected guidance 
 ## Reporting
 
 Mention only rules that changed the action you took. Do not clutter the final answer with generic precedence theory.
+
+## BMAD-METHOD V7 Verified Repo Context (`<!-- bmad:context -->`) & Instruction Ledger
+
+1. **Verified `<!-- bmad:context -->` Block in `AGENTS.md`:** Keep repository-specific non-obvious pitfalls inside `<!-- bmad:context --> ... <!-- /bmad:context -->` where every rule is verified against current repository files.
+2. **Instruction Ledger Hygiene (`retain | rewrite | relocate | automate | delete`):** Whenever a review or retrospective uncovers a repeated agent mistake, prefer automating the check into a script/linter (`automate`) or recording a concise verified repo pitfall (`retain`/`rewrite`) rather than bloating global prose prompts.

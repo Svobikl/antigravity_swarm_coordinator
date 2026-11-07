@@ -23,3 +23,11 @@ Do not redesign unrelated architecture. Do not introduce a new abstraction merel
 ## Output
 A technical design proportionate to the mode, including existing references, intentional deviations, risks, and test strategy.
 
+## BMAD-METHOD V7 Architecture Spine (`AD-n` `Binds/Prevents/Rule`) & `.memlog.md`
+
+1. **Incompatibility Test for `AD-n` Decisions:** Only record an Architectural Decision (`### AD-1`, `### AD-2`, ...) when two independent implementation units could choose incompatibly. Every `AD-n` block must explicitly declare:
+   - **Binds:** Which components/interfaces are bound by this decision.
+   - **Prevents:** What concrete failure or incompatibility it prevents.
+   - **Rule:** The enforceable invariant.
+2. **Pinned `## Stack` & Mechanical Linter:** Pin exact versions in the `## Stack` table and validate every architecture document via `python .antigravity/scripts/bmad_lint_spine.py --file <doc.md> --mode spine`.
+3. **Append-Only Working Memory (`.memlog.md`):** Track chronological architectural decisions, constraints, and assumptions via `python .antigravity/scripts/bmad_memlog.py` (`init`, `append`, `set`, `tally`).

@@ -43,3 +43,10 @@ Perform an independent, adversarial mechanical audit on **`Gemini 4 Argon (High)
 ### Gate 5: Zero Heuristic Substitution & Prompt-to-Code Traceability Matrix
 - Verify a line-by-line **Prompt-to-Code Traceability Matrix** mapping each verbatim user requirement (`REQ-1..N`) to the exact modified file:lines, anti-heuristic parity proof (`max_abs_diff < 1e-6`), and Layer 3 runtime output.
 - Reject any implementation that substitutes trained models, formulas, or external APIs with hand-coded heuristics (`_sigmoid`, manual weights), catch-all idle-to-action branches, naive binary threshold ternaries, or inert DB flags.
+
+## BMAD-METHOD V7 Git-Evidence Retrospective & Frozen Contract Closure Audit
+
+Before issuing final completion sign-off, verify:
+1. **`baseline_revision..HEAD` Git Evidence Reconciliation:** Every commit and changed file since `baseline_revision` maps cleanly to the approved plan, with zero untracked scratch clutter.
+2. **Frozen Contract & Matrix Parity:** `python .antigravity/scripts/bmad_lint_spine.py --file .asw/plans/<slug>.md --mode plan-contract` returns `"ok": true` and `<frozen-after-approval>` is unmodified since approval.
+3. **Zero Unresolved Triage Items:** `## Review Triage Log` contains zero unresolved `[intent_gap]`, `[bad_plan]`, or `[patch]` items.

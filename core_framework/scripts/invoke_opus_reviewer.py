@@ -25,6 +25,7 @@ Adversarial Engine + Gemini 4 Argon (High) whenever Claude Opus 5.5 credits/quot
 
 import argparse
 import json
+import math
 import os
 import re
 import shutil
@@ -631,6 +632,80 @@ def audit_diff(
             "message": "Plan still contains unchecked '- [ ]' items. Zero-Unchecked-Plan Closure Gate violated."
         })
 
+    # BMAD Gate 1A: Frozen Contract Tamper Detection (<frozen-after-approval>)
+    if plan_content:
+        human_reapproved = bool(re.search(r"^human_reapproved:\s*true\b", plan_content, re.MULTILINE | re.IGNORECASE))
+        if not human_reapproved:
+            frozen_tampered = False
+            # Check if diff directly modifies lines inside a <frozen-after-approval> block
+            in_frozen_diff = False
+            for dline in diff_content.splitlines():
+                if "<frozen-after-approval>" in dline:
+                    if not dline.startswith("+"):
+                        in_frozen_diff = True
+                elif "</frozen-after-approval>" in dline:
+                    in_frozen_diff = False
+                elif in_frozen_diff and (dline.startswith("+") or dline.startswith("-")) and not dline.startswith(("+++", "---")):
+                    frozen_tampered = True
+                    break
+
+            # Also check git baseline_revision comparison if plan_path is tracked in git at baseline_revision
+            if not frozen_tampered and plan_path and plan_path.exists():
+                base_match = re.search(r"^baseline_revision:\s*([0-9a-fA-F]{7,40})\b", plan_content, re.MULTILINE)
+                status_match = re.search(r"^status:\s*(ready-for-dev|in-progress|in-review|built|done)\b", plan_content, re.MULTILINE | re.IGNORECASE)
+                if base_match and status_match:
+                    base_sha = base_match.group(1)
+                    try:
+                        git_top = subprocess.run(
+                            ["git", "-C", str(plan_path.parent), "rev-parse", "--show-toplevel"],
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
+                            check=False,
+                        )
+                        if git_top.returncode == 0 and git_top.stdout.strip():
+                            top_dir = Path(git_top.stdout.strip())
+                            rel_plan = plan_path.resolve().relative_to(top_dir.resolve()).as_posix()
+                            old_plan_proc = subprocess.run(
+                                ["git", "-C", str(top_dir), "show", f"{base_sha}:{rel_plan}"],
+                                capture_output=True,
+                                text=True,
+                                encoding="utf-8",
+                                errors="replace",
+                                timeout=5,
+                                check=False,
+                            )
+                            if old_plan_proc.returncode == 0 and old_plan_proc.stdout:
+                                f_rx = re.compile(
+                                    r"<!--\s*<frozen-after-approval>.*?-->\s*(.*?)\s*<!--\s*</frozen-after-approval>\s*-->",
+                                    re.DOTALL | re.IGNORECASE,
+                                )
+                                old_f = f_rx.search(old_plan_proc.stdout)
+                                new_f = f_rx.search(plan_content)
+                                if old_f and (not new_f or old_f.group(1).strip() != new_f.group(1).strip()):
+                                    frozen_tampered = True
+                    except Exception:
+                        pass
+
+            if frozen_tampered:
+                findings.append({
+                    "vector": "1. Scope & Plan Integrity",
+                    "level": "CRITICAL",
+                    "message": "BMAD_FROZEN_CONTRACT_VIOLATION: The human-owned <frozen-after-approval> contract (Intent, Boundaries, or I/O & Edge-Case Matrix) was modified after plan approval without human_reapproved: true."
+                })
+
+        # BMAD Gate 1B: Unresolved Review Triage Log items ([intent_gap], [bad_plan], [patch])
+        triage_sec = re.search(r"^##\s+Review\s+Triage\s+Log\b(.*?)(?=\n##\s+|\Z)", plan_content, re.DOTALL | re.MULTILINE | re.IGNORECASE)
+        if triage_sec:
+            for tline in triage_sec.group(1).splitlines():
+                if re.search(r"^\s*-\s*\[(?:intent_gap|bad_plan|patch)\]", tline, re.IGNORECASE):
+                    if not re.search(r"\b(?:RESOLVED|REVERTED|DONE|FIXED)\b", tline, re.IGNORECASE):
+                        findings.append({
+                            "vector": "1. Scope & Plan Integrity",
+                            "level": "CRITICAL",
+                            "message": f"BMAD_UNRESOLVED_TRIAGE_ITEM: Unresolved review triage finding in Review Triage Log: {tline.strip()[:100]}"
+                        })
+
     # Separate added lines into production code lines vs test code lines (excluding markdown docs and reviewer scripts)
     added_code_lines = []
     added_prod_lines = []
@@ -932,6 +1007,40 @@ def audit_diff(
                 "message": f"Private LAN IP ({priv_ip_match.group(0)}) introduced in a public GitHub repository diff. Use placeholders (<DEVICE_IP>) or environment variables."
             })
 
+    # BMAD Gate 4F: Deletion Check & Missing-Adoption Caller Scan (edge-case-hunter & verification-gap lenses)
+    removed_symbols: set[str] = set()
+    added_symbols: set[str] = set()
+    sym_def_re = re.compile(r"^\s*(?:async\s+def|def|export\s+(?:async\s+)?function)\s+([A-Za-z_][A-Za-z0-9_]{2,})\s*\(")
+    for dline in diff_content.splitlines():
+        if dline.startswith("-") and not dline.startswith("---"):
+            m = sym_def_re.match(dline[1:])
+            if m:
+                removed_symbols.add(m.group(1))
+        elif dline.startswith("+") and not dline.startswith("+++"):
+            m = sym_def_re.match(dline[1:])
+            if m:
+                added_symbols.add(m.group(1))
+
+    deleted_only_symbols = removed_symbols - added_symbols
+    if deleted_only_symbols:
+        surviving_lines = [
+            ln[1:] if ln.startswith(("+", " ")) else ln
+            for ln in diff_content.splitlines()
+            if not ln.startswith(("-", "diff ", "@@", "index "))
+        ]
+        surviving_text = "\n".join(surviving_lines)
+        for sym in sorted(deleted_only_symbols):
+            call_rx = re.compile(rf"(?<!def\s)(?<!function\s)\b{re.escape(sym)}\s*\(")
+            if call_rx.search(surviving_text):
+                findings.append({
+                    "vector": "4. Downstream & Blast-Radius Safety",
+                    "level": "CRITICAL",
+                    "message": f"BMAD_DELETION_OR_ADOPTION_GAP: Deleted or renamed symbol '{sym}' is still called by surviving/sibling code without updating all call sites."
+                })
+
+    diff_kb = max(len(diff_content.encode("utf-8")) / 1024.0, 0.001)
+    blind_hunter_floor = min(int(math.sqrt(diff_kb) + 1), 10)
+
     critical_or_high = [f for f in findings if f["level"] in ("CRITICAL", "HIGH")]
     verdict = "ASW REJECTED" if critical_or_high else "ASW APPROVED"
 
@@ -948,6 +1057,7 @@ def audit_diff(
         f"**Plan File**: `{plan_path.name if (plan_path and plan_path.exists()) else 'auto-resolved'}`",
         f"**Diff File**: `{diff_path.name if (diff_path and diff_path.exists()) else 'git-files-diff'}`",
         f"**Reviewer**: {reviewer_line}",
+        f"**BMAD 5-Lens Audit**: `blind-hunter (floor N={blind_hunter_floor}, diff={diff_kb:.2f} kB) + edge-case-hunter + verification-gap + intent-alignment + opus-cross-family`",
     ]
     if active_fallback:
         review_text.append(

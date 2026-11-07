@@ -115,3 +115,11 @@ python3 scripts/research.py --list
 - Use this skill only when the task clearly matches the scope described above.
 - Do not treat the output as a substitute for environment-specific validation, testing, or expert review.
 - Stop and ask for clarification if required inputs, permissions, safety boundaries, or success criteria are missing.
+
+## BMAD-METHOD V7 Research Firewall, `.memlog.md` Claim Tally & 4-Agent Codebase Recon
+
+1. **The Research Firewall (Standing Epistemic Rule):**
+   - Never conclude from training data alone; every load-bearing claim requires a retrieved source (publisher, date, access date) or traced file/line citation from this run.
+   - Project context (tickets, briefs, PRDs, prior notes) shapes *what to ask*, never *what is true*. Research subagents receive only their bounded question brief.
+2. **Append-Only `.memlog.md` Claim Tallying:** Record every source batch and claim via `python .antigravity/scripts/bmad_memlog.py append --type <claim|unverified|overturned>` and compute verified/unverified/overturned counts deterministically via `python .antigravity/scripts/bmad_memlog.py tally`.
+3. **4-Agent Codebase Recon (`locator`, `analyzer`, `historian`, `verifier`):** When researching a codebase, trace files (`locator`), execution flow (`analyzer`), git blame/history (`historian`), and commit-SHA freshness (`verifier`).

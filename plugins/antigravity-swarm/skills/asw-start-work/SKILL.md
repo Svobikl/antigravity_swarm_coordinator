@@ -168,3 +168,9 @@ Cleanup: <receipts>
 ```
 
 Never treat green tests alone as completion. The plan is done only when the observable user-facing surface has been exercised and all continuation state is closed.
+
+## BMAD-METHOD V7 Frozen Contract, Subagent Re-Engagement & Triage Gate
+
+1. **Pre-Implementation `baseline_revision`:** Ensure `baseline_revision` (Git HEAD SHA) is recorded in the plan frontmatter before executing the first unchecked `- [ ]` task.
+2. **Context-Free Subagent Handoff & Re-Engagement:** Pass leaf implementation subagents only `{plan_file}` and its `## Code Map`; save their `conversationId` in `.asw/start-work/state.json` so `[patch]` findings during review re-engage the same subagent.
+3. **Frozen Contract & Review Triage Enforcement:** Never modify `<!-- <frozen-after-approval> -->` during execution. Do not print `ORCHESTRATION COMPLETE` while any `[intent_gap]`, `[bad_plan]`, or `[patch]` entry in `## Review Triage Log` remains unresolved.

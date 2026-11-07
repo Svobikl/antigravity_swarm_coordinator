@@ -34,3 +34,7 @@ Maintain the machine-verifiable persistent control plane for long-horizon progra
 - **Single-writer serialization**: Subagents never modify state files directly. All state transitions must be serialized and committed through the Coordinator / Program State Controller.
 - **Validation hook**: Run `validate_program_state.py` before and after state transitions.
 
+## BMAD-METHOD V7 Ticket Tree, Vertical Slicing & `Unknown:` Blocker Discipline
+
+1. **Initiative -> Epic -> Story/Spike/Bug Hierarchy:** Maintain clean vertical slices where every story delivers an observable end-to-end user or system behavior rather than isolated horizontal layers.
+2. **Explicit `Unknown:` Blockers & `after` Prerequisites:** Track open architectural or domain unknowns (`Unknown: <question>`) and prerequisite ordering (`after`) before marking a leaf task `ready-for-dev`, and log state transitions in `.memlog.md` via `python .antigravity/scripts/bmad_memlog.py`.

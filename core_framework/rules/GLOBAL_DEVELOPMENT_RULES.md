@@ -600,3 +600,41 @@ Final Handoff
 5. **Stale Asset & Browser Cache-Buster Verification Gate (`--assert-asset-version`):**
    - When updating static JS/CSS bundles, module URLs, or server startup configurations, partial service reloads often leave HTML templates serving stale cached asset URLs; perform a full container/service restart when entrypoint asset URLs change.
    - Verify live uncached HTML (`Cache-Control: no-cache`) via `python .antigravity/scripts/run_gui_test.py --mode web --url "<live_url>" --assert-asset-version "<new_version>"` to prove the live server actually serves the new `?v=<new_version>` bundle URL.
+
+---
+
+## 28. BMAD-METHOD V7 Step-File Execution, Frozen Plan Contract, 5-Lens Review & Triage Loopback
+
+1. **Step-File JIT Micro-Architecture & Single-Goal Scope Gate (`900–1600` Token Ceiling):**
+   - Complex delivery and multi-step implementation workflows (`asw-plan`, `asw-loop`, `asw-start-work`, `swarm-coordinator`) execute through **5 sequential Just-In-Time (JIT) micro-steps**:
+     1. `step-01-clarify-and-route` (intent clarification, scope bounding, and Mode 0–5 routing);
+     2. `step-02-plan` (`<frozen-after-approval>` contract, `I/O & Edge-Case Matrix`, and `Code Map` generation);
+     3. `step-03-implement` (`baseline_revision` Git SHA capture, context-free subagent execution, and Matrix Test Audit);
+     4. `step-04-review` (5 orthogonal review lenses + 4-route cascading triage);
+     5. `step-05-present` (evidence summary, walkthrough, and memory sync).
+   - **Never preload future step instructions into the active execution context**; load one step at a time and enforce a **Single-Goal Plan Ceiling (`900–1600` tokens)**, splitting secondary or follow-up goals into `.asw/plans/deferred-work.md`.
+2. **`<frozen-after-approval>` Human-Owned Contract, `baseline_revision` & Matrix Test Audit (`BMAD_FROZEN_CONTRACT_VIOLATION`):**
+   - Every implementation plan (`.asw/plans/<slug>.md`) must enclose the human-owned contract (`## User Intent & Anti-Shortcut Contract`, `### Intent`, `### Boundaries & Constraints` with `Always:` / `Never:`, and `### I/O & Edge-Case Matrix`) inside `<!-- <frozen-after-approval> --> ... <!-- </frozen-after-approval> -->` markers.
+   - Before the first code edit in `step-03-implement`, record the current Git HEAD SHA in plan frontmatter as `baseline_revision`.
+   - Once a plan transitions to `ready-for-dev` / `in-progress`, **agents are strictly forbidden from modifying anything inside `<frozen-after-approval>`** without explicit human re-approval. Any unauthorized edit triggers `BMAD_FROZEN_CONTRACT_VIOLATION` in `invoke_opus_reviewer.py` and `asw-hook.mjs`.
+   - **Matrix Test Audit:** Every row in `### I/O & Edge-Case Matrix` (`M1..Mn`) must be covered by an automated test that actually ran and passed. If a test fails or disagrees with the matrix, **never rewrite the matrix expectation to match broken code** — fix the code or route a `bad_plan` / `intent_gap` escalation.
+3. **Context-Free Subagent Handoff (`## Code Map`) & Re-Engagement:**
+   - Implementation subagents (`Gemini 3.8 Flash High`) are dispatched with **zero prior conversation history**, receiving only `{plan_file}` and its `## Code Map` (exact file paths, symbols, and call chains so the subagent does not waste context searching the repo).
+   - The coordinator retains the subagent's `conversationId` so targeted `patch` fixes from `step-04-review` are sent back to the already-warmed subagent context.
+4. **5 Orthogonal Context-Free Review Lenses + 4-Route Cascading Triage (`step-04-review`):**
+   - Every non-trivial diff since `baseline_revision` is evaluated across **5 orthogonal lenses**:
+     1. **`blind-hunter` (Diff-Only, Zero Plan Bias):** Sees *only* the diff (never the plan or intent) and enforces a mandatory finding floor $N = \min(\lfloor\sqrt{\text{kB}} + 1\rfloor, 10)$ so reviewers cannot lazily rubber-stamp non-empty diffs.
+     2. **`edge-case-hunter` (`deletion-check` + `claims-check`):** Walks every branching path, resource/handle lifetime, and error return in the diff *before* reading `## Implementation Notes`, then verifies that removed/replaced code did not drop a contract (`deletion-check`) and attempts to falsify every agent claim against traced source lines (`claims-check`).
+     3. **`verification-gap` (Caller Hop Trace & Adoption Check):** Traces changed symbols 1–3 hops to real callers/consumers, rejecting mock-only / source-text assertions (`broken-verification gap`) and flagging sibling call sites that were not updated (`missing-adoption gap` / `BMAD_DELETION_OR_ADOPTION_GAP`).
+     4. **`intent-alignment` (Verbatim Intent vs. Diff Surface):** Compares *only* the user's verbatim intent and the diff to catch cases where the agent completed its own checklist items while missing the user's actual target surface.
+     5. **`opus-cross-family` (`Claude Opus 5.5` + Deterministic Local Engine):** Independent cross-family adversarial audit via `invoke_opus_reviewer.py --mode diff-review`.
+   - **4-Route Cascading Triage (`## Review Triage Log`):** Every verified finding is logged in `## Review Triage Log` and routed by highest blast radius:
+     - `[intent_gap]` -> revert code to `baseline_revision`, clarify with the user, and return to `step-02-plan`;
+     - `[bad_plan]` -> extract `KEEP` notes (what worked), revert code to `baseline_revision`, log the dead-end in `## Plan Change Log` (so it is never repeated), amend the non-frozen plan, and re-run `step-03-implement`;
+     - `[patch]` -> send minimal localized fix to the `step-03` subagent and re-run full verification;
+     - `[defer]` -> record out-of-scope follow-up in `.asw/plans/deferred-work.md`.
+5. **Architecture Spine (`AD-n` `Binds/Prevents/Rule`), Append-Only `.memlog.md`, Research Firewall & Repo Pitfall Ledger:**
+   - **Architecture Spine (`bmad_lint_spine.py`):** Architectural decisions (`AD-1`, `AD-2`, ...) are recorded only when two independent units could choose incompatibly, and each `AD-n` must specify `Binds`, `Prevents`, and `Rule`, alongside version-pinned dependencies in `## Stack` (validated via `python .antigravity/scripts/bmad_lint_spine.py`).
+   - **Append-Only Working Memory (`bmad_memlog.py`):** Long-running architecture, planning, and research sessions record chronological decisions, assumptions, and verified claims in `.memlog.md` via `python .antigravity/scripts/bmad_memlog.py` (`init`, `append`, `set`, `tally`).
+   - **Research Firewall & 4-Agent Codebase Recon (`deep-research`):** Project context shapes *what to ask*, never *what is true* (zero unverified conclusions from training data alone); codebase recon dispatches bounded `locator`, `analyzer`, `historian`, and `verifier` passes tagged with the Git commit SHA.
+   - **Verified Repo Pitfall Ledger (`<!-- bmad:context -->`):** Recurring repository-specific pitfalls discovered during review are either automated into hooks/linters (`automate`) or recorded inside `<!-- bmad:context -->` in `AGENTS.md` (`retain | rewrite | relocate | automate | delete`).

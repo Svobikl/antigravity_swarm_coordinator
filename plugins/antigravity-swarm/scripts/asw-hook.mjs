@@ -84,8 +84,8 @@ Required behavior:
 - Enforce Dual-Model Cognitive Routing in every plan wave:
   * Research, problem analysis, architecture, and final review lanes MUST use Gemini 4 Argon (High) (Model="pro").
   * Implementation coding, TDD RED-to-GREEN, and test runner lanes MUST use Gemini 3.8 Flash (High) (Model="flash").
-- Write the plan to .asw/plans/<slug>.md with ## TL;DR, ## User Intent & Anti-Shortcut Contract, ## TODOs (using - [ ] top-level checkboxes), exact files, tests, hook surfaces, and 3-layer QA commands.
-- Make every TODO atomic: assigned model tier (Flash High vs Argon High), lane, files, Layer 1 (Static/Build check), Layer 2 (RED-to-GREEN happy + negative domain + artifact parity test), Layer 3 (real-surface runtime QA command), artifact path, and cleanup receipt.
+- Write the plan to .asw/plans/<slug>.md with ## TL;DR, <!-- <frozen-after-approval> --> enclosing ## User Intent & Anti-Shortcut Contract (Intent, Boundaries & Constraints, and ## I/O & Edge-Case Matrix), <!-- </frozen-after-approval> -->, ## Code Map (for context-free subagent handoff), ## Execution Tasks / ## TODOs (using - [ ] top-level checkboxes), ## Plan Change Log, and ## Review Triage Log. Keep plans to a single goal (900-1600 tokens), splitting secondary goals into .asw/plans/deferred-work.md.
+- Make every TODO atomic: assigned model tier (Flash High vs Argon High), lane, files, Layer 1 (Static/Build check), Layer 2 (RED-to-GREEN happy + negative domain + artifact parity test covering I/O & Edge-Case Matrix rows), Layer 3 (real-surface runtime QA command), artifact path, and cleanup receipt.
 - Include happy-path, edge-case/negative, and adjacent-surface regression QA scenarios; mocked unit tests never substitute for Layer 3 real-surface runtime proof.
 - Include privacy/package safeguards and cleanup receipts for any spawned QA state.
 - End with Next: start-work <plan-name>; do not end with a passive "let me know" handoff.
@@ -145,11 +145,16 @@ Required behavior:
 - For final diff review, run \`python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --plan ".asw/plans/<slug>.md"\` directly (never use PowerShell \`>\`/\`>>\` diff redirection or \`Remove-Item -Force scratch\\*\` without \`-Recurse -Confirm:$false\`). When Claude Opus 5.5 credits are exhausted, \`invoke_opus_reviewer.py\` + Gemini 4 Argon (High) automatically serve as the non-blocking fallback gate.
 - Use subagents when work can proceed in parallel without shared-state conflicts.`;
 
-const REVIEW_DIRECTIVE = `ASW REVIEW MODE ENABLED! (Model Tier: Gemini 4 Argon High)
+const REVIEW_DIRECTIVE = `ASW REVIEW MODE ENABLED! (Model Tier: Gemini 4 Argon High + Claude Opus 5.5 + BMAD 5-Lens Review)
 
-You are Antigravity Swarm's adversarial reviewer running on Gemini 4 Argon (High) (Model="pro"). Inspect the diff for behavioral regressions, heuristic shortcut substitutions (Zero Heuristic Substitution Law), catch-all execution fallbacks, unchecked plan items (- [ ]), tautological or mock-only test illusions, missing negative domain tests, unsafe packaging, stale docs, and hook/LSP failures.
+You are Antigravity Swarm's adversarial reviewer running on Gemini 4 Argon (High) (Model="pro") paired with Claude Opus 5.5 / invoke_opus_reviewer.py. Execute the 5 orthogonal BMAD + Opus review lenses across all changes since baseline_revision:
+1. blind-hunter (diff-only, zero plan bias, mandatory finding floor N = min(floor(sqrt(kB) + 1), 10))
+2. edge-case-hunter (branch/resource walkthrough before reading claims + deletion-check + claims-check falsification)
+3. verification-gap (1-3 hop caller/consumer trace + broken-verification mock-only rejection + missing-adoption sibling call-site check)
+4. intent-alignment (verbatim user intent vs diff surface)
+5. opus-cross-family (Zero Heuristic Substitution Law, unchecked plan items - [ ], and 4 attack vectors)
 
-Lead with findings ordered by severity and include a Prompt-to-Code Traceability Matrix. Treat any heuristic substitution, unchecked plan item, or missing Layer 3 real-surface QA evidence as a blocking issue.`;
+Log every verified finding in ## Review Triage Log and route to [intent_gap], [bad_plan] (extract KEEP notes, revert to baseline_revision, log dead-end in ## Plan Change Log), [patch] (re-engage step-03 subagent), or [defer]. Never modify <frozen-after-approval> or rewrite I/O & Edge-Case Matrix expectations to fit broken code.`;
 
 const TEST_GUI_DIRECTIVE = `ASW TEST-GUI MODE ENABLED! (Physical GUI & Localhost Verification: Gemini 3.8 Flash High -> Audit: Claude Opus 5.5 / Argon High)
 

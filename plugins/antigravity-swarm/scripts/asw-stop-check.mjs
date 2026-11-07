@@ -39,12 +39,14 @@ function findUncheckedActivePlan(cwd) {
     // so we don't force execution during a pure planning phase before user approval.
     const checkedMatches = content.match(/^[ \t]*-\s+\[[xX]\]\s+/gm) || [];
     const uncheckedMatches = content.match(/^[ \t]*-\s+\[ \]\s+.+$/gm) || [];
+    const unresolvedTriageMatches = (content.match(/^[ \t]*-\s*\[(?:intent_gap|bad_plan|patch)\][^\r\n]*$/gim) || [])
+      .filter((line) => !/\b(?:RESOLVED|REVERTED|DONE|FIXED)\b/i.test(line));
     const startWorkActive = existsSync(join(cwd, ".asw", "start-work"));
 
-    if (uncheckedMatches.length > 0 && (checkedMatches.length > 0 || startWorkActive)) {
+    if ((uncheckedMatches.length > 0 || unresolvedTriageMatches.length > 0) && (checkedMatches.length > 0 || startWorkActive)) {
       const stateDir = join(cwd, ".asw", "start-work");
       const guardFile = join(stateDir, ".stop-guard.json");
-      const signature = `${latest.name}:${checkedMatches.length}:${uncheckedMatches.length}`;
+      const signature = `${latest.name}:${checkedMatches.length}:${uncheckedMatches.length}:${unresolvedTriageMatches.length}`;
       let guard = { signature: "", count: 0 };
       if (existsSync(guardFile)) {
         try {
@@ -68,7 +70,8 @@ function findUncheckedActivePlan(cwd) {
         planName: latest.name,
         uncheckedCount: uncheckedMatches.length,
         checkedCount: checkedMatches.length,
-        nextItem: uncheckedMatches[0].trim(),
+        unresolvedTriageCount: unresolvedTriageMatches.length,
+        nextItem: uncheckedMatches.length > 0 ? uncheckedMatches[0].trim() : unresolvedTriageMatches[0].trim(),
       };
     }
   } catch {
@@ -90,12 +93,14 @@ if (safeMode(payload)) {
 } else {
   const unfinishedPlan = findUncheckedActivePlan(cwd);
   if (unfinishedPlan) {
+    const gateLabel = unfinishedPlan.unresolvedTriageCount > 0 && unfinishedPlan.uncheckedCount === 0
+      ? `BMAD Review Triage Gate: Active plan '.asw/plans/${unfinishedPlan.planName}' has ${unfinishedPlan.unresolvedTriageCount} unresolved [intent_gap]/[bad_plan]/[patch] finding(s) in Review Triage Log.`
+      : `Zero-Unchecked-Plan Gate: Active plan '.asw/plans/${unfinishedPlan.planName}' still has ${unfinishedPlan.uncheckedCount} unchecked task(s) (${unfinishedPlan.checkedCount} completed).`;
     process.stdout.write(JSON.stringify({
       decision: "continue",
-      reason: `Zero-Unchecked-Plan Gate: Active plan '.asw/plans/${unfinishedPlan.planName}' still has ${unfinishedPlan.uncheckedCount} unchecked task(s) (${unfinishedPlan.checkedCount} completed). Next unchecked item: "${unfinishedPlan.nextItem}". Dispatch Gemini 3.8 Flash (High) to complete and verify remaining items or explicitly log a blocker.`,
+      reason: `${gateLabel} Next item: "${unfinishedPlan.nextItem}". Dispatch Gemini 3.8 Flash (High) to complete and verify remaining items or explicitly log a blocker.`,
     }));
   } else {
     process.stdout.write(JSON.stringify({ decision: "" }));
   }
 }
-

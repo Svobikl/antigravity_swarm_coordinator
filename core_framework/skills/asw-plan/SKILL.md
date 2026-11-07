@@ -56,3 +56,11 @@ Split work into waves when tasks can proceed independently. Ensure zero overlapp
   1. `Verbatim User Requirements (REQ-1..N)`
   2. `Authoritative Source of Truth` (exact model artifacts, datasets, or API endpoints)
   3. `Forbidden Shortcuts & Heuristics` (enforcing Zero Heuristic Substitution Law)
+
+## BMAD-METHOD V7 `<frozen-after-approval>`, `I/O & Edge-Case Matrix` & `Code Map` Contract
+
+See `references/bmad-plan-template.md` for the canonical plan structure:
+1. **Single-Goal Scope (`900-1600` tokens):** Keep each `.asw/plans/<slug>.md` focused on one coherent goal; move secondary goals to `.asw/plans/deferred-work.md`.
+2. **`<frozen-after-approval>` Block:** Wrap `## User Intent & Anti-Shortcut Contract` (`### Intent`, `### Boundaries & Constraints`, and `### I/O & Edge-Case Matrix`) inside `<!-- <frozen-after-approval> --> ... <!-- </frozen-after-approval> -->`.
+3. **`baseline_revision` & `## Code Map`:** Record `baseline_revision: <git-short-sha>` in YAML frontmatter and include `## Code Map` listing exact target files, symbols, and callers so implementation subagents start context-free.
+4. **Deterministic Contract Lint:** Run `python .antigravity/scripts/bmad_lint_spine.py --file .asw/plans/<slug>.md --mode plan-contract` alongside `invoke_opus_reviewer.py --mode plan-review`.

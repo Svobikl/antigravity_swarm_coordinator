@@ -50,3 +50,10 @@ In the **Tri-Model Cross-Family Cognitive Architecture**, `opposition-reviewer` 
 - Verify a line-by-line **Prompt-to-Code Traceability Matrix** against the user's verbatim instructions.
 - **Opus Credit Exhaustion Fallback & Self-Contained Diff Review**: Always run `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>"` directly (never redirect diffs via PowerShell `>`/`>>` or run `Remove-Item -Force scratch\*` without `-Recurse -Confirm:$false`). If Claude Opus 5.5 credits are exhausted, automatically fall back to the deterministic `invoke_opus_reviewer.py` engine + `Gemini 4 Argon (High)` without stalling.
 - **Deterministic Tripwires (2A-2F, 3A-3C, 4A-4E & `--scan-public-repo`)**: Reject heuristic `_sigmoid` substitutions (`2A`), catch-all idle-to-action fallbacks (`2B`), binary threshold ternaries (`2C`), live safety/validation gate bypasses (`2E`), capped-denominator `sum / min(K, len(...))` inflation & flat `0.0` series (`2F`), tautological `is not None` tests (`3A`), non-principal-scoped `idempotency_key` (`3C`), DOM/Shadow-DOM error overlays (`4B`), `unauthorized`/`offline` external devices (`4C`), unapproved binary package hot-patching (`4D`), and private LAN IPs/PII in public repos (`4E` / `--scan-public-repo`).
+
+## BMAD-METHOD V7 Claims-Check, Deletion-Check & Missing-Adoption Falsification
+
+In addition to the 4 core attack vectors, enforce:
+1. **`BMAD_FROZEN_CONTRACT_VIOLATION`:** Reject any diff that modifies `<!-- <frozen-after-approval> -->` after plan approval without `human_reapproved: true`.
+2. **`claims-check` & `deletion-check`:** Treat `## Implementation Notes` as unverified testimony to falsify against traced code, and verify that deleted/renamed functions do not leave orphaned sibling callers (`BMAD_DELETION_OR_ADOPTION_GAP`).
+3. **`blind-hunter` Finding Floor:** Enforce $N = \min(\lfloor\sqrt{\text{kB}} + 1\rfloor, 10)$ candidate findings on non-empty diffs and block completion while `## Review Triage Log` has unresolved `[intent_gap]`, `[bad_plan]`, or `[patch]` items (`BMAD_UNRESOLVED_TRIAGE_ITEM`).

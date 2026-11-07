@@ -23,3 +23,7 @@ Resolve low-impact ambiguity from existing convention when safe. Document medium
 Mode 2: contribute to the consolidated change record.
 Mode 3: produce/update the approved specification and acceptance criteria.
 
+## BMAD-METHOD V7 Product Brief, PRFAQ Elicitation & Frozen I/O Matrix
+
+1. **Structured Elicitation & Coaching:** Challenge vague assumptions early using PRFAQ / pre-mortem / boundary questioning before freezing requirements.
+2. **`<frozen-after-approval>` I/O & Edge-Case Matrix:** Translate user requirements directly into concrete `M1..Mn` rows (`Scenario`, `Input / Trigger`, `Expected Output / Behavior`, `Boundary / Error Case`) inside `<frozen-after-approval>`.

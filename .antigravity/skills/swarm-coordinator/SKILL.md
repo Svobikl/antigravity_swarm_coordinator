@@ -83,3 +83,17 @@ Use **`Gemini 3.8 Flash (High)`** whenever delegating bounded execution waves:
   - **Production-Volume Distribution (`Tripwire 2F`)**: Never divide sums by capped denominators (`sum / min(K, len(...))`); require non-degenerate mark-to-market time series.
   - **Public-Repo Privacy (`--scan-public-repo` / `Tripwire 4E`)**: Run `invoke_opus_reviewer.py --scan-public-repo "<dir>" --forbid-terms "<pii>"` before pushing to public repositories; zero RFC1918 LAN IPs or private location PII allowed.
   - **Baseline Feature Survival & Asset Cache Verification (`--assert-asset-version`)**: Verify existing modes survive new modes/cleanup and verify live uncached HTML (`Cache-Control: no-cache`) serves the new `?v=...` bundle.
+
+## BMAD-METHOD V7 Step-File Orchestration, Frozen Contract & 5-Lens Review Integration
+
+1. **5-Step JIT Execution Discipline (`step-01..05`):**
+   - Execute complex deliveries through sequential Just-In-Time steps (`step-01-clarify-and-route` -> `step-02-plan` -> `step-03-implement` -> `step-04-review` -> `step-05-present`, see `asw-loop/references/bmad-steps.md`). Never preload future step instructions into active worker context.
+   - Enforce a **Single-Goal Scope & Token Ceiling (`900-1600` tokens)** per plan, splitting secondary goals into `.asw/plans/deferred-work.md`.
+2. **`<frozen-after-approval>` Contract & `I/O & Edge-Case Matrix` Audit:**
+   - Enclose human-owned `Intent`, `Boundaries & Constraints` (`Always:` / `Never:`), and `I/O & Edge-Case Matrix` (`M1..Mn`) inside `<!-- <frozen-after-approval> --> ... <!-- </frozen-after-approval> -->` and record `baseline_revision` (Git SHA) before implementation.
+   - Forbid any modification of `<frozen-after-approval>` or rewriting of matrix expectations during implementation/review (`BMAD_FROZEN_CONTRACT_VIOLATION`).
+3. **Context-Free Subagent Handoff (`## Code Map`) & Re-Engagement:**
+   - Pass `Gemini 3.8 Flash (High)` implementation subagents only `{plan_file}` and its `## Code Map` (zero conversation history bloat) and retain the subagent `conversationId` for targeted `patch` fixes in `step-04-review`.
+4. **5 Orthogonal Review Lenses & 4-Route Cascading Triage (`## Review Triage Log`):**
+   - Run `blind-hunter` (floor $N = \min(\lfloor\sqrt{\text{kB}} + 1\rfloor, 10)$), `edge-case-hunter` (`deletion-check` + `claims-check`), `verification-gap` (caller hop trace + `missing-adoption` check), `intent-alignment`, and `opus-cross-family` (`invoke_opus_reviewer.py --mode diff-review`).
+   - Route every verified finding in `## Review Triage Log` to `[intent_gap]`, `[bad_plan]` (extract `KEEP` notes, revert to `baseline_revision`, log dead-end in `## Plan Change Log`), `[patch]`, or `[defer]`.
