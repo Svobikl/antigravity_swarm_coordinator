@@ -47,7 +47,7 @@ class TestSwarmAdapterAndChannels(unittest.TestCase):
     def test_benchspec_asymmetric_tri_model(self):
         """2) Asymmetric Tri-Model BenchSpec.channels configuration validates cleanly."""
         channels = {
-            "proposer": ChannelSpec("antigravity", "gemini-4-argon"),
+            "proposer": ChannelSpec("antigravity", "gemini-4-carbon"),
             "selector": ChannelSpec("antigravity_opus", "claude-opus-5-5"),
         }
         prompts = BenchPrompts(work="Codebase feature delivery")
@@ -59,14 +59,14 @@ class TestSwarmAdapterAndChannels(unittest.TestCase):
             channels=channels,
         )
         self.assertEqual(b_spec.channels["proposer"].kind, "antigravity")
-        self.assertEqual(b_spec.channels["proposer"].model, "gemini-4-argon")
+        self.assertEqual(b_spec.channels["proposer"].model, "gemini-4-carbon")
         self.assertEqual(b_spec.channels["selector"].kind, "antigravity_opus")
         self.assertEqual(b_spec.channels["selector"].model, "claude-opus-5-5")
 
         # Test resolve_channel_model
-        cs_prop = spec.resolve_channel_model("antigravity", "gemini-4-argon")
+        cs_prop = spec.resolve_channel_model("antigravity", "gemini-4-carbon")
         self.assertEqual(cs_prop.kind, "antigravity")
-        self.assertEqual(cs_prop.model, "gemini-4-argon")
+        self.assertEqual(cs_prop.model, "gemini-4-carbon")
 
         cs_sel = spec.resolve_channel_model("antigravity_opus", "claude-opus-5-5")
         self.assertEqual(cs_sel.kind, "antigravity_opus")
@@ -175,9 +175,9 @@ class TestSwarmAdapterAndChannels(unittest.TestCase):
                 self.assertEqual(call_args[model_idx + 1], "claude-opus-5-5")
 
     def test_antigravity_call_invocations(self):
-        """5) proposer.py:_antigravity_call supports gemini-4-argon and claude-opus-5-5."""
-        cs_argon = ChannelSpec("antigravity", "gemini-4-argon")
-        prop_argon = proposer.Proposer(spec=cs_argon, project="")
+        """5) proposer.py:_antigravity_call supports gemini-4-carbon and claude-opus-5-5."""
+        cs_carbon = ChannelSpec("antigravity", "gemini-4-carbon")
+        prop_carbon = proposer.Proposer(spec=cs_carbon, project="")
 
         cs_opus = ChannelSpec("antigravity_opus", "claude-opus-5-5")
         prop_opus = proposer.Proposer(spec=cs_opus, project="")
@@ -185,18 +185,18 @@ class TestSwarmAdapterAndChannels(unittest.TestCase):
         # Both route through call()
         with tempfile.TemporaryDirectory() as td:
             audit_dir = Path(td) / "audit"
-            prop_argon.audit_dir = audit_dir
+            prop_carbon.audit_dir = audit_dir
             prop_opus.audit_dir = audit_dir
 
             # Mock _antigravity_call returning answer
             with mock.patch.object(
-                prop_argon,
+                prop_carbon,
                 "_antigravity_call",
-                return_value=("Argon improvement proposal", 0.005, ""),
+                return_value=("Carbon improvement proposal", 0.005, ""),
             ) as mock_ag:
-                reply = prop_argon.call("Propose improvement", None, "label_inv1")
+                reply = prop_carbon.call("Propose improvement", None, "label_inv1")
                 self.assertTrue(reply.ok)
-                self.assertEqual(reply.text, "Argon improvement proposal")
+                self.assertEqual(reply.text, "Carbon improvement proposal")
                 self.assertEqual(reply.channel, "antigravity")
                 mock_ag.assert_called_once()
 
@@ -223,7 +223,7 @@ class TestSwarmAdapterAndChannels(unittest.TestCase):
                 mock_run.return_value = subprocess.CompletedProcess(
                     args=[], returncode=0, stdout="", stderr=""
                 )
-                text, cost, err = prop_argon._antigravity_call(cwd, "Mission", "System", 30)
+                text, cost, err = prop_carbon._antigravity_call(cwd, "Mission", "System", 30)
                 self.assertEqual(text, "Detailed Antigravity Answer")
                 self.assertEqual(err, "")
                 # MISSION.md must have been created in cwd

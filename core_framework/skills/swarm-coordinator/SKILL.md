@@ -6,13 +6,13 @@ description: Global orchestration lead enforcing Mode 0-5 routing, Tri-Model gat
 # Swarm Coordinator
 
 ## Purpose
-Classify the request, select the smallest valid workflow, enforce single-orchestrator control, govern execution modes (Mode 0 through Mode 5), route tasks across the **Tri-Model Cross-Family Cognitive Architecture (`Gemini 4 Argon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`)**, manage bounded subagents, enforce 3-layer functional verification, and guarantee 100% mechanical plan completion.
+Classify the request, select the smallest valid workflow, enforce single-orchestrator control, govern execution modes (Mode 0 through Mode 5), route tasks across the **Tri-Model Cross-Family Cognitive Architecture (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`)**, manage bounded subagents, enforce 3-layer functional verification, and guarantee 100% mechanical plan completion.
 
 ## Tri-Model Cross-Family Cognitive Routing Protocol (Mandatory)
 Every phase and subagent invocation (`invoke_subagent`) MUST be routed to the explicit cognitive tier that maximizes product quality, cross-family adversarial rigor, and model efficiency:
 
-### Tier 1A: `Gemini 4 Argon (High)` (`Model="pro"`) — Primary Architect, Planner & Proposer
-Use **`Gemini 4 Argon (High)`** whenever performing or delegating:
+### Tier 1A: `Gemini 4 Carbon (High)` (`Model="pro"`) — Primary Architect, Planner & Proposer
+Use **`Gemini 4 Carbon (High)`** whenever performing or delegating:
 1. **Research & Discovery Synthesis:** Mode 1 investigations, domain/codebase research (`spec-product-analyst`), and external documentation synthesis (`asw-librarian`, `asw-planning-analysis`).
 2. **Problem Analysis & Root-Cause Isolation:** Bug triage, architectural bottleneck analysis, failure-mode modeling, and complex debugging (`systematic-debugging`, `asw-debug`).
 3. **Architecture & Implementation Planning:** Mode 3 Phase 1 technical design (`software-architect`), Mode 5 plan freeze and `TASK_GRAPH.json` decomposition (`program-state-controller`), and executable plan creation (`asw-planner`).
@@ -30,9 +30,9 @@ Use **`Gemini 3.8 Flash (High)`** whenever delegating bounded execution waves:
 2. **TDD & Test Suite Execution:** Writing RED-to-GREEN unit/integration/E2E tests and executing canonical build/test commands (`validator-build-test-agent`, `interaction-e2e-tester`).
 3. **Fast Repository Scouting & Cleanup:** Local file/symbol exploration (`asw-explorer`) and mechanical code cleanup (`asw-cleanup`).
 
-### Efficiency Invariant (Argon Plans -> Opus Audits -> Flash Implements -> Opus & Argon Verify)
-- Never waste `Gemini 4 Argon (High)` or `Claude Opus 5.5` context on multi-file boilerplate writing or iterative compile-fix loops.
-- `Gemini 4 Argon (High)` writes a **Decision-Complete Task Contract**; `Claude Opus 5.5` validates it across the 6 adversarial vectors (`Verdict: PLAN_APPROVED`); `Gemini 3.8 Flash (High)` executes the bounded coding waves; `Claude Opus 5.5` and `completion-auditor` audit the empirical evidence before completion.
+### Efficiency Invariant (Carbon Plans -> Opus Audits -> Flash Implements -> Opus & Carbon Verify)
+- Never waste `Gemini 4 Carbon (High)` or `Claude Opus 5.5` context on multi-file boilerplate writing or iterative compile-fix loops.
+- `Gemini 4 Carbon (High)` writes a **Decision-Complete Task Contract**; `Claude Opus 5.5` validates it across the 6 adversarial vectors (`Verdict: PLAN_APPROVED`); `Gemini 3.8 Flash (High)` executes the bounded coding waves; `Claude Opus 5.5` and `completion-auditor` audit the empirical evidence before completion.
 
 ## Core Rules & Authority
 - **Single-Orchestrator Rule**: `swarm-coordinator` is the SOLE authority for global scope, program state transitions, task graph updates, and final handoff. Helper orchestration tools act strictly as localized sub-workflows under coordinator control.
@@ -46,21 +46,21 @@ Use **`Gemini 3.8 Flash (High)`** whenever delegating bounded execution waves:
 
 ## Execution Modes
 - **Mode 0 (Operational Fast Path)**: Keep it direct; use Coordinator + Validator (`3.8 Flash High`) only. No design artifacts.
-- **Mode 1 (Investigation Only)**: Non-mutating analysis, root cause, and reporting using **`Gemini 4 Argon (High)`**. No implementation.
+- **Mode 1 (Investigation Only)**: Non-mutating analysis, root cause, and reporting using **`Gemini 4 Carbon (High)`**. No implementation.
 - **Mode 2 (Small Controlled Change)**:
-  - Problem analysis & reference audit via **`Gemini 4 Argon (High)`**.
+  - Problem analysis & reference audit via **`Gemini 4 Carbon (High)`**.
   - If the change spans **3+ steps or 3+ files**, create an on-disk checklist in `.asw/plans/<slug>.md` before editing.
   - Pre-execution plan opposition audit via **`Claude Opus 5.5`**.
   - Bounded implementation & test run via **`Gemini 3.8 Flash (High)`**, followed by 3-Layer Functional Verification and opposition diff review.
 - **Mode 3 (Complex Delivery)**:
-  1. **Alignment, Research & Architecture Design (`Gemini 4 Argon High`)** -> write executable plan `.asw/plans/<slug>.md`.
+  1. **Alignment, Research & Architecture Design (`Gemini 4 Carbon High`)** -> write executable plan `.asw/plans/<slug>.md`.
   2. **Plan Opposition Gate (`Claude Opus 5.5`)** -> audit across 6 vectors -> obtain `Verdict: PLAN_APPROVED`.
   3. **Implementation (`Gemini 3.8 Flash High`)** -> bounded execution waves.
-  4. **QA & Opposition Review (`Claude Opus 5.5` + `Argon High`)** -> 3-layer verification + diff opposition audit.
+  4. **QA & Opposition Review (`Claude Opus 5.5` + `Carbon High`)** -> 3-layer verification + diff opposition audit.
   5. **Handoff & Cleanup** -> final closure sign-off.
 
 ## Continuous Self-Learning & Obsidian Project Memory (Mandatory)
-- **Pre-Task Recall & Auto-Indexing**: At task start, invoke `python .antigravity/scripts/memory_manager.py --recall --project-path . --task-type <code|presentation|research|general>` so `Gemini 4 Argon (High)` plans with full awareness of user/company profile, presentation/coding preferences, historical anti-patterns, and project architecture.
+- **Pre-Task Recall & Auto-Indexing**: At task start, invoke `python .antigravity/scripts/memory_manager.py --recall --project-path . --task-type <code|presentation|research|general>` so `Gemini 4 Carbon (High)` plans with full awareness of user/company profile, presentation/coding preferences, historical anti-patterns, and project architecture.
 - **Self-Learning Capture on User Feedback**:
   - When the user shares company, personal, presentation, or coding preferences -> run `memory_manager.py --record-preference`.
   - When the user corrects a mistake or rejects an implementation pattern -> run `memory_manager.py --record-lesson` so the mistake is never repeated across any project.
@@ -77,7 +77,7 @@ Use **`Gemini 3.8 Flash (High)`** whenever delegating bounded execution waves:
   - **Boundary-to-Boundary Hardware / IoT / Voice Fidelity Gate**: Never substitute mid-pipeline shortcuts for physical/external boundary triggers; halt in `BLOCKED_ON_HARDWARE_AUTH` if target devices or services are `unauthorized` or `offline`.
   - **3-Strike Anti-Thrashing Circuit Breaker**: Stop after 3 failed repair attempts on the same component; forbid unapproved binary bytecode patching of third-party packages and restore atomic service backups on failure.
   - **Feature-Flag & Negative-State Isolation Gate**: Prove zero unintended alerts, mutations, or external calls when a feature flag is `OFF` or `SUSPENDED`.
-- **Opus Credit Exhaustion Fallback & PowerShell Anti-Hang**: When Claude Opus 5.5 credits/quota are exhausted, never stall; invoke `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --fallback-reason "opus_credits_exhausted"` (zero API credit dependency) + `Gemini 4 Argon (High)`. Never use PowerShell `>`/`>>` to build diff files or `Remove-Item -Force <dir>\*` without `-Recurse -Confirm:$false`.
+- **Opus Credit Exhaustion Fallback & PowerShell Anti-Hang**: When Claude Opus 5.5 credits/quota are exhausted, never stall; invoke `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --fallback-reason "opus_credits_exhausted"` (zero API credit dependency) + `Gemini 4 Carbon (High)`. Never use PowerShell `>`/`>>` to build diff files or `Remove-Item -Force <dir>\*` without `-Recurse -Confirm:$false`.
 - **Cross-Session Production Reliability & Privacy Gates**:
   - **Multi-Tenant State Isolation (`Tripwire 3C`)**: Always scope `idempotency_key` by principal (`{principal_id}:{operation_key}`), persist `PENDING` DB rows before external side effects, and test with 2+ concurrent principals.
   - **Production-Volume Distribution (`Tripwire 2F`)**: Never divide sums by capped denominators (`sum / min(K, len(...))`); require non-degenerate mark-to-market time series.

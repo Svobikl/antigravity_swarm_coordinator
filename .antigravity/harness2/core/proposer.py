@@ -324,7 +324,7 @@ class Proposer:
     def _antigravity_call(
         self, cwd: Path, mission: str, system: str, wall: int
     ) -> tuple[str, float, str]:
-        """Invoke Antigravity native execution runtime for gemini-4-argon or claude-opus-5-5."""
+        """Invoke Antigravity native execution runtime for gemini-4-carbon or claude-opus-5-5."""
         (cwd / "MISSION.md").write_text(
             (f"{system}\n\n---\n\n" if system else "") + mission, encoding="utf-8"
         )

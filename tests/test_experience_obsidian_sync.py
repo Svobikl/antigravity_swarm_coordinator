@@ -318,7 +318,7 @@ class TestSkillsAndRouting(unittest.TestCase):
             self.assertIn(f"name: {expected_name}", content)
             self.assertIn("description:", content)
             # Tri-Model references
-            self.assertIn("Gemini 4 Argon", content)
+            self.assertIn("Gemini 4 Carbon", content)
             self.assertIn("Claude Opus 5.5", content)
             self.assertIn("Gemini 3.8 Flash", content)
 

@@ -6,9 +6,9 @@ description: Performs final mechanical closure, stub scans, and 3-layer evidence
 # Completion Auditor
 
 ## Purpose
-Perform an independent, adversarial mechanical audit on **`Gemini 4 Argon (High)` (`Model="pro"`)** before any long-horizon program (Mode 5), complex delivery (Mode 3), or multi-step change (Mode 2) can be declared 100% complete. Reject optimistic narrative summaries, catch unfinished plan checkboxes, and enforce strict leaf-level 3-layer evidence closure.
+Perform an independent, adversarial mechanical audit on **`Gemini 4 Carbon (High)` (`Model="pro"`)** before any long-horizon program (Mode 5), complex delivery (Mode 3), or multi-step change (Mode 2) can be declared 100% complete. Reject optimistic narrative summaries, catch unfinished plan checkboxes, and enforce strict leaf-level 3-layer evidence closure.
 
-## Mandatory Audit Gates (`Gemini 4 Argon High`)
+## Mandatory Audit Gates (`Gemini 4 Carbon High`)
 
 ### Gate 1: Source-Plan & Checklist Reconciliation (Zero Dropped Steps)
 - **Mode 5**: Compare `REQUIREMENT_COVERAGE.csv` row-by-row against `SOURCE_PLAN.md`.
@@ -36,7 +36,7 @@ Perform an independent, adversarial mechanical audit on **`Gemini 4 Argon (High)
 ## Sign-Off Policy
 - If ANY requirement lacks 3-layer direct evidence or any plan checkbox/task remains open, the audit result is **FAIL** or **PARTIAL**, and the coordinator MUST resume implementation waves via `Gemini 3.8 Flash (High)`.
 - Only when all gates pass does the auditor log a signed approval in `COMPLETION_LEDGER.md` (or the final Mode 3 handoff).
-- No agent may declare "100% complete" without this formal `Gemini 4 Argon (High)` auditor sign-off.
+- No agent may declare "100% complete" without this formal `Gemini 4 Carbon (High)` auditor sign-off.
 
 
 

@@ -190,7 +190,7 @@ Negative test failure and edge cases verified.
             self.assertIn("Verdict: ASW APPROVED", report)
 
     def test_opus_credit_exhaustion_automatic_fallback_never_blocks(self):
-        """Verifies that exhausted Opus credits trigger automatic deterministic + Gemini 4 Argon High fallback without hanging."""
+        """Verifies that exhausted Opus credits trigger automatic deterministic + Gemini 4 Carbon High fallback without hanging."""
         # 1. Check --preflight metadata includes fallback_model and credit_exhaustion_policy
         pre = subprocess.run(
             [sys.executable, str(self.reviewer_script), "--preflight"],
@@ -201,8 +201,8 @@ Negative test failure and edge cases verified.
         self.assertEqual(pre.returncode, 0)
         pre_data = json.loads(pre.stdout)
         rt = pre_data.get("antigravity_runtime", {})
-        self.assertEqual(rt.get("fallback_model"), "gemini-4-argon-high")
-        self.assertEqual(rt.get("credit_exhaustion_policy"), "auto_fallback_deterministic_and_argon_high")
+        self.assertEqual(rt.get("fallback_model"), "gemini-4-carbon-high")
+        self.assertEqual(rt.get("credit_exhaustion_policy"), "auto_fallback_deterministic_and_carbon_high")
 
         # 2. Run diff-review with ANTIGRAVITY_OPUS_CREDITS_EXHAUSTED=1 and --fallback-reason
         with tempfile.TemporaryDirectory() as tmp:
@@ -252,7 +252,7 @@ Negative test failure and edge cases verified.
             report = out_file.read_text(encoding="utf-8")
             self.assertIn("Verdict: ASW APPROVED", report)
             self.assertIn("Fallback Mode", report)
-            self.assertIn("gemini-4-argon-high", report.lower())
+            self.assertIn("gemini-4-carbon-high", report.lower())
 
     def test_clean_scratch_removes_nested_pycache_without_interactive_hang(self):
         """Reproduces StrataRelay 16-minute hang: scratch/__pycache__ caused PowerShell Remove-Item without -Recurse to hang."""
@@ -283,7 +283,7 @@ Negative test failure and edge cases verified.
         for toml_name in ("asw-plan-audit.toml", "asw-opposition-reviewer.toml", "asw-reviewer.toml"):
             toml_path = self.repo_root / ".antigravity" / "agents" / toml_name
             content = toml_path.read_text(encoding="utf-8")
-            self.assertIn('fallback_model = "gemini-4-argon-high"', content, f"{toml_name} missing fallback_model")
+            self.assertIn('fallback_model = "gemini-4-carbon-high"', content, f"{toml_name} missing fallback_model")
             self.assertIn("timeout_seconds =", content, f"{toml_name} missing timeout_seconds")
 
         rules_text = (self.repo_root / ".antigravity" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md").read_text(encoding="utf-8")

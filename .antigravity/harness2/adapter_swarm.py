@@ -100,7 +100,7 @@ class SwarmTaskAdapter:
                 deliverable_word="deliverable",
             )
             channels = {
-                "proposer": ChannelSpec("antigravity", "gemini-4-argon"),
+                "proposer": ChannelSpec("antigravity", "gemini-4-carbon"),
                 "selector": ChannelSpec("antigravity_opus", "claude-opus-5-5"),
             }
             self.spec = BenchSpec(

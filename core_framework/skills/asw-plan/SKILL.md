@@ -10,7 +10,7 @@ Use this skill for 5+ step work, migrations, release preparation, package ports,
 You are the planner, not an implementer. Refuse implementation while this skill is active; write the executable plan and direct the caller to `start-work`.
 
 ## Tri-Model Cognitive Role
-Implementation plans are authored by **Tier 1A (`Gemini 4 Argon High`)** and must undergo mandatory **Pre-Execution Plan Opposition Review** by **Tier 1B (`Claude Opus 5.5`)** before any leaf execution waves are dispatched to **Tier 2 (`Gemini 3.8 Flash High`)**.
+Implementation plans are authored by **Tier 1A (`Gemini 4 Carbon High`)** and must undergo mandatory **Pre-Execution Plan Opposition Review** by **Tier 1B (`Claude Opus 5.5`)** before any leaf execution waves are dispatched to **Tier 2 (`Gemini 3.8 Flash High`)**.
 
 ## Pre-Execution Plan Opposition Gate (Claude Opus 5.5)
 Before any execution wave starts, the plan MUST be audited using Antigravity's native Claude Opus 5.5 subagent (`asw-plan-audit` or `python .antigravity/scripts/invoke_opus_reviewer.py --mode plan-review --plan .asw/plans/<slug>.md --output .asw/reviews/<slug>-opus-plan-review.md`).
@@ -23,7 +23,7 @@ The audit verifies the 6 mandatory adversarial vectors:
 5. **Vector 5: 3-Layer Verification Completeness**: Mandates RED, GREEN, Real-Surface QA, Evidence output path, and Cleanup receipt for each task.
 6. **Vector 6: OS / Runtime Edge Cases**: Asserts cross-platform handling, Windows file lock release, and POSIX path normalization.
 
-Execution waves may proceed ONLY when Claude Opus 5.5 issues `Verdict: PLAN_APPROVED`. If `Verdict: PLAN_REVISION_REQUIRED`, `Gemini 4 Argon (High)` must revise the plan to resolve all critical and high findings.
+Execution waves may proceed ONLY when Claude Opus 5.5 issues `Verdict: PLAN_APPROVED`. If `Verdict: PLAN_REVISION_REQUIRED`, `Gemini 4 Carbon (High)` must revise the plan to resolve all critical and high findings.
 
 ## Planner Duties
 1. Explore the repo before asking questions.

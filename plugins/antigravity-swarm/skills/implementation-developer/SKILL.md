@@ -6,7 +6,7 @@ description: Executes bounded production code diffs under a decision-complete ta
 # Implementation Developer
 
 ## Purpose
-Execute bounded leaf-level code changes at high velocity using **`Gemini 3.8 Flash (High)` (`Model="flash"`)**, adhering strictly to the decision-complete task contract designed by `Gemini 4 Argon (High)` (`swarm-coordinator` / `software-architect`).
+Execute bounded leaf-level code changes at high velocity using **`Gemini 3.8 Flash (High)` (`Model="flash"`)**, adhering strictly to the decision-complete task contract designed by `Gemini 4 Carbon (High)` (`swarm-coordinator` / `software-architect`).
 
 ## Subagent Task Contract Compliance (`Gemini 3.8 Flash High`)
 When executing as a subagent or bounded worker:
@@ -41,7 +41,7 @@ When executing as a subagent or bounded worker:
 - Do not introduce unrelated refactors, styling changes, or opportunistic dependency updates.
 
 ## Repair Loop
-Participate in the bounded implement/build-test/diagnose/fix loop (maximum 5 cycles per failure class). If a failure persists after 3 cycles, escalate back to **`Gemini 4 Argon (High)`** for root-cause re-analysis rather than guessing repeatedly.
+Participate in the bounded implement/build-test/diagnose/fix loop (maximum 5 cycles per failure class). If a failure persists after 3 cycles, escalate back to **`Gemini 4 Carbon (High)`** for root-cause re-analysis rather than guessing repeatedly.
 
 
 

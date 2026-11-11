@@ -175,7 +175,7 @@ DEFAULT_PROPOSER_CHANNEL = "opencode"
 PROPOSER_MODEL_BY_CHANNEL = {
     "opencode": IMPROVER_MODEL,
     "claude_cli": IMPROVER_MODEL,
-    "antigravity": env("HARNESS2_IMPROVER_MODEL", "gemini-4-argon"),
+    "antigravity": env("HARNESS2_IMPROVER_MODEL", "gemini-4-carbon"),
     "antigravity_opus": env("HARNESS2_SELECTOR_MODEL", "claude-opus-5-5"),
 }
 PHASE_WIDTH = 2

@@ -211,7 +211,7 @@ class TestObsidianMemoryManager(unittest.TestCase):
                     "--title",
                     "ADR-001 Tri-Model Routing",
                     "--content",
-                    "Use Argon High for planning, Opus 5.5 for opposition review, Flash High for bounded coding.",
+                    "Use Carbon High for planning, Opus 5.5 for opposition review, Flash High for bounded coding.",
                     "--vault-dir",
                     str(vault_dir),
                 ],

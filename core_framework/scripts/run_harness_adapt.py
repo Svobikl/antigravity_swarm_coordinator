@@ -16,7 +16,7 @@
 
 Executes the full adaptation cycle (Propose -> Probe -> Compose -> Select -> Reflect)
 with Tri-Model routing:
-  - Tier 1A: Gemini 4 Argon High (proposer="antigravity"/gemini-4-argon)
+  - Tier 1A: Gemini 4 Carbon High (proposer="antigravity"/gemini-4-carbon)
   - Tier 1B: Claude Opus 5.5 (selector="antigravity_opus"/claude-opus-5-5)
   - Tier 2:  Gemini 3.8 Flash High (executor/probes/test runner)
 """
@@ -72,7 +72,7 @@ def run_adaptation(
     if demo:
         adapter = DemoAdapter(root)
         # Configure Tri-Model channels explicitly
-        proposer_channel = ChannelSpec("antigravity", "gemini-4-argon")
+        proposer_channel = ChannelSpec("antigravity", "gemini-4-carbon")
         selector_channel = ChannelSpec("antigravity_opus", "claude-opus-5-5")
         adapter.spec.channels["proposer"] = proposer_channel
         adapter.spec.channels["selector"] = selector_channel

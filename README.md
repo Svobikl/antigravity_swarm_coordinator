@@ -1,6 +1,6 @@
 # Antigravity Swarm Coordinator (Long-Horizon V4.1 + BMAD-METHOD V7 + Harness² + Claude Opus 5.5 + 200 Multi-Domain Skills)
 
-Complete backup, distribution, and cross-platform setup package (**Apple macOS**, **Windows**, and **Linux**) for the default **Swarm Coordinator**, **Google Research `Harness²` recursive adaptation engine**, **Tri-Model Cross-Family Governance Framework** (`Gemini 4 Argon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`), and **200 Curated Multi-Domain Golden Catalog Skills** for **Google Antigravity** and **Gemini CLI**.
+Complete backup, distribution, and cross-platform setup package (**Apple macOS**, **Windows**, and **Linux**) for the default **Swarm Coordinator**, **Google Research `Harness²` recursive adaptation engine**, **Tri-Model Cross-Family Governance Framework** (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`), and **200 Curated Multi-Domain Golden Catalog Skills** for **Google Antigravity** and **Gemini CLI**.
 
 This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 200 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **71 automated verification tests**.
 
@@ -19,15 +19,15 @@ In Antigravity, the Swarm Coordinator functions under the **Single Orchestrator 
                                                 ▼
                     ┌────────────────────────────────────────────────────────┐
                     │                   swarm-coordinator                    │
-                    │   (Sole Global Orchestration Lead — Gemini 4 Argon)    │
+                    │   (Sole Global Orchestration Lead — Gemini 4 Carbon)    │
                     └───────┬───────────────────┼────────────────────┬───────┘
                             │                   │                    │
        ┌────────────────────┴───┐   ┌───────────┴───────────┐   ┌────┴───────────────────────┐
        │  Tier 1B: Opposition   │   │  Tier 2: Execution    │   │   Harness² Adaptation      │
        │   (Claude Opus 5.5)    │   │  (Gemini 3.8 Flash)   │   │  (Propose–Probe–Compose)   │
        ├────────────────────────┤   ├───────────────────────┤   ├────────────────────────────┤
-       │ • asw-plan-audit       │   │ • implementation-dev  │   │ • INV Proposer (Argon)     │
-       │   (6-Vector Plan Gate) │   │ • asw-loop / TDD      │   │ • DOM Proposer (Argon)     │
+       │ • asw-plan-audit       │   │ • implementation-dev  │   │ • INV Proposer (Carbon)     │
+       │   (6-Vector Plan Gate) │   │ • asw-loop / TDD      │   │ • DOM Proposer (Carbon)     │
        │ • asw-opposition-rev   │   │ • validator-build-test│   │ • Git Worktree Probes      │
        │   (4-Vector Diff Gate) │   │ • interaction-e2e     │   │ • Blind Selector (Opus 5.5)│
        │ • Blind Selector       │   │ • asw-explorer        │   │ • Obsidian Experience Sync │
@@ -47,11 +47,11 @@ In Antigravity, the Swarm Coordinator functions under the **Single Orchestrator 
 
 ### Core Rules
 1. **Single Orchestrator:** `swarm-coordinator` is the SOLE authority for global scope and state. Helper orchestration tools (ASW, Conductor) act strictly as localized sub-workflows under coordinator control.
-2. **Tri-Model Cross-Family Cognitive Routing (`Gemini 4 Argon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`):**
-   - **Tier 1A — Primary Architect, Planner, Synthesizer & Harness² Proposer (`Gemini 4 Argon (High)` / `Model="pro"`):** Mandatory for research, root-cause isolation, architecture design, implementation planning (`.asw/plans/<slug>.md`, `SOURCE_PLAN.md`, `TASK_GRAPH.json`), `INV`/`DOM`/`COMPOSE` harness proposals, and final mechanical completion auditing (`completion-auditor`).
+2. **Tri-Model Cross-Family Cognitive Routing (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`):**
+   - **Tier 1A — Primary Architect, Planner, Synthesizer & Harness² Proposer (`Gemini 4 Carbon (High)` / `Model="pro"`):** Mandatory for research, root-cause isolation, architecture design, implementation planning (`.asw/plans/<slug>.md`, `SOURCE_PLAN.md`, `TASK_GRAPH.json`), `INV`/`DOM`/`COMPOSE` harness proposals, and final mechanical completion auditing (`completion-auditor`).
    - **Tier 1B — Independent Cross-Family Opposition Reviewer, Plan Auditor & Blind Selector (`Claude Opus 5.5` natively in Antigravity / `model = "claude-opus-5-5"`):** Eliminates single-model blind spots and self-preference bias across two mandatory gates:
-     - **Pre-Execution Plan Opposition Gate (`asw-plan-audit.toml` / `invoke_opus_reviewer.py --mode plan-review`):** Every implementation plan drafted by `Gemini 4 Argon (High)` is audited by `Claude Opus 5.5` across 6 adversarial vectors before execution waves are dispatched to `Gemini 3.8 Flash (High)`.
-     - **Execution & Diff Opposition Gate (`asw-opposition-reviewer.toml` / `invoke_opus_reviewer.py --mode diff-review`):** Falsifies code diffs, boundary cases, and negative test proofs before task closure, and acts as `channels["selector"]` in Harness² adaptation sweeps so `Gemini 4 Argon` never grades its own proposals.
+     - **Pre-Execution Plan Opposition Gate (`asw-plan-audit.toml` / `invoke_opus_reviewer.py --mode plan-review`):** Every implementation plan drafted by `Gemini 4 Carbon (High)` is audited by `Claude Opus 5.5` across 6 adversarial vectors before execution waves are dispatched to `Gemini 3.8 Flash (High)`.
+     - **Execution & Diff Opposition Gate (`asw-opposition-reviewer.toml` / `invoke_opus_reviewer.py --mode diff-review`):** Falsifies code diffs, boundary cases, and negative test proofs before task closure, and acts as `channels["selector"]` in Harness² adaptation sweeps so `Gemini 4 Carbon` never grades its own proposals.
    - **Tier 2 — High-Velocity Bounded Executor (`Gemini 3.8 Flash (High)` / `Model="flash"`):** Mandatory for leaf code implementation, TDD RED-to-GREEN cycles, test suite execution, and isolated git-worktree candidate rollouts (`implementation-developer`, `asw-loop`, `validator-build-test-agent`, `interaction-e2e-tester`, `asw-explorer`).
 3. **3-Layer Functional Verification Gate:** Syntax checks or mocked unit tests alone never prove completion. Every behavior-changing task requires: (1) Static/Build/Type integrity, (2) Automated happy-path + negative/edge-case tests, and (3) **Real-Surface End-to-End Runtime Proof** (invoking the actual CLI, API, UI, or data pipeline entrypoint with observable output).
 4. **Zero-Unchecked-Plan Closure Gate:** Multi-step tasks (Modes 2, 3, and 5) maintain an on-disk checklist (`.asw/plans/<slug>.md` or `TASK_GRAPH.json`) enforced by `asw-stop-check.mjs` and `completion-auditor`. Stopping while any `- [ ]` checkbox remains open is strictly prohibited.
@@ -74,14 +74,14 @@ While foundation model weights are fixed at inference time, an agent's real-worl
 ### What Harness² Actually Does in the Swarm Coordinator
 When triggered (either automatically after repeated leaf-task failures in `asw-loop`, on explicit `/asw-harness-adapt` invocation, or during Mode 5 continual domain sweeps), **Harness²** executes a closed-loop **5-stage recursive adaptation cycle (`Propose ➔ Probe ➔ Compose ➔ Select ➔ Reflect`)**:
 
-1. **Stage 1 — Orthogonal Diagnosis & Proposal (`Propose` via `Gemini 4 Argon High`):**
-   Instead of making ad-hoc prompt edits, `Gemini 4 Argon (High)` inspects the full, untruncated execution trajectories (`context/rollouts/`) and produced deliverables (`context/deliverables/`) across two strictly separated axes:
+1. **Stage 1 — Orthogonal Diagnosis & Proposal (`Propose` via `Gemini 4 Carbon High`):**
+   Instead of making ad-hoc prompt edits, `Gemini 4 Carbon (High)` inspects the full, untruncated execution trajectories (`context/rollouts/`) and produced deliverables (`context/deliverables/`) across two strictly separated axes:
    - **`INV` (Invariant Axis — *How the Agent Works*):** Diagnoses procedural failures, tool-use errors, timeout loops, or fragile hand-rolled calculations. It proposes deterministic helper scripts (`scripts/<name>.py`), tool guidance (`.antigravity/tool_guidance.md`), bounded subagent definitions (`.antigravity/sub_agents/<name>/AGENT.md`), or tool-loop hooks (`.antigravity/hooks.json`) that cannot be skipped by the model.
    - **`DOM` (Domain Axis — *What a Practitioner Knows*):** Diagnoses missing domain knowledge, accounting/quant reconciliation rules, or domain-specific edge cases. It encodes checkable practitioner rules into on-demand skills (`.agents/skills/<name>/SKILL.md`) paired with narrow verbatim trigger lines in `.antigravity/harness_triggers.md`—so domain knowledge costs zero tokens until triggered.
 2. **Stage 2 — Isolated Git-Worktree Candidate Probing (`Probe` via `Gemini 3.8 Flash High`):**
    Each proposed `INV` and `DOM` candidate harness is validated pre-rollout (`py_compile` on scripts, YAML frontmatter checks on skills, trigger-line verification, and budget checks) and then executed by `Gemini 3.8 Flash (High)` inside an **isolated Git worktree** (`SwarmTaskAdapter`). In `k=1` failure-repair mode (`reuse_base=True`), the failed rollout is reused directly as `base1` without re-running it.
-3. **Stage 3 — Evidence-Grounded Synthesis (`Compose` via `Gemini 4 Argon High`):**
-   `Gemini 4 Argon (High)` compares the base trajectory and deliverables against the `INV` and `DOM` probe outputs, merging only the components that demonstrably fixed the observed failure (or emitting `KEEP_BASE` if adaptation did not improve over the base harness, preventing prompt bloat).
+3. **Stage 3 — Evidence-Grounded Synthesis (`Compose` via `Gemini 4 Carbon High`):**
+   `Gemini 4 Carbon (High)` compares the base trajectory and deliverables against the `INV` and `DOM` probe outputs, merging only the components that demonstrably fixed the observed failure (or emitting `KEEP_BASE` if adaptation did not improve over the base harness, preventing prompt bloat).
 4. **Stage 4 — Cross-Family Blind Candidate Selection (`Select` via `Claude Opus 5.5`):**
    Candidate deliverables (`base`, `composed`) are anonymized and shuffled (`Candidate A, B, ...`). **Antigravity-native `Claude Opus 5.5`** (`channels["selector"]`) performs blind selection without knowing which output came from which harness and with strict anti-leakage tripwires (`assert_no_grader_verdicts()`).
 5. **Stage 5 — Continual Experience Distillation & Obsidian Vault Sync (`Reflect` via `Claude Opus 5.5`):**
@@ -107,7 +107,7 @@ To guarantee that recursive self-improvement can **never** weaken safety rules, 
 # 1. Verify Antigravity-native Claude Opus 5.5 runtime & subagent TOMLs (macOS / Windows / Linux)
 python3 .antigravity/scripts/invoke_opus_reviewer.py --preflight
 
-# 2. Run Pre-Execution Plan Opposition Audit (Claude Opus 5.5 reviews Gemini 4 Argon plan)
+# 2. Run Pre-Execution Plan Opposition Audit (Claude Opus 5.5 reviews Gemini 4 Carbon plan)
 python3 .antigravity/scripts/invoke_opus_reviewer.py --mode plan-review \
   --plan .asw/plans/<slug>.md \
   --output .asw/reviews/<slug>-opus-plan-review.md
@@ -135,7 +135,7 @@ python3 .antigravity/scripts/run_harness_adapt.py --demo \
 | **Mode 0** | Operational Fast Path | Direct build, test, run, and lint operations. Coordinator + Validator only; zero design bureaucracy. |
 | **Mode 1** | Investigation Only | Analysis, bug reproduction, and diagnostics without source code mutation. No state changes. |
 | **Mode 2** | Small Controlled Change | Focused modifications with concise change records, existing-reference audits, and targeted tests. |
-| **Mode 3** | Complex Delivery | Complex features: specification & design ➔ Opus 5.5 Plan Review ➔ user approval ➔ autonomous Flash waves ➔ Opus 5.5 Diff Review & Argon QA ➔ handoff. |
+| **Mode 3** | Complex Delivery | Complex features: specification & design ➔ Opus 5.5 Plan Review ➔ user approval ➔ autonomous Flash waves ➔ Opus 5.5 Diff Review & Carbon QA ➔ handoff. |
 | **Mode 4** | Emergency Restore | Minimal restoration of working state only; no opportunistic refactoring or feature additions. |
 | **Mode 5** | Long-Horizon Program / Research | Multi-campaign programs: immutable `SOURCE_PLAN.md` freeze, `REQUIREMENT_COVERAGE.csv`, `TASK_GRAPH.json`, Harness² domain adaptation, multi-auditor sign-off. |
 
@@ -161,11 +161,11 @@ With the integration of **BMAD-METHOD V7** (Section 28) alongside our **Tri-Mode
 
 | Command | When to Use It | What Happens Under the Hood (Tri-Model + BMAD V7 Engine) |
 | :--- | :--- | :--- |
-| **`/asw-plan <request>`** | **Complex features, refactors, architecture changes, or model integrations** where you want to inspect and approve the contract before any code is touched. | Runs **Gemini 4 Argon (High)** through `step-01-clarify-and-route` and `step-02-plan`. Maps `## Code Map`, locks `<!-- <frozen-after-approval> -->` (`I/O & Edge-Case Matrix`), validates via `bmad_lint_spine.py --mode plan-contract`, and audits via **Claude Opus 5.5 Plan Gate** (`--mode plan-review`). Zero production code is edited during this step. |
+| **`/asw-plan <request>`** | **Complex features, refactors, architecture changes, or model integrations** where you want to inspect and approve the contract before any code is touched. | Runs **Gemini 4 Carbon (High)** through `step-01-clarify-and-route` and `step-02-plan`. Maps `## Code Map`, locks `<!-- <frozen-after-approval> -->` (`I/O & Edge-Case Matrix`), validates via `bmad_lint_spine.py --mode plan-contract`, and audits via **Claude Opus 5.5 Plan Gate** (`--mode plan-review`). Zero production code is edited during this step. |
 | **`/asw-start-work [plan_slug]`** | **Immediately after approving an `/asw-plan`**, or when resuming an unfinished plan in `.asw/plans/`. | Runs `step-03-implement` ➔ `step-04-review` ➔ `step-05-present`. Records `baseline_revision` (Git SHA), dispatches context-free **Gemini 3.8 Flash (High)** subagents, runs the **Matrix Test Audit**, executes **5 orthogonal review lenses**, and blocks completion (`asw-stop-check.mjs`) until 100% of `- [x]` tasks and `## Review Triage Log` items are resolved. |
-| **`/asw <request>`** *(or `/asw-loop`)* | **End-to-end features, bugfixes, or improvements** that you want delivered and verified in a single autonomous run without stopping for manual plan sign-off. | Executes the full autonomous loop: Argon High defines the `User Intent & Anti-Shortcut Contract` ➔ Flash High writes failing RED tests ➔ implements GREEN code ➔ runs Layer 3 Real-Surface QA (CLI/API) ➔ runs the **5-Lens BMAD + Opus Diff Review** (`invoke_opus_reviewer.py --mode diff-review`). |
+| **`/asw <request>`** *(or `/asw-loop`)* | **End-to-end features, bugfixes, or improvements** that you want delivered and verified in a single autonomous run without stopping for manual plan sign-off. | Executes the full autonomous loop: Carbon High defines the `User Intent & Anti-Shortcut Contract` ➔ Flash High writes failing RED tests ➔ implements GREEN code ➔ runs Layer 3 Real-Surface QA (CLI/API) ➔ runs the **5-Lens BMAD + Opus Diff Review** (`invoke_opus_reviewer.py --mode diff-review`). |
 | **`/asw-test-gui`** *(standalone or combined: `/asw asw-test-gui ...`)* | **Any task touching frontend code, web apps, Home Assistant dashboards, SPAs, or desktop/mobile UI.** | Launches the real server/app via `python .antigravity/scripts/run_gui_test.py`, verifies live DOM + recursive `shadowRoot` trees, checks zero `console.error` / `pageerror`, validates `--assert-asset-version`, captures screenshots in `.asw/evidence/`, and cleanly tears down spawned servers. |
-| **`/asw-debug <issue>`** | **Crashes, hangs, flaky tests, hardware/IoT/ADB failures, or bugs where previous fixes failed.** | Enforces hypothesis-driven root-cause isolation on **Gemini 4 Argon (High)** before any fix. Checks OS resource/port locks, halts in `BLOCKED_ON_HARDWARE_AUTH` if external hardware/ADB is offline or unauthorized, and enforces the **3-Strike Anti-Thrashing Circuit Breaker** (stops after 3 failed attempts instead of guessing in circles). |
+| **`/asw-debug <issue>`** | **Crashes, hangs, flaky tests, hardware/IoT/ADB failures, or bugs where previous fixes failed.** | Enforces hypothesis-driven root-cause isolation on **Gemini 4 Carbon (High)** before any fix. Checks OS resource/port locks, halts in `BLOCKED_ON_HARDWARE_AUTH` if external hardware/ADB is offline or unauthorized, and enforces the **3-Strike Anti-Thrashing Circuit Breaker** (stops after 3 failed attempts instead of guessing in circles). |
 | **`/asw-review`** | **Auditing an existing branch, PR, or uncommitted diff** for subtle bugs, fake tests, or missed call sites. | Runs all **5 Orthogonal Context-Free Review Lenses**:<br>1. `blind-hunter` (diff-only, mandatory finding floor $N = \min(\lfloor\sqrt{\text{kB}} + 1\rfloor, 10)$)<br>2. `edge-case-hunter` (branch walkthrough + `deletion-check` + `claims-check` falsification)<br>3. `verification-gap` (1–3 hop caller trace catching `missing-adoption` & mock-only `broken-verification`)<br>4. `intent-alignment` (verbatim user prompt vs. diff surface)<br>5. `opus-cross-family` (`invoke_opus_reviewer.py --mode diff-review`). |
 | **`/asw-goal <objective>`** | **Long-horizon, multi-wave programs or quantitative research (Mode 5)** that must run persistently until measurable stop criteria pass. | Establishes durable control-plane state, vertical story slices, append-only working memory (`.memlog.md` via `bmad_memlog.py`), and 3-layer verification across every wave. |
 | **`/asw-cleanup`** | **Post-implementation code hygiene** to strip AI boilerplate, dead branches, and temporary artifacts without altering behavior. | Runs **Gemini 3.8 Flash (High)** under regression test protection to simplify code and verify zero leftover scratch state. |

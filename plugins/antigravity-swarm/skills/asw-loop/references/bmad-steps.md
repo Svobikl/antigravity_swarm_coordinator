@@ -5,7 +5,7 @@ To prevent context rot and mid-execution instruction amnesia, `asw-loop`, `asw-s
 ---
 
 ## Step 1: `step-01-clarify-and-route` (Clarify, Bound & Route)
-- **Model Tier:** `Gemini 4 Argon (High)` (`Model="pro"`)
+- **Model Tier:** `Gemini 4 Carbon (High)` (`Model="pro"`)
 - **Entry Gate:** Recall project memory (`memory_manager.py --recall`) and classify the request into Mode 0–5.
 - **Single-Goal Scope Gate:** If the user request bundles multiple independent goals, keep the primary goal in the active plan and split secondary goals into `.asw/plans/deferred-work.md`.
 - **Early Exit:** If Mode 0 (direct build/test/run) or Mode 1 (investigation only), execute directly without generating a multi-wave implementation plan.
@@ -13,7 +13,7 @@ To prevent context rot and mid-execution instruction amnesia, `asw-loop`, `asw-s
 ---
 
 ## Step 2: `step-02-plan` (Author Frozen Contract, Matrix & Code Map)
-- **Model Tier:** `Gemini 4 Argon (High)` (`Model="pro"`) + `Claude Opus 5.5` (`--mode plan-review`)
+- **Model Tier:** `Gemini 4 Carbon (High)` (`Model="pro"`) + `Claude Opus 5.5` (`--mode plan-review`)
 - **Action:**
   1. Scout the exact files and callers to build `## Code Map`.
   2. Draft `.asw/plans/<slug>.md` (900–1600 tokens) enclosing `### Intent`, `### Boundaries & Constraints` (`Always:` / `Never:`), and `### I/O & Edge-Case Matrix` (`M1..Mn`) inside `<!-- <frozen-after-approval> --> ... <!-- </frozen-after-approval> -->`.
@@ -34,7 +34,7 @@ To prevent context rot and mid-execution instruction amnesia, `asw-loop`, `asw-s
 ---
 
 ## Step 4: `step-04-review` (5 Orthogonal Review Lenses & 4-Route Cascading Triage)
-- **Model Tier:** `Claude Opus 5.5` + `Gemini 4 Argon (High)`
+- **Model Tier:** `Claude Opus 5.5` + `Gemini 4 Carbon (High)`
 - **Action:**
   1. Evaluate the diff since `baseline_revision` across all 5 orthogonal lenses (`blind-hunter`, `edge-case-hunter` with `deletion-check` & `claims-check`, `verification-gap` with caller hop trace & `missing-adoption` check, `intent-alignment`, and `opus-cross-family` via `invoke_opus_reviewer.py --mode diff-review`).
   2. Verify every finding against the actual source code, log it in `## Review Triage Log`, and route by highest blast radius:
@@ -46,7 +46,7 @@ To prevent context rot and mid-execution instruction amnesia, `asw-loop`, `asw-s
 ---
 
 ## Step 5: `step-05-present` (Clean Handoff, Pitfall Capture & Memory Sync)
-- **Model Tier:** `Gemini 4 Argon (High)` / `Gemini 3.8 Flash (High)`
+- **Model Tier:** `Gemini 4 Carbon (High)` / `Gemini 3.8 Flash (High)`
 - **Action:**
   1. Verify all `- [x]` checkboxes are closed, `## Review Triage Log` has zero unresolved `[intent_gap]`/`[bad_plan]`/`[patch]` items, and `Verdict: ASW APPROVED` is on disk.
   2. If review uncovered a recurring repo pitfall, either automate it into a check or record it in `<!-- bmad:context -->` in `AGENTS.md` and via `memory_manager.py --record-lesson`.

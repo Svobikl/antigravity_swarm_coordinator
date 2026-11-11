@@ -31,7 +31,7 @@ slug: "<plan_slug>"
 
 ## Governance & Invariants
 - **Mode:** Mode 2 / Mode 3 / Mode 5 (`GLOBAL_DEVELOPMENT_RULES.md`)
-- **Tri-Model Routing:** `Gemini 4 Argon (High)` (Architect/Planner) -> `Claude Opus 5.5` (Opposition Gate) -> `Gemini 3.8 Flash (High)` (Implementation/TDD)
+- **Tri-Model Routing:** `Gemini 4 Carbon (High)` (Architect/Planner) -> `Claude Opus 5.5` (Opposition Gate) -> `Gemini 3.8 Flash (High)` (Implementation/TDD)
 
 <!-- <frozen-after-approval> — Human-owned contract; do not modify after approval -->
 

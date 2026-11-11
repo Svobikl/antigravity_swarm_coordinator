@@ -13,15 +13,15 @@ Every Harness² adaptation cycle enforces strict cross-family cognitive separati
 
 | Tier | Role | Assigned Model | Substrate / Channel |
 |---|---|---|---|
-| **Tier 1A** | Proposer & Synthesizer | **`Gemini 4 Argon (High)`** (`Model="pro"`) | `antigravity/gemini-4-argon` |
+| **Tier 1A** | Proposer & Synthesizer | **`Gemini 4 Carbon (High)`** (`Model="pro"`) | `antigravity/gemini-4-carbon` |
 | **Tier 1B** | Blind Candidate Selector & Reflector | **`Claude Opus 5.5`** (Native Antigravity) | `antigravity_opus/claude-opus-5-5` |
 | **Tier 2** | Bounded Probe Executor & Test Runner | **`Gemini 3.8 Flash (High)`** (`Model="flash"`) | `opencode` / `antigravity` executor |
 
 ### Cognitive Separation Invariant
-The primary proposer (`Gemini 4 Argon High`) MUST NEVER grade or select its own candidate proposals. Blind selection is owned by `Claude Opus 5.5` evaluating anonymized deliverables and trajectories to prevent self-confirmation bias.
+The primary proposer (`Gemini 4 Carbon High`) MUST NEVER grade or select its own candidate proposals. Blind selection is owned by `Claude Opus 5.5` evaluating anonymized deliverables and trajectories to prevent self-confirmation bias.
 
 ## 5-Phase Adaptation Lifecycle
-1. **Propose (Tier 1A - Gemini 4 Argon High)**:
+1. **Propose (Tier 1A - Gemini 4 Carbon High)**:
    - Proposes candidate harness mutations across three invariant-preserving vectors:
      - `INV`: Invariant-hardening adaptations (governance rules, budget tripwires, shell safety).
      - `DOM`: Domain-specialized skill prompts and toolchains.
@@ -29,7 +29,7 @@ The primary proposer (`Gemini 4 Argon High`) MUST NEVER grade or select its own 
 2. **Probe (Tier 2 - Gemini 3.8 Flash High)**:
    - Rolls out candidate harnesses in isolated ephemeral workspaces/worktrees.
    - Captures full observable trajectories and deliverables.
-3. **Compose (Tier 1A - Gemini 4 Argon High)**:
+3. **Compose (Tier 1A - Gemini 4 Carbon High)**:
    - Performs cross-candidate pairwise and multi-way synthesis on promising candidates.
 4. **Select (Tier 1B - Claude Opus 5.5)**:
    - Evaluates anonymized candidate deliverables and trajectories against task requirements.
