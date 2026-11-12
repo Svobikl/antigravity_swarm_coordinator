@@ -20,7 +20,7 @@ grounded in native Claude Opus 5.5 subagent configurations (.antigravity/agents/
 deterministic adversarial verification tripwires (Zero Heuristic Substitution, Anti-Shortcut
 Enforcement, and Prompt-to-Code Traceability), UTF-16LE PowerShell redirection resilience,
 self-contained `--files` git diff collection, and automatic fallback to the Deterministic
-Adversarial Engine + Gemini 4 Carbon (High) whenever Claude Opus 5.5 credits/quota are exhausted.
+Adversarial Engine + Gemini 4 Argon (High) whenever Claude Opus 5.5 credits/quota are exhausted.
 """
 
 import argparse
@@ -284,8 +284,8 @@ def discover_antigravity_runtime(repo_root: Path) -> dict:
         "agy_found": bool(agy_path),
         "subagent_tomls": subagent_status,
         "active_model": "claude-opus-5-5",
-        "fallback_model": "gemini-4-carbon-high",
-        "credit_exhaustion_policy": "auto_fallback_deterministic_and_carbon_high",
+        "fallback_model": "gemini-4-argon-high",
+        "credit_exhaustion_policy": "auto_fallback_deterministic_and_argon_high",
         "subagent_timeout_seconds": 60,
         "thinking_level": "high",
     }
@@ -536,7 +536,7 @@ def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str
 
     active_fallback = resolve_fallback_reason(fallback_reason)
     reviewer_line = (
-        "`Claude Opus 5.5` -> `Deterministic Adversarial Engine + gemini-4-carbon-high` (Opus Quota Fallback)"
+        "`Claude Opus 5.5` -> `Deterministic Adversarial Engine + gemini-4-argon-high` (Opus Quota Fallback)"
         if active_fallback
         else "`Claude Opus 5.5` (Native Antigravity Subagent `asw-plan-audit`)"
     )
@@ -549,7 +549,7 @@ def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str
     ]
     if active_fallback:
         review_text.append(
-            f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-carbon-high)`"
+            f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-argon-high)`"
         )
     review_text.extend([
         "**Thinking Level**: `high`",
@@ -580,7 +580,7 @@ def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str
 
     if verdict == "PLAN_APPROVED":
         review_text.append("## Conclusion")
-        review_text.append("The plan fulfills all 6 adversarial vectors. Bounded execution waves may proceed to Gemini 3.8 Flash (High).")
+        review_text.append("The plan fulfills all 6 adversarial vectors. Bounded execution waves may proceed to Gemini 4 Hydrogen (High).")
     else:
         review_text.append("## Required Plan Revisions")
         review_text.append("Primary Architect (Gemini 4 Carbon High) must resolve the critical and high findings listed above before dispatching execution waves.")
@@ -1046,7 +1046,7 @@ def audit_diff(
 
     active_fallback = resolve_fallback_reason(fallback_reason)
     reviewer_line = (
-        "`Claude Opus 5.5` -> `Deterministic Adversarial Engine + gemini-4-carbon-high` (Opus Quota Fallback)"
+        "`Claude Opus 5.5` -> `Deterministic Adversarial Engine + gemini-4-argon-high` (Opus Quota Fallback)"
         if active_fallback
         else "`Claude Opus 5.5` (Native Antigravity Subagent `asw-opposition-reviewer`)"
     )
@@ -1061,7 +1061,7 @@ def audit_diff(
     ]
     if active_fallback:
         review_text.append(
-            f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-carbon-high)`"
+            f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-argon-high)`"
         )
     review_text.extend([
         "**Thinking Level**: `high`",

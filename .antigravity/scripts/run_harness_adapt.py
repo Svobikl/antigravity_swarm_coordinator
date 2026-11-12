@@ -15,10 +15,11 @@
 """Run Harness2 Recursive Self-Improvement Adaptation Workflow with Obsidian Vault Sync.
 
 Executes the full adaptation cycle (Propose -> Probe -> Compose -> Select -> Reflect)
-with Tri-Model routing:
-  - Tier 1A: Gemini 4 Carbon High (proposer="antigravity"/gemini-4-carbon)
-  - Tier 1B: Claude Opus 5.5 (selector="antigravity_opus"/claude-opus-5-5)
-  - Tier 2:  Gemini 3.8 Flash High (executor/probes/test runner)
+with Quad-Model routing:
+  - Tier 1A: Gemini 4 Carbon High (proposer="antigravity"/gemini-4-carbon — planning & research)
+  - Tier 1B: Claude Opus 5.5 (selector="antigravity_opus"/claude-opus-5-5 — opposing reviews & blind selection)
+  - Tier 1C: Gemini 4 Argon High (review, audits & remaining coordinator tasks)
+  - Tier 2:  Gemini 4 Hydrogen High (executor/probes/implementation/routine tasks)
 """
 
 from __future__ import annotations

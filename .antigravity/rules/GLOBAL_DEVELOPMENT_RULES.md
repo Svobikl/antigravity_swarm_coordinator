@@ -25,10 +25,11 @@ These rules define a language-, framework-, platform-, and product-agnostic work
 17. **4-Axis Completion Architecture (V4.1).** Every Mode 5 program must evaluate four independent axes: `MECHANICAL_COMPLETION`, `SEMANTIC_INTEGRITY`, `SCIENTIFIC_VALIDITY`, and `FORWARD_VALIDATION`. A program with forward paper shadow validation in progress must never be summarized as "100% Validated" or "Production Ready".
 18. **Dual-Auditor & Three-Auditor Governance (V4.1).** Closure requires independent verification from both `completion-auditor` (mechanical) and `semantic-completion-auditor` (semantic), plus `research-validity-auditor` for empirical research programs.
 19. **Research Pre-Registration & Post-Hoc Protection (V4.1).** Research agents must explicitly report `PRE_REGISTERED_CRITERION`, `OBSERVED_RESULT`, and `CRITERION_PASS?`. Post-hoc relaxation of criteria or economic friction without governed overrides is strictly prohibited.
-20. **Tri-Model Cross-Family Cognitive Routing (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 3.8 Flash High`).**
-   - **Tier 1A (`Gemini 4 Carbon High` / `Model="pro"`):** Primary Architect, Planner, and Harness² Proposer for all research, problem analysis, root-cause isolation, architecture design, and Mode 3/5 implementation planning (`asw-planner`).
+20. **Quad-Model Cross-Family Cognitive Routing (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 4 Argon High` + `Gemini 4 Hydrogen High`).**
+   - **Tier 1A (`Gemini 4 Carbon High` / `Model="pro"`):** Primary Planner, Architect & Deep Researcher — reserved ONLY for initial high-impact planning (`asw-planner`, `software-architect`, `spec-product-analyst`, `program-state-controller` plan freeze), deep research (`asw-librarian`, `asw-planning-analysis`, Mode 1 discovery), and Harness² proposals.
    - **Tier 1B (`Claude Opus 5.5` natively in Antigravity):** Independent Cross-Family Opposition Reviewer, Plan Auditor, and Blind Selector. Mandated for Pre-Execution Plan Opposition Reviews across 6 adversarial vectors (`asw-plan-audit`), Code Diff & Evidence Opposition Reviews across 4 attack vectors (`asw-opposition-reviewer`), and Harness² blind candidate selection (`channels["selector"]`).
-   - **Tier 2 (`Gemini 3.8 Flash High` / `Model="flash"`):** High-velocity bounded leaf implementation (`asw-loop`, `asw-start-work`), RED-to-GREEN TDD execution (`validator-build-test-agent`), local scouting, and mechanical cleanup.
+   - **Tier 1C (`Gemini 4 Argon High` / `Model="pro"`):** Reviewer, Auditor & Remaining Non-Routine Coordinator Tasks — handles wave orchestration (`swarm-coordinator`, `skill-router`), non-Opus reviews & QA (`compliance-maintainability-reviewer`, `acceptance-reviewer-product-qa`, `security-reliability-reviewer`, `research-experiment-auditor`, `completion-auditor`), root-cause debugging (`asw-debug`), UI/UX specs (`ui-ux-designer`), and Opus quota fallback reviews (`gemini-4-argon-high`).
+   - **Tier 2 (`Gemini 4 Hydrogen High` / `Model="flash"`):** High-velocity bounded leaf implementation (`implementation-developer`, `asw-loop`, `asw-start-work`), RED-to-GREEN TDD execution (`validator-build-test-agent`, `interaction-e2e-tester`), local scouting (`asw-explorer`), routine memory/doc sync (`memory-state-curator`, `documentation-handoff-agent`), and mechanical cleanup (`asw-cleanup`).
 21. **3-Layer Functional Verification Gate.** Syntax checks or mocked unit tests never prove functional completion. Every behavior-changing task requires: (1) Static/Build/Type integrity, (2) Automated happy-path + negative/edge-case tests, and (3) **Real-Surface End-to-End Execution Proof** (invoking the actual CLI, API, UI, or data pipeline entrypoint with observable runtime output).
 22. **Zero-Unchecked-Plan Closure Gate.** Any task with 3+ steps across Modes 2, 3, and 5 must maintain an on-disk checklist (`.asw/plans/<slug>.md` or `TASK_GRAPH.json`). Stopping or summarizing work as complete while any `- [ ]` checkbox or non-terminal leaf task remains open is strictly prohibited.
 
@@ -134,40 +135,44 @@ Mandatory Control Plane Lifecycle:
 
 ---
 
-## 4. Single-Orchestrator Rule, Tri-Model Cross-Family Routing & Subagent Contracts
+## 4. Single-Orchestrator Rule, Quad-Model Cross-Family Routing & Subagent Contracts
 
 ### Single Orchestrator
-- `swarm-coordinator` (running on **`Gemini 4 Carbon (High)`**) is the sole global orchestrator.
+- `swarm-coordinator` (running on **`Gemini 4 Argon (High)`**) is the sole global orchestrator after initial planning.
 - External or third-party orchestration tools (e.g. ASW, Conductor, CrewAI, AutoGen patterns) must operate strictly as subordinate helper skills for specific leaf tasks, never as peer global controllers.
 - Subagents, reviewers, and helpers report findings back to the Coordinator. Only the Coordinator updates `TASK_GRAPH.json`, `PROGRAM_STATE.md`, and `.asw/plans/<slug>.md`.
 
-### Tri-Model Cross-Family Cognitive Routing Policy
+### Quad-Model Cross-Family Cognitive Routing Policy
 To maximize architectural rigor, cross-family adversarial robustness, and execution velocity while preventing context exhaustion:
-1. **Tier 1A - Primary Architect, Planner & Proposer (`Gemini 4 Carbon (High)` / `Model="pro"` in `invoke_subagent`):**
-   - **Mandatory for:**
+1. **Tier 1A - Primary Planner, Architect & Deep Researcher (`Gemini 4 Carbon (High)` / `Model="pro"` in `invoke_subagent`):**
+   - **Mandatory ONLY for initial high-impact planning and deep research:**
      - **Research & Discovery:** Mode 1 investigations, domain/codebase research (`spec-product-analyst`), and external documentation synthesis (`asw-librarian`, `asw-planning-analysis`).
-     - **Problem Analysis & Root-Cause Isolation:** Bug triage, architectural bottleneck analysis, failure-mode modeling (`systematic-debugging`, `asw-debug`).
      - **Architecture & Implementation Planning:** Mode 3 Phase 1 technical design (`software-architect`), Mode 5 plan freeze & task graph decomposition (`program-state-controller`), and executable plan writing (`asw-planner`).
      - **Harness² Adaptation Proposer:** Proposing invariant (`INV`), domain (`DOM`), and composition (`COMPOSE`) harness mutations.
 2. **Tier 1B - Independent Cross-Family Opposition Reviewer & Blind Selector (`Claude Opus 5.5` natively in Antigravity):**
-   - **Mandatory for:**
+   - **Mandatory for Opposing Reviews:**
      - **Pre-Execution Plan Opposition Review Gate:** Independent audit of implementation plans across the 6 adversarial vectors (`asw-plan-audit`, `invoke_opus_reviewer.py --mode plan-review`) before execution waves are dispatched.
      - **Diff & Evidence Opposition Gate:** Falsifying code diffs, verifying negative/edge test proof, checking blast radius, and detecting lookahead/data leakage (`asw-opposition-reviewer`, `invoke_opus_reviewer.py --mode diff-review`).
      - **Blind Candidate Selection & Reflection:** Acting as `channels["selector"]` in Harness² adaptation sweeps, ensuring primary proposers never grade or select their own proposals.
-3. **Tier 2 - High-Velocity Implementation & Bounded Execution (`Gemini 3.8 Flash (High)` / `Model="flash"` in `invoke_subagent`):**
-   - **Mandatory for:**
+3. **Tier 1C - Reviewer, Auditor & Remaining Non-Routine Coordinator Tasks (`Gemini 4 Argon (High)` / `Model="pro"` in `invoke_subagent`):**
+   - **Mandatory for reviews, audits, debugging, and remaining non-planning/non-implementation tasks:**
+     - **Orchestration & Routing:** `swarm-coordinator`, `skill-router`, and `ui-ux-designer`.
+     - **Problem Analysis & Root-Cause Isolation:** Bug triage, architectural bottleneck analysis, failure-mode modeling (`systematic-debugging`, `asw-debug`).
+     - **Standard Reviews, Audits & Opus Quota Fallback:** `compliance-maintainability-reviewer`, `acceptance-reviewer-product-qa`, `security-reliability-reviewer`, `research-experiment-auditor`, `completion-auditor`, and fallback reviewer (`gemini-4-argon-high`) when Claude Opus 5.5 credits/quota are exhausted.
+4. **Tier 2 - High-Velocity Implementation & Routine Execution (`Gemini 4 Hydrogen (High)` / `Model="flash"` in `invoke_subagent`):**
+   - **Mandatory for actual implementation and routine tasks:**
      - **Bounded Leaf Implementation:** Writing production code diffs under a decision-complete task contract (`implementation-developer`, `asw-loop`, `asw-start-work`).
      - **TDD & Test Suite Execution:** Writing RED-to-GREEN unit/integration/E2E tests and executing canonical build/test commands (`validator-build-test-agent`, `interaction-e2e-tester`).
-     - **Fast Local Scouting & Mechanical Cleanup:** Rapid file/symbol lookup (`asw-explorer`) and behavior-preserving code cleanup (`asw-cleanup`).
-4. **Efficiency Invariant (Carbon Plans -> Opus Audits -> Flash Implements -> Opus & Carbon Verify):**
-   - Never burn `Gemini 4 Carbon (High)` or `Claude Opus 5.5` context on multi-file boilerplate writing or repetitive compile-fix loops.
-   - `Gemini 4 Carbon (High)` produces a **Decision-Complete Task Contract** and implementation plan; `Claude Opus 5.5` audits and approves the plan; `Gemini 3.8 Flash (High)` executes the bounded leaf implementation; `Claude Opus 5.5` and `completion-auditor` audit empirical evidence before completion sign-off.
+     - **Fast Local Scouting, Memory Sync & Mechanical Cleanup:** Rapid file/symbol lookup (`asw-explorer`), routine memory/doc sync (`memory-state-curator`, `documentation-handoff-agent`), and behavior-preserving code cleanup (`asw-cleanup`).
+5. **Efficiency Invariant (Carbon Plans/Researches -> Opus Audits -> Hydrogen Implements -> Opus & Argon Verify):**
+   - Never burn `Gemini 4 Carbon (High)` on routine tasks, post-implementation reviews, or repetitive compile-fix loops.
+   - `Gemini 4 Carbon (High)` produces a **Decision-Complete Task Contract** and research; `Claude Opus 5.5` audits and approves the plan; `Gemini 4 Hydrogen (High)` executes the bounded leaf implementation and routine tasks; `Claude Opus 5.5` (opposing review) and `Gemini 4 Argon (High)` (`completion-auditor` / reviews) audit empirical evidence before completion sign-off.
 
 ### Bounded Subagent Contracts
 When launching subagents (e.g. via `invoke_subagent`):
 1. **Concurrency Limit:** Maximum **4 parallel independent subagents** active concurrently.
 2. **Input Contract:** Every subagent must receive:
-   - Unique Task ID and explicit Model Tier (`Model="pro"` for Carbon High or `Model="flash"` for 3.8 Flash High);
+   - Unique Task ID and explicit Model Tier (`Model="pro"` for Carbon High [plan/research] or Argon High [review/debug/remaining], `Model="flash"` for Hydrogen High [implementation/routine]);
    - Exact allowed target files;
    - Explicitly forbidden areas (`TASK_GRAPH.json`, `PROGRAM_STATE.md`, unrelated modules);
    - Assigned skill budget (<= 8 skills);
@@ -378,15 +383,15 @@ Maximum: **5 repair cycles per distinct failure class**.
 Rules:
 - Do not count a trivial command typo as a full cycle.
 - Do not repeat the same change without new evidence.
-- After cycle 3, escalate from `Gemini 3.8 Flash (High)` back to `Gemini 4 Carbon (High)` to explicitly reconsider the root-cause model.
+- After cycle 3, escalate from `Gemini 4 Hydrogen (High)` back to `Gemini 4 Argon (High)` to explicitly reconsider the root-cause model.
 - At cycle 5, stop the loop, preserve evidence in `BLOCKER_LEDGER.md`, and report the blocker or request a decision.
 - If a new unrelated failure appears, classify it separately rather than hiding scope expansion inside the loop.
 
 ---
 
-## 16. Independent Review Model (`Claude Opus 5.5` + `Gemini 4 Carbon High`)
+## 16. Independent Review Model (`Claude Opus 5.5` + `Gemini 4 Argon High`)
 
-For Mode 3 and Mode 5 (and risky Mode 2 work), use independent review roles running on **`Gemini 4 Carbon (High)`**:
+For Mode 3 and Mode 5 (and risky Mode 2 work), use independent review roles running on **`Gemini 4 Argon (High)`**:
 
 ### Compliance & Maintainability Review
 Inspects repository alignment, minimal diff, error handling, resource lifecycle, and code hygiene.
@@ -398,7 +403,7 @@ Actively attempts to falsify the implementation, checking for data leakage, look
 Verifies the result against user goals and approved requirements using 3-layer runtime evidence, rejecting narrative self-scoring.
 
 ### Blind-First Rule
-The first review of code or design must inspect requirements and the raw diff before reading the implementation agent's (`Gemini 3.8 Flash High`) self-justification, reducing confirmation bias.
+The first review of code or design must inspect requirements and the raw diff before reading the implementation agent's (`Gemini 4 Hydrogen High`) self-justification, reducing confirmation bias.
 
 ---
 
@@ -476,7 +481,7 @@ Before declaring completion of any task or program, verify all applicable items:
 - requested scope is 100% implemented (zero dropped steps);
 - zero unresolved high-impact assumptions;
 - **3-Layer Functional Verification Gate passed** (Static/Build + Automated Happy/Negative Tests + Real-Surface Runtime Execution Proof);
-- independent `Gemini 4 Carbon (High)` and Antigravity-native `Claude Opus 5.5` reviews passed;
+- independent `Gemini 4 Argon (High)` and Antigravity-native `Claude Opus 5.5` reviews passed;
 - **for Mode 2 (3+ steps) and Mode 3:**
   - `.asw/plans/<slug>.md` has **zero `- [ ]` unchecked items** (100% `- [x]`);
   - zero placeholder stubs (`TODO`, `FIXME`, `NotImplementedError`) remain in modified files;
@@ -484,13 +489,13 @@ Before declaring completion of any task or program, verify all applicable items:
   - `TASK_GRAPH.json` has 100% of leaf nodes in `COMPLETED` or `ABANDONED` status;
   - `REQUIREMENT_COVERAGE.csv` has valid, non-empty `evidence_path` files for all completed requirements;
   - `validate_program_state.py --strict-completion` passes;
-  - `completion-auditor` (`Gemini 4 Carbon High`) has signed the completion ledger;
+  - `completion-auditor` (`Gemini 4 Argon High`) has signed the completion ledger;
 - documentation impact handled;
 - temporary artifacts contained;
 - unrelated user changes preserved;
 - known limitations and risks disclosed.
 
-**Hard Rule:** It is strictly prohibited to declare "100% complete" based on narrative summaries or mocked unit tests alone. Completion requires machine-verifiable plan/task-graph closure, real-surface runtime proof, and independent `Gemini 4 Carbon (High)` auditor sign-off and cross-family opposition review sign-off by **Claude Opus 5.5**.
+**Hard Rule:** It is strictly prohibited to declare "100% complete" based on narrative summaries or mocked unit tests alone. Completion requires machine-verifiable plan/task-graph closure, real-surface runtime proof, and independent `Gemini 4 Argon (High)` auditor sign-off and cross-family opposition review sign-off by **Claude Opus 5.5**.
 
 ---
 
@@ -546,7 +551,7 @@ Final Handoff
 
 1. **Opus Credit / Quota Exhaustion & Timeout Automatic Fallback:**
    - Whenever `Claude Opus 5.5` credits or quota are exhausted (`credit balance is too low`, `insufficient_quota`, `resource_exhausted`, HTTP `429`), or a native Opus subagent times out (`> 60s`), the workflow **MUST NEVER HANG OR STALL**.
-   - Immediately fall back to **Deterministic Local Adversarial Engine (`python .antigravity/scripts/invoke_opus_reviewer.py`) + `Gemini 4 Carbon (High)` (`Model="pro"`)** (`--fallback-reason "opus_credits_exhausted"` or `ANTIGRAVITY_OPUS_CREDITS_EXHAUSTED=1`).
+   - Immediately fall back to **Deterministic Local Adversarial Engine (`python .antigravity/scripts/invoke_opus_reviewer.py`) + `Gemini 4 Argon (High)` (`Model="pro"`)** (`--fallback-reason "opus_credits_exhausted"` or `ANTIGRAVITY_OPUS_CREDITS_EXHAUSTED=1`).
    - `invoke_opus_reviewer.py` executes 100% of the 6 plan-review vectors, 4 diff-review attack vectors, and Zero Heuristic Substitution tripwires offline in `< 2s` with zero external API credit dependency.
 2. **Self-Contained Diff Review Invocation (Zero PowerShell `>` / `>>` UTF-16LE Corruption):**
    - Always invoke diff reviews via the self-contained `--files` flag:
@@ -619,7 +624,7 @@ Final Handoff
    - Once a plan transitions to `ready-for-dev` / `in-progress`, **agents are strictly forbidden from modifying anything inside `<frozen-after-approval>`** without explicit human re-approval. Any unauthorized edit triggers `BMAD_FROZEN_CONTRACT_VIOLATION` in `invoke_opus_reviewer.py` and `asw-hook.mjs`.
    - **Matrix Test Audit:** Every row in `### I/O & Edge-Case Matrix` (`M1..Mn`) must be covered by an automated test that actually ran and passed. If a test fails or disagrees with the matrix, **never rewrite the matrix expectation to match broken code** — fix the code or route a `bad_plan` / `intent_gap` escalation.
 3. **Context-Free Subagent Handoff (`## Code Map`) & Re-Engagement:**
-   - Implementation subagents (`Gemini 3.8 Flash High`) are dispatched with **zero prior conversation history**, receiving only `{plan_file}` and its `## Code Map` (exact file paths, symbols, and call chains so the subagent does not waste context searching the repo).
+   - Implementation subagents (`Gemini 4 Hydrogen High`) are dispatched with **zero prior conversation history**, receiving only `{plan_file}` and its `## Code Map` (exact file paths, symbols, and call chains so the subagent does not waste context searching the repo).
    - The coordinator retains the subagent's `conversationId` so targeted `patch` fixes from `step-04-review` are sent back to the already-warmed subagent context.
 4. **5 Orthogonal Context-Free Review Lenses + 4-Route Cascading Triage (`step-04-review`):**
    - Every non-trivial diff since `baseline_revision` is evaluated across **5 orthogonal lenses**:

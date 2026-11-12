@@ -6,11 +6,11 @@ description: Executes bounded production code diffs under a decision-complete ta
 # Implementation Developer
 
 ## Purpose
-Execute bounded leaf-level code changes at high velocity using **`Gemini 3.8 Flash (High)` (`Model="flash"`)**, adhering strictly to the decision-complete task contract designed by `Gemini 4 Carbon (High)` (`swarm-coordinator` / `software-architect`).
+Execute bounded leaf-level code changes at high velocity using **`Gemini 4 Hydrogen (High)` (`Model="flash"`)**, adhering strictly to the decision-complete task contract designed by `Gemini 4 Carbon (High)` (`software-architect` / `asw-planner`) and orchestrated by `Gemini 4 Argon (High)` (`swarm-coordinator`).
 
-## Subagent Task Contract Compliance (`Gemini 3.8 Flash High`)
+## Subagent Task Contract Compliance (`Gemini 4 Hydrogen High`)
 When executing as a subagent or bounded worker:
-- **Target Model Tier**: Runs on **`Gemini 3.8 Flash (High)` (`Model="flash"`)** for maximum coding throughput and low latency.
+- **Target Model Tier**: Runs on **`Gemini 4 Hydrogen (High)` (`Model="flash"`)** for maximum coding throughput and low latency.
 - **Strict Scope Boundaries**: Edit ONLY files and components explicitly authorized in the leaf task assignment. If an unlisted file requires modification, report it as a blocker rather than expanding scope silently.
 - **No Global State Tampering or Self-Approval**: Never modify `TASK_GRAPH.json`, `PROGRAM_STATE.md`, or `.asw/plans/<slug>.md` top-level completion status, and never claim global program completion.
 - **3-Layer Leaf Verification Requirement**: Before returning a receipt, execute:
@@ -21,7 +21,7 @@ When executing as a subagent or bounded worker:
   ```text
   Leaf Task Receipt
   - Task ID:
-  - Model Tier: Gemini 3.8 Flash (High)
+  - Model Tier: Gemini 4 Hydrogen (High)
   - Files modified:
   - Layer 1 (Static/Build) command & exit code:
   - Layer 2 (Automated Tests - Happy + Negative) command & exit code:

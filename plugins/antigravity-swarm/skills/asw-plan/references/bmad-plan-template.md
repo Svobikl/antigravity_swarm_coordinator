@@ -6,7 +6,7 @@ Use this canonical template when creating `.asw/plans/<slug>.md`.
 1. **Single-Goal Scope & Token Ceiling (`900–1600` tokens):** Each plan targets one single coherent goal. If the user's request spans multiple independent goals, split secondary goals into `.asw/plans/deferred-work.md`.
 2. **Human-Owned `<frozen-after-approval>` Contract:** Everything inside `<!-- <frozen-after-approval> --> ... <!-- </frozen-after-approval> -->` (`Intent`, `Boundaries & Constraints`, and `I/O & Edge-Case Matrix`) is frozen once the plan reaches `status: ready-for-dev` or `in-progress`. Agents must NEVER edit `<frozen-after-approval>` during implementation or review without setting `human_reapproved: true` after explicit human sign-off.
 3. **`baseline_revision` Git SHA:** Record the Git HEAD commit SHA (`git rev-parse --short HEAD`) in frontmatter before the first code edit in `step-03-implement`.
-4. **Context-Free `## Code Map`:** List the exact files, classes/functions, and caller-to-callee relationships so `Gemini 3.8 Flash (High)` implementation subagents can execute with zero prior conversation context and zero blind repository searching.
+4. **Context-Free `## Code Map`:** List the exact files, classes/functions, and caller-to-callee relationships so `Gemini 4 Hydrogen (High)` implementation subagents can execute with zero prior conversation context and zero blind repository searching.
 
 ---
 
@@ -31,7 +31,7 @@ slug: "<plan_slug>"
 
 ## Governance & Invariants
 - **Mode:** Mode 2 / Mode 3 / Mode 5 (`GLOBAL_DEVELOPMENT_RULES.md`)
-- **Tri-Model Routing:** `Gemini 4 Carbon (High)` (Architect/Planner) -> `Claude Opus 5.5` (Opposition Gate) -> `Gemini 3.8 Flash (High)` (Implementation/TDD)
+- **Quad-Model Routing:** `Gemini 4 Carbon (High)` (Planner/Researcher) -> `Claude Opus 5.5` (Opposition Gate) -> `Gemini 4 Hydrogen (High)` (Implementation/Routine) -> `Gemini 4 Argon (High)` + `Claude Opus 5.5` (Review/QA)
 
 <!-- <frozen-after-approval> — Human-owned contract; do not modify after approval -->
 
@@ -62,7 +62,7 @@ slug: "<plan_slug>"
 ## Execution Tasks (Serialized Wave Order — Zero File Overlap)
 
 - [ ] **Task 1 (Wave 1 — Serialized): <Task Title>**
-  - **Model Tier:** `Gemini 3.8 Flash (High)` (`Model="flash"`)
+  - **Model Tier:** `Gemini 4 Hydrogen (High)` (`Model="flash"`)
   - **Target Files:** `path/to/module.py`, `tests/test_module.py`
   - **Action:** <Exact decision-complete implementation instructions.>
   - **RED / GREEN / QA / CLEANUP:**

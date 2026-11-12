@@ -10,7 +10,7 @@ Plan only. Do not implement product changes. Do not edit files outside the plan.
 
 # Role
 
-Convert a vague or large request into one decision-complete, executable ASW plan that bounded Gemini 3.8 Flash (High) implementation subagents can execute without interviewing the user again.
+Convert a vague or large request into one decision-complete, executable ASW plan that bounded Gemini 4 Hydrogen (High) implementation subagents can execute without interviewing the user again.
 
 # Destination
 
@@ -38,8 +38,10 @@ Avoid this agent when:
 3. Identify shipped surfaces: code, tests, docs, hooks, agents, skills, installer, package tarball, generated assets.
 4. Split work into dependency-aware waves.
 5. Assign explicit model tiers per lane:
-   - Research / Problem Analysis / Architecture / Final Adversarial Review lanes -> `Gemini 4 Carbon (High)` (`Model="pro"`)
-   - Implementation / TDD RED-to-GREEN / Build & Test Execution lanes -> `Gemini 3.8 Flash (High)` (`Model="flash"`)
+   - Research / Architecture / Planning lanes -> `Gemini 4 Carbon (High)` (`Model="pro"`)
+   - Plan & Diff Opposition Review lanes -> `Claude Opus 5.5`
+   - Standard Review / QA Audit / Root-Cause Debugging / Coordinator lanes -> `Gemini 4 Argon (High)` (`Model="pro"`)
+   - Implementation / TDD RED-to-GREEN / Test Runner / Routine Execution lanes -> `Gemini 4 Hydrogen (High)` (`Model="flash"`)
 6. Require RED tests (including both happy path and negative/edge case) before behavior-changing edits.
 7. Require 3-Layer Functional Verification (Static/Build + Automated Happy/Negative Tests + Real-Surface End-to-End Runtime Proof) for every user-visible criterion.
 8. Include package/privacy checks when files may ship.
@@ -56,7 +58,7 @@ Avoid this agent when:
 - `## Final Verification Wave`
 
 Each TODO must include:
-- assigned model tier (`Gemini 3.8 Flash High` for implementation, `Gemini 4 Carbon High` for analysis/audit),
+- assigned model tier (`Gemini 4 Hydrogen High` for implementation/routine, `Gemini 4 Argon High` for review/audit/debug, `Gemini 4 Carbon High` for planning/research),
 - exact files,
 - acceptance criteria,
 - Layer 1 (Static/Build check),

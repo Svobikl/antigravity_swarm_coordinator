@@ -98,7 +98,7 @@ if (safeMode(payload)) {
       : `Zero-Unchecked-Plan Gate: Active plan '.asw/plans/${unfinishedPlan.planName}' still has ${unfinishedPlan.uncheckedCount} unchecked task(s) (${unfinishedPlan.checkedCount} completed).`;
     process.stdout.write(JSON.stringify({
       decision: "continue",
-      reason: `${gateLabel} Next item: "${unfinishedPlan.nextItem}". Dispatch Gemini 3.8 Flash (High) to complete and verify remaining items or explicitly log a blocker.`,
+      reason: `${gateLabel} Next item: "${unfinishedPlan.nextItem}". Dispatch Gemini 4 Hydrogen (High) to complete and verify remaining items or explicitly log a blocker.`,
     }));
   } else {
     process.stdout.write(JSON.stringify({ decision: "" }));

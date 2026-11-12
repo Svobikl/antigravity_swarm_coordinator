@@ -6,16 +6,17 @@ description: Executes Harness2 recursive Propose-Probe-Compose-Select-Reflect ad
 # ASW Harness² Adaptation Engine
 
 ## Purpose
-Execute Harness² recursive self-improvement sweeps across Antigravity and Claude Code agent architectures. Coordinate the Tri-Model Cross-Family Cognitive Architecture, run closed-loop adaptation sweeps (`Propose -> Probe -> Compose -> Select -> Reflect`), and sync verified transferable lessons into the Obsidian Knowledge Vault without grader verdict leakage.
+Execute Harness² recursive self-improvement sweeps across Antigravity and Claude Code agent architectures. Coordinate the Quad-Model Cross-Family Cognitive Architecture, run closed-loop adaptation sweeps (`Propose -> Probe -> Compose -> Select -> Reflect`), and sync verified transferable lessons into the Obsidian Knowledge Vault without grader verdict leakage.
 
-## Tri-Model Cognitive Routing Matrix
+## Quad-Model Cognitive Routing Matrix
 Every Harness² adaptation cycle enforces strict cross-family cognitive separation of duties:
 
 | Tier | Role | Assigned Model | Substrate / Channel |
 |---|---|---|---|
 | **Tier 1A** | Proposer & Synthesizer | **`Gemini 4 Carbon (High)`** (`Model="pro"`) | `antigravity/gemini-4-carbon` |
 | **Tier 1B** | Blind Candidate Selector & Reflector | **`Claude Opus 5.5`** (Native Antigravity) | `antigravity_opus/claude-opus-5-5` |
-| **Tier 2** | Bounded Probe Executor & Test Runner | **`Gemini 3.8 Flash (High)`** (`Model="flash"`) | `opencode` / `antigravity` executor |
+| **Tier 1C** | Reviewer, Auditor & Remaining Tasks | **`Gemini 4 Argon (High)`** (`Model="pro"`) | `antigravity/gemini-4-argon` |
+| **Tier 2** | Bounded Probe Executor & Test Runner | **`Gemini 4 Hydrogen (High)`** (`Model="flash"`) | `opencode` / `antigravity` executor |
 
 ### Cognitive Separation Invariant
 The primary proposer (`Gemini 4 Carbon High`) MUST NEVER grade or select its own candidate proposals. Blind selection is owned by `Claude Opus 5.5` evaluating anonymized deliverables and trajectories to prevent self-confirmation bias.
@@ -26,7 +27,7 @@ The primary proposer (`Gemini 4 Carbon High`) MUST NEVER grade or select its own
      - `INV`: Invariant-hardening adaptations (governance rules, budget tripwires, shell safety).
      - `DOM`: Domain-specialized skill prompts and toolchains.
      - `COMPOSE`: Harmonized multi-component merges.
-2. **Probe (Tier 2 - Gemini 3.8 Flash High)**:
+2. **Probe (Tier 2 - Gemini 4 Hydrogen High)**:
    - Rolls out candidate harnesses in isolated ephemeral workspaces/worktrees.
    - Captures full observable trajectories and deliverables.
 3. **Compose (Tier 1A - Gemini 4 Carbon High)**:

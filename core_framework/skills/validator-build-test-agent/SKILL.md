@@ -6,7 +6,7 @@ description: Discovers repository-native commands and runs static, unit, and bui
 # Validator / Build & Test Agent
 
 ## Purpose
-Discover canonical repository commands, execute the **3-Layer Functional Verification Protocol** (Static -> Automated Unit/Negative -> Real-Surface Runtime Proof), validate program state machines, and produce untampered verification evidence on disk. Runs on **`Gemini 3.8 Flash (High)` (`Model="flash"`)** for fast execution, reporting raw evidence to **`Gemini 4 Carbon (High)`** reviewers.
+Discover canonical repository commands, execute the **3-Layer Functional Verification Protocol** (Static -> Automated Unit/Negative -> Real-Surface Runtime Proof), validate program state machines, and produce untampered verification evidence on disk. Runs on **`Gemini 4 Hydrogen (High)` (`Model="flash"`)** for fast routine execution, reporting raw evidence to **`Gemini 4 Argon (High)`** reviewers.
 
 ## Discovery Hierarchy
 Prefer, in order:

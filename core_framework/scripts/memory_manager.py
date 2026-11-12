@@ -331,7 +331,7 @@ def init_vault(
             f"Linked from [[Home|Vault Home]].\n\n"
             f"## Communication & Workflow Preferences\n"
             f"- **Primary Conversation Language**: Czech (with technical identifiers and repository artifacts in English unless requested otherwise).\n"
-            f"- **Orchestration Standard**: Tri-Model Cross-Family Routing (`Gemini 4 Carbon High` for research/planning, `Claude Opus 5.5` for adversarial plan & diff audit, `Gemini 3.8 Flash High` for bounded implementation).\n\n"
+            f"- **Orchestration Standard**: Quad-Model Cross-Family Routing (`Gemini 4 Carbon High` for initial planning/research, `Claude Opus 5.5` for adversarial opposing reviews, `Gemini 4 Argon High` for standard reviews/audits/remaining tasks, `Gemini 4 Hydrogen High` for implementation & routine tasks).\n\n"
             f"## Recorded Profile & Company Facts\n"
         ),
         v_dir / "domains" / "Presentations and Visual Style.md": (
@@ -366,7 +366,7 @@ def init_vault(
             f"created: {today}\n"
             f"---\n\n"
             f"# Engineering Lessons and Anti-Patterns\n\n"
-            f"Self-learning ledger of mistakes, user corrections, and regression traps across all projects. The Swarm Coordinator (`Gemini 4 Carbon High`) and Opposition Reviewer (`Claude Opus 5.5`) inspect this ledger before planning and reviewing work so no mistake is ever repeated.\n"
+            f"Self-learning ledger of mistakes, user corrections, and regression traps across all projects. The Swarm Coordinator (`Gemini 4 Argon High`), Planner (`Gemini 4 Carbon High`), and Opposition Reviewer (`Claude Opus 5.5`) inspect this ledger before planning and reviewing work so no mistake is ever repeated.\n"
             f"Linked from [[Home|Vault Home]].\n\n"
             f"## Active Lessons\n\n"
             f"### [{today}] Skill YAML Frontmatter & BOM Hygiene\n"

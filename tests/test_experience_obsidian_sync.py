@@ -317,10 +317,11 @@ class TestSkillsAndRouting(unittest.TestCase):
             self.assertTrue(content.startswith("---\n"), f"{skill_path} missing frontmatter start")
             self.assertIn(f"name: {expected_name}", content)
             self.assertIn("description:", content)
-            # Tri-Model references
+            # Quad-Model references
             self.assertIn("Gemini 4 Carbon", content)
             self.assertIn("Claude Opus 5.5", content)
-            self.assertIn("Gemini 3.8 Flash", content)
+            self.assertIn("Gemini 4 Argon", content)
+            self.assertIn("Gemini 4 Hydrogen", content)
 
         # Check skill-router mentions asw-harness-adapt
         router_content = skill_router.read_text(encoding="utf-8")

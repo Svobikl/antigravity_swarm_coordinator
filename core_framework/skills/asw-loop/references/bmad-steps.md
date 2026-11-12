@@ -23,7 +23,7 @@ To prevent context rot and mid-execution instruction amnesia, `asw-loop`, `asw-s
 ---
 
 ## Step 3: `step-03-implement` (Context-Free Subagent Handoff & Matrix Test Audit)
-- **Model Tier:** `Gemini 3.8 Flash (High)` (`Model="flash"`)
+- **Model Tier:** `Gemini 4 Hydrogen (High)` (`Model="flash"`)
 - **Action:**
   1. **Record `baseline_revision`:** Capture `git rev-parse --short HEAD` into the plan frontmatter before the first code edit.
   2. **Context-Free Subagent Handoff:** Dispatch the bounded implementation subagent with **zero prior conversation history**, passing only `{plan_file}` and its `## Code Map`. Keep the subagent `conversationId` alive for `step-04-review` patches.
@@ -34,7 +34,7 @@ To prevent context rot and mid-execution instruction amnesia, `asw-loop`, `asw-s
 ---
 
 ## Step 4: `step-04-review` (5 Orthogonal Review Lenses & 4-Route Cascading Triage)
-- **Model Tier:** `Claude Opus 5.5` + `Gemini 4 Carbon (High)`
+- **Model Tier:** `Claude Opus 5.5` + `Gemini 4 Argon (High)`
 - **Action:**
   1. Evaluate the diff since `baseline_revision` across all 5 orthogonal lenses (`blind-hunter`, `edge-case-hunter` with `deletion-check` & `claims-check`, `verification-gap` with caller hop trace & `missing-adoption` check, `intent-alignment`, and `opus-cross-family` via `invoke_opus_reviewer.py --mode diff-review`).
   2. Verify every finding against the actual source code, log it in `## Review Triage Log`, and route by highest blast radius:
@@ -46,7 +46,7 @@ To prevent context rot and mid-execution instruction amnesia, `asw-loop`, `asw-s
 ---
 
 ## Step 5: `step-05-present` (Clean Handoff, Pitfall Capture & Memory Sync)
-- **Model Tier:** `Gemini 4 Carbon (High)` / `Gemini 3.8 Flash (High)`
+- **Model Tier:** `Gemini 4 Argon (High)` / `Gemini 4 Hydrogen (High)`
 - **Action:**
   1. Verify all `- [x]` checkboxes are closed, `## Review Triage Log` has zero unresolved `[intent_gap]`/`[bad_plan]`/`[patch]` items, and `Verdict: ASW APPROVED` is on disk.
   2. If review uncovered a recurring repo pitfall, either automate it into a check or record it in `<!-- bmad:context -->` in `AGENTS.md` and via `memory_manager.py --record-lesson`.
