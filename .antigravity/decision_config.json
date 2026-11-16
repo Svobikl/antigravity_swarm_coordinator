@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "prefer_gpu": true,
+  "min_free_vram_mib": 2048,
+  "min_total_vram_mib": 4096
+}

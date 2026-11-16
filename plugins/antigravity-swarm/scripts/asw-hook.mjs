@@ -1,7 +1,77 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { homedir } from "node:os";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { redactSecrets, safeMode } from "./asw-redact.mjs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function resolveDecisionRouter() {
+  const candidates = [
+    join(__dirname, "..", "..", "..", "core_framework", "scripts", "decision_router.py"),
+    join(__dirname, "..", "..", "..", ".antigravity", "scripts", "decision_router.py"),
+    join(process.cwd(), ".antigravity", "scripts", "decision_router.py"),
+    join(process.cwd(), "core_framework", "scripts", "decision_router.py"),
+    join(homedir(), ".gemini", "scripts", "decision_router.py"),
+    join(homedir(), ".gemini", ".antigravity", "scripts", "decision_router.py"),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return null;
+}
+
+function isDecisionModelEnabled() {
+  const envVal = process.env.ASW_DECISION_MODEL_ENABLED;
+  if (envVal !== undefined) {
+    const s = String(envVal).trim().toLowerCase();
+    if (s === "0" || s === "false" || s === "no" || s === "off") return false;
+    if (s === "1" || s === "true" || s === "yes" || s === "on") return true;
+  }
+  const configPaths = [
+    join(process.cwd(), ".antigravity", "decision_config.json"),
+    join(__dirname, "..", "..", "..", ".antigravity", "decision_config.json"),
+    join(homedir(), ".gemini", "decision_config.json"),
+    join(homedir(), ".gemini", ".antigravity", "decision_config.json"),
+  ];
+  for (const cp of configPaths) {
+    if (existsSync(cp)) {
+      try {
+        const parsed = JSON.parse(readFileSync(cp, "utf8"));
+        if (typeof parsed?.enabled === "boolean") return parsed.enabled;
+      } catch {
+        // continue
+      }
+    }
+  }
+  return true;
+}
+
+function queryAutoDecisionRouter(prompt) {
+  if (!isDecisionModelEnabled()) return null;
+  const routerPath = resolveDecisionRouter();
+  if (!routerPath) return null;
+  try {
+    const res = spawnSync(
+      process.platform === "win32" ? "python" : "python3",
+      [routerPath, "--mode", "route-prompt", "--text", String(prompt)],
+      { timeout: 1500, encoding: "utf8" }
+    );
+    if (res.status === 0 && res.stdout) {
+      const parsed = JSON.parse(res.stdout);
+      if (parsed.enabled === false || parsed.status === "disabled") {
+        return null;
+      }
+      return parsed;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 const WORD = "(?<![A-Za-z0-9_./-])/?";
 const END = "(?![A-Za-z0-9_/-])";
@@ -180,7 +250,7 @@ You MUST perform physical GUI and runtime verification of the implemented applic
 - If Verdict: GUI_FAILED occurs, fix the underlying UI/runtime defect and re-run physical GUI verification until Verdict: GUI_VERIFIED passes.
 - Always terminate spawned dev servers, browsers, and GUI processes in cleanup before finishing.`;
 
-function directiveFor(prompt) {
+function directiveFor(prompt, payload = {}) {
   prompt = redactSecrets(stripIgnoredPromptRegions(prompt));
   let base = "";
   if (PLAN_RE.test(prompt)) base = PLAN_DIRECTIVE;
@@ -193,6 +263,22 @@ function directiveFor(prompt) {
   if (TEST_GUI_RE.test(prompt)) {
     return base ? `${base}\n\n${TEST_GUI_DIRECTIVE}` : TEST_GUI_DIRECTIVE;
   }
+
+  // System 1 Auto Decision Router evaluation when enabled
+  if (!base && (process.env.ASW_AUTO_DECISION_ROUTER === "1" || payload.autoDecisionRouter === true)) {
+    if (isDecisionModelEnabled()) {
+      const decision = queryAutoDecisionRouter(prompt);
+      if (decision) {
+        if (decision.requires_subagent_plan_wave) {
+          base = LOOP_DIRECTIVE;
+        }
+        if (decision.requires_gui_verification) {
+          base = base ? `${base}\n\n${TEST_GUI_DIRECTIVE}` : TEST_GUI_DIRECTIVE;
+        }
+      }
+    }
+  }
+
   return base;
 }
 
@@ -204,7 +290,7 @@ function stripIgnoredPromptRegions(prompt) {
 
 const payload = readPayload();
 const isSubsequentStep = Number(payload.invocationNum) > 1;
-const directive = safeMode(payload) || isSubsequentStep ? "" : directiveFor(promptFrom(payload));
+const directive = safeMode(payload) || isSubsequentStep ? "" : directiveFor(promptFrom(payload), payload);
 if (!directive) {
   process.stdout.write("{}");
 } else {

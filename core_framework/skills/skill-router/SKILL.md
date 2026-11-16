@@ -51,3 +51,17 @@ For any single task or subagent invocation, strictly enforce:
 - Ensure primary proposers (`Gemini 4 Carbon High`) are paired with cross-family adversarial opposition reviewers (`Claude Opus 5.5`).
 - Reject requests to preload broad multi-skill bundles or unused toolsets.
 - Under context pressure, prune completed or inactive skills immediately.
+
+## System 1 Autonomous Decision Routing (`decision_router.py`)
+
+For automated, low-latency (< 5 ms) Mode 0–5 routing, active skill selection, and review finding triage, invoke `decision_router.py`:
+- **Route Prompt / Mode Classification:**
+  `python .antigravity/scripts/decision_router.py --mode route-prompt --text "<prompt>"`
+  Evaluates prompt intent, detects UI verification requirements (`requires_gui_verification`), and determines whether a Carbon planning wave is required (`requires_subagent_plan_wave`).
+- **Bounded Skill Selection (`<= 8` skills):**
+  `python .antigravity/scripts/decision_router.py --mode select-skills --text "<prompt>" --max-skills 8`
+- **Review Finding Triage:**
+  `python .antigravity/scripts/decision_router.py --mode triage-finding --text "<finding>"`
+  Routes broken caller defects to `[patch]` or `[bad_plan]` (severity >= 4) and out-of-scope notes to `[defer]`.
+- **Hardware-Aware VRAM Selection:**
+  `decision_router.py` automatically checks available GPU memory via `nvidia-smi` and safely routes to `cpu` on low-VRAM GPUs (e.g. GTX 1060 3GB with < 2048 MiB free) and `cuda` on GPUs with >= 2048 MiB free and >= 4096 MiB total.

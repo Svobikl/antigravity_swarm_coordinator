@@ -166,6 +166,8 @@ def run_install(
     clean_skills: bool = False,
     install_obsidian_app: bool = False,
     skip_rtk: bool = False,
+    install_laya: bool = False,
+    disable_decision_model: bool = False,
 ) -> dict[str, object]:
     gemini_dir = home_dir / ".gemini"
     config_dir = gemini_dir / "config"
@@ -187,6 +189,10 @@ def run_install(
         "rtk_installed": False,
         "rtk_version": None,
         "rtk_skill_mandatory": True,
+        "decision_router_installed": False,
+        "decision_router_device": None,
+        "decision_model_enabled": not disable_decision_model,
+        "laya_sdk_installed": False,
     }
 
     # 1. Global Entry Point Prompt (~/.gemini/GEMINI.md & ~/.agents/AGENTS.md)
@@ -385,6 +391,60 @@ def run_install(
         target_rules_dir.mkdir(parents=True, exist_ok=True)
         (target_rules_dir / "antigravity-rtk-rules.md").write_text(rules_content, encoding="utf-8")
 
+    # 7. System 1 Decision Router & Laya Status
+    decision_cfg = {
+        "enabled": not disable_decision_model,
+        "prefer_gpu": True,
+        "min_free_vram_mib": 2048,
+        "min_total_vram_mib": 4096,
+    }
+    cfg_json = json.dumps(decision_cfg, indent=2)
+    gemini_dir.mkdir(parents=True, exist_ok=True)
+    (gemini_dir / "decision_config.json").write_text(cfg_json, encoding="utf-8")
+    if resolved_target is not None:
+        (resolved_target / ".antigravity").mkdir(parents=True, exist_ok=True)
+        (resolved_target / ".antigravity" / "decision_config.json").write_text(cfg_json, encoding="utf-8")
+    elif home_dir == Path.home() and (repo_root / ".antigravity").is_dir():
+        (repo_root / ".antigravity" / "decision_config.json").write_text(cfg_json, encoding="utf-8")
+    summary["decision_model_enabled"] = not disable_decision_model
+
+    dr_dest = gemini_dir / "scripts" / "decision_router.py"
+    dr_src = repo_root / ".antigravity" / "scripts" / "decision_router.py"
+    if not dr_src.is_file():
+        dr_src = repo_root / "core_framework" / "scripts" / "decision_router.py"
+
+    if dr_src.is_file():
+        (gemini_dir / "scripts").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(dr_src, dr_dest)
+        summary["decision_router_installed"] = True
+    elif dr_dest.is_file():
+        summary["decision_router_installed"] = True
+
+    try:
+        dr_spec = importlib.util.spec_from_file_location(
+            "decision_router_inst", dr_src if dr_src.is_file() else dr_dest
+        )
+        if dr_spec and dr_spec.loader:
+            dr_mod = importlib.util.module_from_spec(dr_spec)
+            dr_spec.loader.exec_module(dr_mod)
+            dev_info = dr_mod.select_optimal_device()
+            summary["decision_router_device"] = dev_info.get("device", "cpu")
+    except Exception:
+        summary["decision_router_device"] = "cpu"
+
+    if install_laya:
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "laya"], capture_output=True, timeout=60)
+        except Exception:
+            pass
+
+    try:
+        import laya  # noqa: F401
+
+        summary["laya_sdk_installed"] = True
+    except ImportError:
+        summary["laya_sdk_installed"] = False
+
     return summary
 
 
@@ -402,6 +462,12 @@ def main() -> int:
     parser.add_argument("--clean-skills", action="store_true", help="Remove uncurated/duplicate skills from global skill folders")
     parser.add_argument("--install-obsidian-app", action="store_true", help="Attempt to install Obsidian desktop app if missing")
     parser.add_argument("--skip-rtk", action="store_true", help="Skip discovering or installing the rtk CLI binary")
+    parser.add_argument("--install-laya", action="store_true", help="Install NandhaKishorM/laya package for neural System 1 routing")
+    parser.add_argument(
+        "--disable-decision-model",
+        action="store_true",
+        help="Disable System 1 Decision Router (for low-RAM or constrained PCs)",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent
@@ -419,6 +485,8 @@ def main() -> int:
         clean_skills=args.clean_skills,
         install_obsidian_app=args.install_obsidian_app,
         skip_rtk=args.skip_rtk,
+        install_laya=args.install_laya,
+        disable_decision_model=args.disable_decision_model,
     )
     print(json.dumps(res, indent=2))
     return 0

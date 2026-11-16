@@ -76,6 +76,19 @@ The Swarm Coordinator integrates `rtk 0.48.0` (`rtk-token-killer`) as its mandat
 
 ---
 
+## 🧠 System 1 Local Decision Engine (`Laya` + Calibrated Zero-Latency Fallback)
+
+Antigravity Swarm Coordinator incorporates a local System 1 Decision Engine (`decision_router.py` and `asw-hook.mjs`) inspired by `NandhaKishorM/laya` that performs bounded classification and routing decisions in sub-40ms (and `< 5 ms` in calibrated fallback mode):
+
+- **Automatic Mode & Tier Routing (CZ/EN):** Evaluates developer prompts (even when explicit `/asw*` commands are omitted) to classify execution modes (Mode 0–5) and assign the appropriate Quad-Model tier (`Gemini 4 Carbon High` for planning/research vs `Gemini 4 Hydrogen High` for implementation).
+- **Automated UI/GUI Verification Triggering:** Detects UI/frontend modification intents (`noul >= 0.75`), automatically enforcing `requires_gui_verification` and localhost Playwright/browser testing.
+- **Active Skill Budget Selection:** Bounded skill routing returning `<= 8` relevant skills from the 200-skill Golden Catalog.
+- **Review Finding Triage:** Classifies review findings in `step-04-review` to `[patch]`, `[bad_plan]`, or `[defer]` based on defect severity.
+- **VRAM-Aware Hardware Device Selector (`select_optimal_device`):** Inspects GPU VRAM and compute capability via `nvidia-smi`. Automatically selects `"cuda"` when free VRAM `>= 2048 MiB` and total VRAM `>= 4096 MiB` (compute capability `>= 7.0`), and safely falls back to `"cpu"` (`max_loaded=1`) on low-VRAM GPUs like NVIDIA GTX 1060 3GB (`~600 MiB` free) to prevent CUDA OOM crashes.
+- **Configurable Enable/Disable Switch (Low-RAM / Constrained PC Protection):** Supports disabling the Decision Engine completely for low-RAM machines or constrained environments via CLI (`python .antigravity/scripts/decision_router.py --disable` / `--enable`), config file (`decision_config.json` in `.antigravity/` or `~/.gemini/`), installer flag (`python install.py --disable-decision-model`), or environment variable (`ASW_DECISION_MODEL_ENABLED=0`). When disabled, `asw-hook.mjs` and `decision_router.py` short-circuit in 0 ms with zero background processes, zero memory footprint, and zero side effects.
+
+---
+
 ## 🧬 Harness² Recursive Adaptation Engine: What It Is & What It Does in Your Harness
 
 This coordinator integrates Google Research's **Harness²** (*Recursive Agent Harnessing for an Open World*, `.antigravity/harness2/`), hardened for cross-platform **macOS + Windows 11 + Linux** and **Python 3.12–3.14** execution.

@@ -190,6 +190,90 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
             )
             self.assertFalse(skip_summary["rtk_installed"])
 
+    def test_decision_router_installer_and_hook_integration(self):
+        """Verifies decision_router is installed by install.py and integrated into asw-hook.mjs."""
+        import importlib.util
+        import json
+        import subprocess
+
+        install_py = self.repo_root / "install.py"
+        spec = importlib.util.spec_from_file_location("installer_mod", install_py)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_home = Path(tmp) / "fake_home"
+            fake_home.mkdir(parents=True)
+            summary = mod.run_install(
+                repo_root=self.repo_root,
+                home_dir=fake_home,
+                skip_skills=True,
+                skip_vault=True,
+                skip_plugin=True,
+            )
+            # 1. Summary reports decision_router status and hardware device
+            self.assertTrue(summary.get("decision_router_installed"), "decision_router_installed must be True")
+            self.assertTrue(summary.get("decision_model_enabled"), "decision_model_enabled must default to True")
+            self.assertIn("decision_router_device", summary)
+            self.assertIn(summary["decision_router_device"], ("cpu", "cuda"))
+
+            # 2. Installed script file in ~/.gemini/scripts and decision_config.json
+            installed_script = fake_home / ".gemini" / "scripts" / "decision_router.py"
+            self.assertTrue(installed_script.is_file(), f"Missing {installed_script}")
+            installed_cfg = fake_home / ".gemini" / "decision_config.json"
+            self.assertTrue(installed_cfg.is_file(), f"Missing {installed_cfg}")
+            cfg_data = json.loads(installed_cfg.read_text(encoding="utf-8"))
+            self.assertTrue(cfg_data.get("enabled"))
+
+            # 3. Test disable_decision_model=True (M7)
+            dis_summary = mod.run_install(
+                repo_root=self.repo_root,
+                home_dir=fake_home,
+                skip_skills=True,
+                skip_vault=True,
+                skip_plugin=True,
+                disable_decision_model=True,
+            )
+            self.assertFalse(dis_summary.get("decision_model_enabled"))
+            dis_cfg = json.loads(installed_cfg.read_text(encoding="utf-8"))
+            self.assertFalse(dis_cfg.get("enabled"))
+
+        # 4. asw-hook.mjs auto-routing integration when autoDecisionRouter=True
+        hook_script = self.repo_root / "plugins" / "antigravity-swarm" / "scripts" / "asw-hook.mjs"
+        hook_proc = subprocess.run(
+            ["node", str(hook_script)],
+            input=json.dumps({
+                "invocationNum": 1,
+                "autoDecisionRouter": True,
+                "lastUserInput": "Uprav výpočet marže v edgerelay, přidej graf na dashboard a otestuj UI",
+            }),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(hook_proc.returncode, 0)
+        out_data = json.loads(hook_proc.stdout)
+        injected = out_data.get("injectSteps", [{}])[0].get("userMessage", "")
+        self.assertIn("ASW LOOP MODE ENABLED!", injected)
+        self.assertIn("ASW TEST-GUI MODE ENABLED!", injected)
+
+        # 5. Feature-Flag Isolation Gate (M7): when ASW_DECISION_MODEL_ENABLED=0, zero directives emitted
+        with mock.patch.dict("os.environ", {"ASW_DECISION_MODEL_ENABLED": "0"}):
+            hook_proc_disabled = subprocess.run(
+                ["node", str(hook_script)],
+                input=json.dumps({
+                    "invocationNum": 1,
+                    "autoDecisionRouter": True,
+                    "lastUserInput": "Uprav výpočet marže v edgerelay, přidej graf na dashboard a otestuj UI",
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(hook_proc_disabled.returncode, 0)
+            out_data_dis = json.loads(hook_proc_disabled.stdout)
+            self.assertNotIn("injectSteps", out_data_dis)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -927,6 +927,7 @@ def audit_diff(
     runtime_ev_lower = "\n".join(runtime_ev_chunks).lower()
 
     # Filter out meta-lines describing passing negative tests (e.g. "rejecting <hui-error-card>", "GREEN Phase: 4 passed")
+    # and hook directive instructions quoting gate names (e.g. "ASW LOOP MODE ENABLED!", "Enforce Mandatory Rendered DOM")
     non_test_ev_lines = [
         line
         for line in runtime_ev_lower.splitlines()
@@ -938,6 +939,9 @@ def audit_diff(
                 "rejecting ",
                 "test_run_gui_test_rejects",
                 "test_diff_review_rejects",
+                "asw loop mode enabled",
+                "enforce mandatory rendered dom",
+                "boundary-to-boundary system/hardware fidelity",
             )
         )
     ]
