@@ -25,6 +25,11 @@ DEFAULT_DECISION_CONFIG: dict[str, object] = {
     "prefer_gpu": True,
     "min_free_vram_mib": 2048,
     "min_total_vram_mib": 4096,
+    "cpu_threads": 12,
+    "flush_denormal": True,
+    "preferred_checkpoint": "multilingual",
+    "compact_question_schema": True,
+    "use_local_snapshot_fastload": True,
 }
 
 
@@ -254,13 +259,45 @@ class DecisionRouter:
             self.device_info = select_optimal_device()
             self._init_inproc_if_enabled()
 
+    @staticmethod
+    def _resolve_local_laya_snapshot(preferred: str = "multilingual") -> tuple[str | None, str | None]:
+        """Find cached HuggingFace snapshot on disk to bypass HTTP Hub check (12.4s -> 2.48s)."""
+        hub_dir = Path.home() / ".cache" / "huggingface" / "hub" / "models--convaiinnovations--laya" / "snapshots"
+        if not hub_dir.is_dir():
+            return None, None
+        snaps = list(hub_dir.iterdir())
+        if preferred == "multilingual":
+            for s in snaps:
+                if (s / "multilingual" / "model.safetensors").is_file():
+                    return str(s), "multilingual"
+        for s in snaps:
+            if (s / "model.safetensors").is_file():
+                return str(s), None
+        return None, None
+
     def _init_inproc_if_enabled(self) -> None:
         if not self.enabled or not self.enable_inproc:
             return
         try:
+            os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+            import torch  # type: ignore
             import laya  # type: ignore
 
             dev = str(self.device_info.get("device", "cpu"))
+            if dev == "cpu":
+                if bool(self.config.get("flush_denormal", True)):
+                    torch.set_flush_denormal(True)
+                threads = int(self.config.get("cpu_threads", os.cpu_count() or 12))
+                if threads > 0:
+                    torch.set_num_threads(threads)
+
+            if bool(self.config.get("use_local_snapshot_fastload", True)):
+                pref = str(self.config.get("preferred_checkpoint", "multilingual"))
+                snap_path, sub = self._resolve_local_laya_snapshot(pref)
+                if snap_path is not None:
+                    self._laya_router = laya.Agent(snap_path, subfolder=sub, device=dev)
+                    return
+
             max_l = int(self.device_info.get("max_loaded", 1))
             self._laya_router = laya.Router(device=dev, max_loaded=max_l)
         except Exception:
@@ -471,7 +508,7 @@ class DecisionRouter:
 
         if is_multi_step or (has_gui and has_feature_verb):
             noul = 0.85 if has_gui else 0.70
-            return self._build_decision(
+            base_decision = self._build_decision(
                 choice="mode_3",
                 execution_mode="mode_3",
                 recommended_tier="carbon_plan_research",
@@ -480,10 +517,11 @@ class DecisionRouter:
                 answer_confidence=0.92,
                 noul=noul,
             )
+            return self._enrich_with_laya(trimmed, base_decision)
 
         # Default fallback
         if has_feature_verb:
-            return self._build_decision(
+            base_decision = self._build_decision(
                 choice="mode_2",
                 execution_mode="mode_2",
                 recommended_tier="hydrogen_implement_tdd",
@@ -492,8 +530,9 @@ class DecisionRouter:
                 answer_confidence=0.80,
                 noul=0.4,
             )
+            return self._enrich_with_laya(trimmed, base_decision)
 
-        return self._build_decision(
+        base_decision = self._build_decision(
             choice="mode_1",
             execution_mode="mode_1",
             recommended_tier="carbon_plan_research",
@@ -502,6 +541,74 @@ class DecisionRouter:
             answer_confidence=0.75,
             noul=0.2,
         )
+        return self._enrich_with_laya(trimmed, base_decision)
+
+    def _laya_questions_schema(self) -> dict[str, dict[str, object]]:
+        if bool(self.config.get("compact_question_schema", True)):
+            return {
+                "execution_mode": {
+                    "type": "choice",
+                    "instructions": "Mode:",
+                    "criteria": {
+                        "mode_0": "build/run",
+                        "mode_1": "explain/research",
+                        "mode_2": "small fix",
+                        "mode_3": "multi-step feature/UI",
+                        "mode_4": "rollback",
+                        "mode_5": "long program",
+                    },
+                },
+            }
+        return {
+            "execution_mode": {
+                "type": "choice",
+                "instructions": "Select the development execution mode for this software engineering request.",
+                "criteria": {
+                    "mode_0": "Fast operational build, test, or run command",
+                    "mode_1": "Read-only investigation, explanation, or research analysis",
+                    "mode_2": "Small single-file bugfix or minor change",
+                    "mode_3": "Complex multi-step feature delivery requiring plan and subagents",
+                    "mode_4": "Emergency production rollback or restore",
+                    "mode_5": "Long-horizon autonomous research program",
+                },
+            },
+            "requires_gui_verification": {
+                "type": "noul",
+                "instructions": "Does this request touch UI, frontend, dashboard, or browser rendering?",
+            },
+            "requires_subagent_plan_wave": {
+                "type": "noul",
+                "instructions": "Is this a multi-step engineering change that requires a plan and subagent waves?",
+            },
+        }
+
+    def _enrich_with_laya(self, prompt: str, base_decision: dict[str, object]) -> dict[str, object]:
+        """Enrich or score via live Laya daemon or in-proc Laya Router when active."""
+        if self._laya_router is None:
+            return base_decision
+        try:
+            raw = self._laya_router.predict(prompt, self._laya_questions_schema())
+            answers = raw.get("answers", {}) if isinstance(raw, dict) else {}
+            mode_ans = answers.get("execution_mode", {})
+            gui_ans = answers.get("requires_gui_verification", {})
+            if isinstance(mode_ans, dict) and "choice" in mode_ans:
+                choice = str(mode_ans["choice"])
+                conf = float(mode_ans.get("answer_confidence", base_decision["answer_confidence"]))
+                probs = mode_ans.get("probabilities", base_decision["probabilities"])
+                gui_noul = float(gui_ans.get("noul", base_decision["noul"])) if isinstance(gui_ans, dict) else float(base_decision["noul"])
+                base_decision["choice"] = choice
+                base_decision["execution_mode"] = choice
+                base_decision["score"] = round(conf, 4)
+                base_decision["answer_confidence"] = round(conf, 4)
+                base_decision["probabilities"] = probs
+                base_decision["noul"] = round(gui_noul, 4)
+                base_decision["requires_gui_verification"] = bool(base_decision["requires_gui_verification"]) or (gui_noul >= 0.5)
+                base_decision["requires_subagent_plan_wave"] = bool(base_decision["requires_subagent_plan_wave"]) or (choice in ("mode_3", "mode_5"))
+                base_decision["backend"] = "laya_inproc"
+                base_decision["laya_routing"] = raw.get("routing")
+        except Exception:
+            pass
+        return base_decision
 
     def select_skills(self, prompt: str, max_skills: int = 8) -> list[str]:
         """Select up to max_skills (capped at 8) relevant skills from the 200-skill catalog."""

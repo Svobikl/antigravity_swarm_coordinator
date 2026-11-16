@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "prefer_gpu": true,
+  "min_free_vram_mib": 2048,
+  "min_total_vram_mib": 4096,
+  "cpu_threads": 12,
+  "flush_denormal": true,
+  "preferred_checkpoint": "multilingual",
+  "compact_question_schema": true,
+  "use_local_snapshot_fastload": true
+}
