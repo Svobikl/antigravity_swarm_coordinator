@@ -12,8 +12,8 @@ Use this skill after `asw-plan` when the user says `start-work`, `asw-start-work
 1. Select the named plan. If no name is provided, inspect `.asw/plans/` and choose the only active plan; ask one focused question only when multiple plans match.
 2. Create or resume `.asw/start-work/state.json` before editing. Track the selected plan path, active checkbox, spawned subagents, artifacts, and cleanup items.
 3. Re-read the selected plan before each step.
-4. Execute the first unchecked top-level checkbox in `## TODOs` or `## Final Verification Wave`.
-5. Split independent work across Antigravity subagents. Keep dependent file edits serialized.
+4. Execute the first unchecked top-level checkbox in `## TODOs` or `## Execution Tasks`.
+5. **Mandatory `invoke_subagent` Dispatch Gate:** Never execute all tasks and reviews inline in a single `Gemini 4 Hydrogen` thread! Dispatch bounded leaf implementation tasks via `invoke_subagent(TypeName="asw-implementer", Role="ASW Leaf Implementer", Model="flash", ...)` (passing `{plan_file}` and `## Code Map`), and dispatch the 5-lens review via `invoke_subagent(TypeName="asw-reviewer", Role="ASW 5-Lens Reviewer", Model="pro", ...)` + `invoke_opus_reviewer.py --mode diff-review`. Keep dependent file edits serialized across waves.
 6. For each checkbox, capture:
    - failing test or reproduction before production changes,
    - passing automated verification after the fix,

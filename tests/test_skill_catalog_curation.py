@@ -190,6 +190,121 @@ class TestSkillCatalogCuration(unittest.TestCase):
             repaired_txt = repaired_raw.decode("utf-8")
             self.assertTrue(repaired_txt.startswith("---\nname: edge-broken-skill\ndescription: "))
 
+    def test_antigravity_plugin_root_hooks_md_agents_and_hydrogen_escalation_gate(self):
+        """Verifies Antigravity native plugin root hooks.json, 8 subagent .md files, lastUserInput/workspacePaths hook parsing, and mandatory invoke_subagent escalation gate in /asw."""
+        import json
+        import subprocess
+        import tempfile
+
+        repo_root = Path(__file__).resolve().parent.parent
+        plugin_src = repo_root / "plugins" / "antigravity-swarm"
+        plugin_dst = self.home / ".gemini" / "config" / "plugins" / "antigravity-swarm"
+
+        # 1. Root hooks.json must exist in both repo and installed plugin dir
+        for p_dir in (plugin_src, plugin_dst):
+            root_hooks = p_dir / "hooks.json"
+            self.assertTrue(root_hooks.is_file(), f"Missing plugin root hooks.json at {root_hooks}")
+            hooks_data = json.loads(root_hooks.read_text(encoding="utf-8"))
+            self.assertIn("antigravity-swarm", hooks_data)
+            self.assertIn("./scripts/asw-hook.mjs", json.dumps(hooks_data))
+            self.assertIn("edit_file", json.dumps(hooks_data))
+
+        # 2. All 8 native Antigravity subagent .md definitions must exist with subagent: true & mainAgent: false
+        expected_agents = {
+            "asw-planner.md",
+            "asw-implementer.md",
+            "asw-reviewer.md",
+            "asw-opposition-reviewer.md",
+            "asw-plan-audit.md",
+            "asw-explorer.md",
+            "asw-librarian.md",
+            "asw-planning-analysis.md",
+        }
+        for p_dir in (plugin_src, plugin_dst):
+            agents_dir = p_dir / "agents"
+            present_md = {f.name for f in agents_dir.glob("*.md")}
+            self.assertTrue(
+                expected_agents.issubset(present_md),
+                f"Missing Antigravity subagent .md files in {agents_dir}: {expected_agents - present_md}",
+            )
+            for md_name in expected_agents:
+                md_txt = (agents_dir / md_name).read_text(encoding="utf-8")
+                self.assertIn("subagent: true", md_txt, f"{md_name} missing subagent: true")
+                self.assertIn("mainAgent: false", md_txt, f"{md_name} missing mainAgent: false")
+
+        # 3. asw/SKILL.md must enforce mandatory invoke_subagent dispatch gate and forbid inline-only Hydrogen execution
+        for asw_md in (
+            plugin_src / "skills" / "asw" / "SKILL.md",
+            self.cfg_dir / "asw" / "SKILL.md",
+        ):
+            txt = asw_md.read_text(encoding="utf-8")
+            self.assertIn("invoke_subagent", txt)
+            self.assertIn("asw-planner", txt)
+            self.assertIn("asw-implementer", txt)
+            self.assertIn("asw-reviewer", txt)
+            self.assertNotIn("Keep dependent edits in the main thread", txt)
+
+        # 4. asw-hook.mjs must parse Antigravity's native lastUserInput and skip invocationNum > 1
+        hook_script = plugin_src / "scripts" / "asw-hook.mjs"
+        res_turn1 = subprocess.run(
+            ["node", str(hook_script)],
+            input=json.dumps({
+                "invocationNum": 1,
+                "modelName": "gemini-4-hydrogen",
+                "lastUserInput": "/asw implement new feature in edgerelay",
+            }),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(res_turn1.returncode, 0)
+        out_turn1 = json.loads(res_turn1.stdout)
+        injected = out_turn1.get("injectSteps", [{}])[0].get("userMessage", "")
+        self.assertIn("ASW LOOP MODE ENABLED!", injected)
+        self.assertIn("MANDATORY SUBAGENT & MODEL-TIER ESCALATION GATE", injected)
+        self.assertIn("invoke_subagent", injected)
+
+        # Negative test: invocationNum > 1 within the same turn must return {} (no repeated spam)
+        res_turn2 = subprocess.run(
+            ["node", str(hook_script)],
+            input=json.dumps({
+                "invocationNum": 2,
+                "modelName": "gemini-4-hydrogen",
+                "lastUserInput": "/asw implement new feature in edgerelay",
+            }),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(res_turn2.returncode, 0)
+        self.assertEqual(json.loads(res_turn2.stdout), {})
+
+        # 5. asw-stop-check.mjs must resolve workspacePaths[0] when cwd is the plugin directory
+        stop_script = plugin_src / "scripts" / "asw-stop-check.mjs"
+        with tempfile.TemporaryDirectory() as tmp:
+            ws_dir = Path(tmp)
+            plans_dir = ws_dir / ".asw" / "plans"
+            plans_dir.mkdir(parents=True)
+            (plans_dir / "active.md").write_text(
+                "# Plan\n- [x] Done step\n- [ ] Remaining task\n",
+                encoding="utf-8",
+            )
+            res_stop = subprocess.run(
+                ["node", str(stop_script)],
+                cwd=str(plugin_src),
+                input=json.dumps({
+                    "fullyIdle": True,
+                    "workspacePaths": [ws_dir.as_uri()],
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(res_stop.returncode, 0)
+            stop_data = json.loads(res_stop.stdout)
+            self.assertEqual(stop_data.get("decision"), "continue")
+            self.assertIn("Remaining task", stop_data.get("reason", ""))
+
 
 if __name__ == "__main__":
     unittest.main()

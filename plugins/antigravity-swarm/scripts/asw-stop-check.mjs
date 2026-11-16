@@ -2,10 +2,32 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { safeMode } from "./asw-redact.mjs";
 
 const MAX_AUTO_CONTINUES = 3;
 const ACTIVE_PLAN_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+function resolveWorkspaceCwd(payload) {
+  const candidates = [
+    payload?.cwd,
+    Array.isArray(payload?.workspacePaths) ? payload.workspacePaths[0] : undefined,
+    Array.isArray(payload?.workspaceUris) ? payload.workspaceUris[0] : undefined,
+  ];
+  for (const raw of candidates) {
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        if (raw.startsWith("file://")) {
+          return fileURLToPath(raw);
+        }
+        return raw.trim();
+      } catch {
+        // continue
+      }
+    }
+  }
+  return process.cwd();
+}
 
 function readPayload() {
   try {
@@ -81,7 +103,7 @@ function findUncheckedActivePlan(cwd) {
 }
 
 const payload = readPayload();
-const cwd = payload.cwd || process.cwd();
+const cwd = resolveWorkspaceCwd(payload);
 
 if (safeMode(payload)) {
   process.stdout.write(JSON.stringify({ decision: "" }));

@@ -161,7 +161,7 @@ def run_install(
                         pass
             summary["plugin_installed"] = True
 
-        # Ensure Claude Opus 5.5 subagent TOMLs from .antigravity/agents are synced
+        # Ensure Claude Opus 5.5 & Quad-Model subagent TOMLs and Antigravity .md definitions are synced
         agents_src = repo_root / ".antigravity" / "agents"
         if not agents_src.is_dir():
             agents_src = repo_root / "core_framework" / "agents"
@@ -169,9 +169,10 @@ def run_install(
             agents_dst = plugin_dst / "agents"
             agents_dst.mkdir(parents=True, exist_ok=True)
             count = 0
-            for toml_file in agents_src.glob("*.toml"):
-                shutil.copy2(toml_file, agents_dst / toml_file.name)
-                count += 1
+            for ext in ("*.toml", "*.md"):
+                for agent_file in agents_src.glob(ext):
+                    shutil.copy2(agent_file, agents_dst / agent_file.name)
+                    count += 1
             summary["agents_synced"] = count
             summary["plugin_installed"] = True
 

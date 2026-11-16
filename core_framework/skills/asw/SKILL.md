@@ -3,9 +3,35 @@ name: asw
 description: Antigravity Swarm execution loop for evidence-driven TDD, subagents, and real-surface QA.
 ---
 
-# Antigravity Swarm Loop
+# Antigravity Swarm Coordinator & Autonomous Execution Loop (`/asw`)
 
-Use this skill when the user asks to complete a non-trivial coding, documentation, packaging, or automation task through Antigravity CLI.
+Use this skill when the user invokes `/asw`, `asw`, `asw-loop`, or `swarmwork` to complete a non-trivial coding, architecture, debugging, documentation, packaging, or automation task.
+
+## MANDATORY SWARM COORDINATOR & `invoke_subagent` DISPATCH GATE (CRITICAL)
+
+**Never execute a multi-step or code-changing `/asw` task entirely inline in a single `Gemini 4 Hydrogen` (`flash`) thread!**
+
+In Antigravity, the UI model selector only sets the model of the **main conversation thread**. Reading a skill does **NOT** automatically switch the main thread's model. Therefore, to enforce the **Quad-Model Cross-Family Architecture (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 4 Argon High` + `Gemini 4 Hydrogen High`)**, the main agent MUST act as the **Swarm Coordinator** and actively dispatch subagents via `invoke_subagent` with explicit `Model` overrides:
+
+1. **Step 1 — Recall & Mode Classification (`step-01-clarify-and-route`):**
+   - Run `python .antigravity/scripts/memory_manager.py --recall --project-path . --task-type code` to load project memory and lessons.
+   - Classify the request into Mode 0-5 (`GLOBAL_DEVELOPMENT_RULES.md`). (Only Mode 0 operational commands or Mode 1 read-only diagnostic questions may run without an implementation subagent wave.)
+2. **Step 2 — Plan, `<frozen-after-approval>` Contract & `Code Map` (`step-02-plan` -> `Gemini 4 Carbon High` + `Claude Opus 5.5`):**
+   - **If the main conversation is running on `Gemini 4 Hydrogen` (`flash`), you are FORBIDDEN from authoring the architectural plan inline on Hydrogen.** You MUST call:
+     `invoke_subagent(TypeName="asw-planner", Role="ASW Architect & Planner (Carbon High)", Model="pro", Prompt="Draft .asw/plans/<slug>.md with <frozen-after-approval> (Intent, Boundaries, I/O & Edge-Case Matrix M1..Mn) and ## Code Map, then validate with bmad_lint_spine.py --mode plan-contract and invoke_opus_reviewer.py --mode plan-review.")`
+   - (If the main conversation is already running on `Pro` / `Carbon High`, you may author `.asw/plans/<slug>.md` directly or via `asw-planner`, and audit it via `bmad_lint_spine.py --mode plan-contract` + `invoke_opus_reviewer.py --mode plan-review` until `Verdict: PLAN_APPROVED`.)
+3. **Step 3 — Context-Free Leaf Implementation & TDD (`step-03-implement` -> `Gemini 4 Hydrogen High`):**
+   - Record `baseline_revision` (Git HEAD short SHA) in `.asw/plans/<slug>.md`.
+   - Dispatch bounded leaf implementation subagent(s) on **`Model="flash"` (`Gemini 4 Hydrogen High`)**:
+     `invoke_subagent(TypeName="asw-implementer", Role="ASW Leaf Implementer (Hydrogen High)", Model="flash", Prompt="Execute Wave <N> from .asw/plans/<slug>.md using its ## Code Map. Run RED -> GREEN -> Layer 3 Real-Surface QA, verify every row M1..Mn in I/O & Edge-Case Matrix, never modify <frozen-after-approval>, and record results in ## Implementation Notes.")`
+   - Retain the subagent `conversationId` for targeted `[patch]` fixes in Step 4. When multiple tasks have zero file overlap, dispatch up to 4 parallel `asw-implementer` subagents (`Model="flash"`).
+4. **Step 4 — 5-Lens BMAD + Opus Opposition Review (`step-04-review` -> `Gemini 4 Argon High` + `Claude Opus 5.5`):**
+   - **Never let `Gemini 4 Hydrogen` grade or approve its own implementation diff!**
+   - Dispatch the review subagent on **`Model="pro"` (`Gemini 4 Argon High`)** paired with `invoke_opus_reviewer.py`:
+     `invoke_subagent(TypeName="asw-reviewer", Role="ASW 5-Lens & Opus Reviewer (Argon High)", Model="pro", Prompt="Execute the 5 orthogonal review lenses (blind-hunter, edge-case-hunter with deletion-check & claims-check, verification-gap with caller hop trace, intent-alignment, and opus-cross-family via invoke_opus_reviewer.py --mode diff-review) on .asw/plans/<slug>.md and record findings in ## Review Triage Log.")`
+   - Route any verified findings in `## Review Triage Log` (`[intent_gap]`, `[bad_plan]`, `[patch]` via `send_message` to the `asw-implementer` `conversationId`, or `[defer]`) until `Verdict: ASW APPROVED` and 100% of `- [x]` checkboxes are closed.
+5. **Step 5 — Clean Handoff & Memory Sync (`step-05-present`):**
+   - Present the `ASW REPORT` and `Prompt-to-Code Traceability Matrix` after all 3 verification layers and cleanup receipts are complete.
 
 ## Operating Contract
 
@@ -15,18 +41,18 @@ Use this skill when the user asks to complete a non-trivial coding, documentatio
 4. Implement the smallest change that makes the test pass.
 5. Run the real user-facing surface through tmux, HTTP, browser, or computer-use QA.
 6. Capture the artifact path or transcript and clean up spawned state.
-7. Use Antigravity subagents for independent research, test, or review lanes.
+7. Use Antigravity subagents (`asw-planner`, `asw-implementer`, `asw-reviewer`, `asw-explorer`, `asw-librarian`) across the Quad-Model architecture.
 
 ## Hook Aliases
 
-The installed PreInvocation hook wakes this mode from `asw`, `asw-loop`, and `swarmwork`.
+The installed PreInvocation hook (`hooks.json` -> `asw-hook.mjs`) wakes this mode from `asw`, `asw-loop`, and `swarmwork`.
 
 ## Loop Discipline
 
 - Keep a visible success contract near the top of the working notes.
 - Prefer one thin vertical slice over many half-edited files.
-- Spawn explorers for read-only mapping, librarians for current external docs, and reviewers for final verification.
-- Keep dependent edits in the main thread so file ownership stays clear.
+- Spawn `asw-explorer` (`Model="flash"`) for read-only mapping, `asw-librarian` (`Model="pro"`) for current external docs, `asw-planner` (`Model="pro"`) for planning, `asw-implementer` (`Model="flash"`) for bounded coding, and `asw-reviewer` (`Model="pro"`) for final verification.
+- Serialize dependent waves across `asw-implementer` subagent invocations so file ownership stays clear.
 - When the task touches install, hooks, package contents, README, or screenshots, verify the shipped surface instead of only unit tests.
 - Stop and surface a blocker only after local discovery and at least one fallback path fail.
 

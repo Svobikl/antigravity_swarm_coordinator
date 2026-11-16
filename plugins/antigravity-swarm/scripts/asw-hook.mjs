@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { redactSecrets, safeMode } from "./asw-redact.mjs";
 
-const WORD = "(?<![A-Za-z0-9_/-])";
+const WORD = "(?<![A-Za-z0-9_./-])/?";
 const END = "(?![A-Za-z0-9_/-])";
 const PLAN_RE = new RegExp(`${WORD}(?:asw-plan|swarmwork-plan|asw\\s+plan)${END}`);
 const GOAL_RE = new RegExp(`${WORD}(?:asw-goal|swarmwork-goal|asw\\s+goal)${END}`);
@@ -23,6 +23,9 @@ function readPayload() {
 }
 
 function promptFrom(payload) {
+  if (typeof payload.lastUserInput === "string" && payload.lastUserInput.trim()) {
+    return payload.lastUserInput;
+  }
   if (typeof payload.prompt === "string") return payload.prompt;
   if (typeof payload.userMessage === "string") return payload.userMessage;
   if (Array.isArray(payload.steps)) {
@@ -57,10 +60,15 @@ function promptFromTranscript(transcriptPath) {
       if (!line) continue;
       try {
         const record = JSON.parse(line);
-        const role = record.role ?? record.type ?? record.kind ?? "";
-        if (typeof role === "string" && /assistant|system|tool/i.test(role)) continue;
+        const source = String(record.source ?? "");
+        const role = String(record.role ?? record.type ?? record.kind ?? "");
+        if (/^(MODEL|SYSTEM)$/i.test(source)) continue;
+        if (/assistant|system|tool|PLANNER_RESPONSE|GENERIC/i.test(role)) continue;
         const joined = stringsFrom(record).join("\n");
         if (directiveFor(joined)) return joined;
+        if (/USER_INPUT|USER_EXPLICIT|^user$/i.test(role) || /USER_EXPLICIT/i.test(source)) {
+          return "";
+        }
       } catch {
         if (directiveFor(line)) return line;
       }
@@ -145,7 +153,10 @@ Required behavior:
 - Drive the real surface (Layer 3) through CLI, tmux, HTTP, browser, or computer-use QA — never rely on mocks alone.
 - Capture artifacts, cleanup receipts, and a Prompt-to-Code Traceability Matrix verifying every user requirement.
 - For final diff review, run \`python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --plan ".asw/plans/<slug>.md"\` directly (never use PowerShell \`>\`/\`>>\` diff redirection or \`Remove-Item -Force scratch\\*\` without \`-Recurse -Confirm:$false\`). When Claude Opus 5.5 credits are exhausted, \`invoke_opus_reviewer.py\` + Gemini 4 Argon (High) automatically serve as the non-blocking fallback gate.
-- Use subagents when work can proceed in parallel without shared-state conflicts.`;
+- MANDATORY SUBAGENT & MODEL-TIER ESCALATION GATE: Never execute planning, coding, and review all inline in a single Gemini 4 Hydrogen thread! Because the UI model dropdown only controls the main conversation thread, you MUST actively call \`invoke_subagent\` with explicit \`Model\` parameters across phases:
+  1. Call \`invoke_subagent(TypeName="asw-planner", Role="ASW Architect & Planner", Model="pro", ...)\` to author \`.asw/plans/<slug>.md\` on Pro (Carbon High) when the main thread is on Hydrogen (or author the plan directly if the main thread is already on Pro).
+  2. Call \`invoke_subagent(TypeName="asw-implementer", Role="ASW Leaf Implementer", Model="flash", ...)\` to execute context-free RED-to-GREEN leaf implementation on Hydrogen High from \`{plan_file}\` and its \`## Code Map\`.
+  3. Call \`invoke_subagent(TypeName="asw-reviewer", Role="ASW 5-Lens Reviewer", Model="pro", ...)\` paired with \`invoke_opus_reviewer.py --mode diff-review\` for the 5-lens review on Pro (Argon High + Opus 5.5).`;
 
 const REVIEW_DIRECTIVE = `ASW REVIEW MODE ENABLED! (Model Tier: Gemini 4 Argon High + Claude Opus 5.5 + BMAD 5-Lens Review)
 
@@ -189,7 +200,8 @@ function stripIgnoredPromptRegions(prompt) {
 }
 
 const payload = readPayload();
-const directive = safeMode(payload) ? "" : directiveFor(promptFrom(payload));
+const isSubsequentStep = Number(payload.invocationNum) > 1;
+const directive = safeMode(payload) || isSubsequentStep ? "" : directiveFor(promptFrom(payload));
 if (!directive) {
   process.stdout.write("{}");
 } else {

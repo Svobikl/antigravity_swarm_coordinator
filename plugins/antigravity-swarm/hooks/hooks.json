@@ -5,12 +5,12 @@
         "type": "command",
         "command": "node ../scripts/asw-hook.mjs",
         "timeout": 10,
-        "statusMessage": "ASW: checking aliases and workflow hooks"
+        "statusMessage": "ASW: routing workflow and Quad-Model subagent gates"
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "^(write_to_file|multi_replace_file_content|write_file|replace_file_content|run_command|apply_patch|Write|Edit|MultiEdit)$",
+        "matcher": "^(write_to_file|multi_replace_file_content|write_file|edit_file|replace_file_content|run_command|apply_patch|Write|Edit|MultiEdit)$",
         "hooks": [
           {
             "type": "command",
@@ -26,7 +26,7 @@
         "type": "command",
         "command": "node ../scripts/asw-stop-check.mjs",
         "timeout": 10,
-        "statusMessage": "ASW: checking continuation"
+        "statusMessage": "ASW: checking plan & subagent continuation"
       }
     ]
   }

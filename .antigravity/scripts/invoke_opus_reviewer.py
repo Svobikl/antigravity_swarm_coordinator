@@ -302,11 +302,12 @@ def sync_agents(repo_root: Path) -> int:
     dst_dir.mkdir(parents=True, exist_ok=True)
 
     synced = 0
-    for toml_path in src_dir.glob("*.toml"):
-        dst_path = dst_dir / toml_path.name
-        content = toml_path.read_text(encoding="utf-8")
-        dst_path.write_text(content, encoding="utf-8")
-        synced += 1
+    for ext in ("*.toml", "*.md"):
+        for agent_path in src_dir.glob(ext):
+            dst_path = dst_dir / agent_path.name
+            content = agent_path.read_text(encoding="utf-8")
+            dst_path.write_text(content, encoding="utf-8")
+            synced += 1
 
     sys.stdout.write(f"Synced {synced} subagent configurations to plugin agents directory.\n")
     return 0

@@ -19,12 +19,14 @@ Use this skill when a plan exists or the work is clear enough to execute.
 
 Never claim completion from tests alone.
 
-## Subagent Use
+## Subagent Use & Mandatory Model-Tier Escalation Gate
 
-- Explorer lane: locate owners, tests, configs, and prior art.
-- Librarian lane: check current official docs for libraries or external CLIs.
-- Reviewer lane: inspect the diff after implementation.
-- Keep all write operations in the execution lane unless the caller explicitly delegates file edits.
+- **Never execute planning, coding, and review all inline in a single `Gemini 4 Hydrogen` (`flash`) thread!** Because the UI dropdown only sets the main thread's model, you MUST call `invoke_subagent` with explicit `Model` overrides so each cognitive tier runs on its designated model:
+  - **Planner lane (`asw-planner`, `Model="pro"`):** Author `.asw/plans/<slug>.md` with `<frozen-after-approval>` (`I/O & Edge-Case Matrix`) and `## Code Map` whenever the main thread is on `Hydrogen` (or for any multi-step Mode 2/3/5 task).
+  - **Explorer lane (`asw-explorer`, `Model="flash"`):** Locate owners, callers, tests, configs, and prior art.
+  - **Librarian lane (`asw-librarian`, `Model="pro"`):** Check current official docs for libraries or external CLIs.
+  - **Implementer lane (`asw-implementer`, `Model="flash"`):** Execute context-free RED -> GREEN -> Layer 3 QA waves from `{plan_file}` and `## Code Map`.
+  - **Reviewer lane (`asw-reviewer`, `Model="pro"` + `invoke_opus_reviewer.py`):** Inspect the diff across the 5 BMAD + Opus review lenses after implementation.
 
 ## Evidence Ledger
 

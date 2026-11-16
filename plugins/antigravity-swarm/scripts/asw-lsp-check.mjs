@@ -19,8 +19,9 @@ if (safeMode(payload)) {
 }
 
 function extractTargetFile(p) {
-  const args = p?.toolArgs || p?.arguments || p?.input || p?.tool_input || {};
+  const args = p?.toolCall?.args || p?.toolArgs || p?.arguments || p?.input || p?.tool_input || {};
   return (
+    args.Path ||
     args.TargetFile ||
     args.targetFile ||
     args.file_path ||
