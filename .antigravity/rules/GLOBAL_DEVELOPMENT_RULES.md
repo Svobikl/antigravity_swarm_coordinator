@@ -179,7 +179,7 @@ When launching subagents (e.g. via `invoke_subagent`):
    - Assigned skill budget (<= 8 skills);
    - Expected deliverable and **3-layer verification commands** (Static + Automated Unit/Negative + Real-Surface Runtime Proof).
 3. **Subagent Prohibition:** Subagents are strictly prohibited from declaring global completion, updating the program state machine, or editing shared state files.
-4. **Structured Leaf Receipt:** Subagents must return a structured receipt containing task ID, model tier, modified files, Layer 1/2/3 verification commands and outputs, evidence path, and unresolved blockers.
+4. **Structured Leaf Receipt & Token Limit:** Subagents must return a structured receipt containing task ID, model tier, modified files, Layer 1/2/3 verification commands and outputs, evidence path, and unresolved blockers. External message receipts must adhere to a strict budget of **<= 250 tokens** to prevent context saturation in the coordinator thread. Internal `<thought>` reasoning tokens remain **100% unconstrained** so deep analytical thinking is never restricted.
 5. **Concurrency Isolation & Serialization:** Subagents must never edit overlapping files or state. The Coordinator serializes all modifications to shared interfaces, models, and control plane files.
 
 ---

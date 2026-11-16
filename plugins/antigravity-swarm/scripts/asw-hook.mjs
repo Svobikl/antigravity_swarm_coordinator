@@ -57,7 +57,7 @@ function queryAutoDecisionRouter(prompt) {
   try {
     const res = spawnSync(
       process.platform === "win32" ? "python" : "python3",
-      [routerPath, "--mode", "route-prompt", "--text", String(prompt)],
+      [routerPath, "--mode", "route-prompt", "--compact", "--text", String(prompt)],
       { timeout: 1500, encoding: "utf8" }
     );
     if (res.status === 0 && res.stdout) {
@@ -194,6 +194,7 @@ Required behavior:
 - Re-read the plan from disk before each step and execute the first unchecked top-level checkbox (- [ ]).
 - Strictly obey the User Intent & Anti-Shortcut Contract and Zero Heuristic Substitution Law: never substitute trained models, formulas, or external APIs with hand-coded heuristics, catch-all side-effect fallbacks, or synthetic data.
 - Default developer command executions (git status/log/diff, pytest, inspection) to rtk CLI proxy (rtk-token-killer) to preserve context budget (87.8% benchmark token reduction), bypassing rtk tree on Windows.
+- Subagent Output Receipt Contract: Bounded leaf subagents (asw-implementer, asw-explorer, asw-reviewer) must emit concise structured receipts <= 250 tokens in external messages, while internal <thought> reasoning tokens remain 100% unconstrained.
 - Dispatch Gemini 4 Hydrogen (High) (Model="flash") subagents for independent implementation, TDD subtasks, and routine work; use Gemini 4 Argon (High) (Model="pro") for root-cause debugging and QA verification, and Claude Opus 5.5 for opposing reviews.
 - For every checkbox, capture 3-Layer Verification (Layer 1 Static/Build, Layer 2 RED-to-GREEN happy + negative domain + parity tests, Layer 3 real-surface runtime proof) and cleanup receipts before marking it - [x].
 - Keep local continuation state in .asw/start-work/ and update the plan only after verification passes.
@@ -222,6 +223,7 @@ Required behavior:
 - Enforce Multi-Tenant State Isolation & Pre-Exchange Idempotency (scope idempotency_key as {principal_id}:{operation_key} and persist PENDING DB rows before external side effects), Production-Volume Distribution (never divide sums by capped min(K, len(...)); verify non-degenerate time series), Public-Repo Privacy (\`--scan-public-repo\` & \`--forbid-terms\` before public repo pushes), Baseline Feature Survival (dual-mode regression matrix), and Stale Asset Cache Verification (\`--assert-asset-version\`).
 - Write failing RED tests (covering happy path, artifact parity, and negative domain/edge cases, never tautological 'is not None' checks) before production changes.
 - Default developer command executions (git status/diff/log, pytest, read -l aggressive, find, json) to rtk CLI proxy (rtk-token-killer) for an 87.8% benchmark token reduction, bypassing rtk tree on Windows (win32) and preserving compound shell operators.
+- Subagent Output Receipt Contract: Bounded leaf subagents (asw-implementer, asw-explorer, asw-reviewer) must emit concise structured receipts <= 250 tokens in external messages, while internal <thought> reasoning tokens remain 100% unconstrained.
 - Run the smallest genuine implementation on Gemini 4 Hydrogen (High) (Model="flash") that flips RED to GREEN.
 - Drive the real surface (Layer 3) through CLI, tmux, HTTP, browser, or computer-use QA — never rely on mocks alone.
 - Capture artifacts, cleanup receipts, and a Prompt-to-Code Traceability Matrix verifying every user requirement.

@@ -326,6 +326,39 @@ class TestSwarmAdapterAndChannels(unittest.TestCase):
             self.assertEqual(len(execution_called), 0, "execute() must reuse captured base without re-running")
             self.assertIn("[ERROR] test failure", adapter_reuse.trajectory(reused_dir, obs_trunc=50000))
 
+    def test_subagent_output_receipt_contract_and_thought_unconstrained(self):
+        """M5: Subagent persona definitions and global rules enforce <= 250 token output receipt with unconstrained thought tokens."""
+        agent_names = ["asw-implementer.md", "asw-explorer.md", "asw-reviewer.md"]
+        agent_dirs = [
+            REPO_ROOT / "plugins" / "antigravity-swarm" / "agents",
+            REPO_ROOT / ".antigravity" / "agents",
+        ]
+
+        for a_dir in agent_dirs:
+            for name in agent_names:
+                p = a_dir / name
+                self.assertTrue(p.is_file(), f"Missing agent definition: {p}")
+                text = p.read_text(encoding="utf-8")
+                self.assertTrue(
+                    "250" in text,
+                    f"Agent {name} in {a_dir} must specify <= 250 token receipt limit",
+                )
+                self.assertTrue(
+                    "<thought>" in text or "thought" in text.lower(),
+                    f"Agent {name} in {a_dir} must mention unconstrained thought reasoning tokens",
+                )
+                self.assertIn("unconstrained", text.lower())
+
+        rules_paths = [
+            REPO_ROOT / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md",
+            REPO_ROOT / ".antigravity" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md",
+        ]
+        for rp in rules_paths:
+            self.assertTrue(rp.is_file(), f"Missing rules file: {rp}")
+            text = rp.read_text(encoding="utf-8")
+            self.assertIn("250", text)
+            self.assertIn("unconstrained", text.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

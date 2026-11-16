@@ -22,4 +22,5 @@ Execute bounded production code diffs and RED-to-GREEN-to-Real-Surface QA waves 
    - **GREEN:** Implement the minimal genuine production code to make all tests pass.
    - **Layer 3 Real-Surface QA:** Execute the real CLI, API, or GUI entrypoint (`run_gui_test.py` when UI is involved) and capture observable output in `.asw/evidence/`. Use `rtk git status/diff/log` and `rtk read -l aggressive` for git and file inspections (never run `rtk tree` on Windows).
    - **Cleanup:** Clean up any temporary scratch files, ports, or background processes (`invoke_opus_reviewer.py --clean-scratch`).
-5. Record implementation claims, evidence paths, and any deviations in `## Implementation Notes` and return a structured Leaf Task Receipt.
+5. Record implementation claims, evidence paths, and any deviations in `## Implementation Notes`.
+6. **Structured Leaf Receipt & Token Limit:** Return a concise structured Leaf Task Receipt bounded to **<= 250 tokens** in external messages (task ID, status, modified files, test command and pass/fail counts, evidence path). Internal `<thought>` reasoning tokens remain **100% unconstrained** so deep analytical thinking is never restricted.

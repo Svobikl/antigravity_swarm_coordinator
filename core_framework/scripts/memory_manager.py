@@ -754,6 +754,383 @@ def record_preference(
     return target_file
 
 
+def tokenize_words(text: str) -> set[str]:
+    """Extract normalized word tokens for keyword matching and Jaccard similarity."""
+    return set(re.findall(r"\w+", (text or "").lower()))
+
+
+def jaccard_similarity(text1: str, text2: str) -> float:
+    """Compute token-level Jaccard similarity between two text strings."""
+    t1 = tokenize_words(text1)
+    t2 = tokenize_words(text2)
+    if not t1 or not t2:
+        return 0.0
+    return len(t1 & t2) / len(t1 | t2)
+
+
+def parse_lesson_blocks(markdown_text: str) -> list[dict[str, str]]:
+    """Parse lesson blocks from markdown into structured dicts."""
+    blocks: list[dict[str, str]] = []
+    parts = re.split(r"(?=\n###\s+\[)", "\n" + (markdown_text or ""))
+    for part in parts:
+        part = part.strip()
+        if not part.startswith("### "):
+            continue
+        m_head = re.match(r"^###\s+\[(\d{4}-\d{2}-\d{2})\]\s*(.*)", part)
+        date = m_head.group(1) if m_head else ""
+        title = m_head.group(2).strip() if m_head else ""
+
+        m_cue = re.search(r"-\s+\*\*(?:Cue \(When\)|When)\*\*:\s*(.*?)(?=\n-\s+\*\*|\Z)", part, re.DOTALL)
+        raw_cue = m_cue.group(1).strip() if m_cue else ""
+
+        proj = None
+        m_proj = re.search(r"\(Project:\s*(?:\[\[projects/([^/\]|]+)[^\]]*\]\]|([^)]+))\)", raw_cue)
+        if m_proj:
+            proj = (m_proj.group(1) or m_proj.group(2)).strip()
+            cue = re.sub(r"\s*\(Project:[^)]+\)", "", raw_cue).strip()
+        else:
+            cue = raw_cue
+
+        m_mis = re.search(r"-\s+\*\*(?:Mistake / User Correction|Mistake)\*\*:\s*(.*?)(?=\n-\s+\*\*|\Z)", part, re.DOTALL)
+        mistake = m_mis.group(1).strip() if m_mis else ""
+
+        m_rule = re.search(r"-\s+\*\*(?:Mandatory Rule|Rule)\*\*:\s*(.*?)(?=\n-\s+\*\*|\n###|\Z)", part, re.DOTALL)
+        rule = m_rule.group(1).strip() if m_rule else ""
+
+        if rule or cue:
+            blocks.append({
+                "date": date,
+                "title": title,
+                "cue": cue,
+                "raw_cue": raw_cue,
+                "project": proj,
+                "mistake": mistake,
+                "rule": rule,
+                "raw_block": part,
+            })
+    return blocks
+
+
+def format_lesson_distilled(lesson: dict[str, str]) -> str:
+    """Format lesson as an extractive When -> Rule entry, omitting historical mistake text."""
+    date_str = f"[{lesson['date']}] " if lesson.get("date") else ""
+    return f"- **{date_str}When:** {lesson['cue']} -> **Rule:** {lesson['rule']}"
+
+
+def format_lesson_full(lesson: dict[str, str]) -> str:
+    """Format lesson in full 3-bullet Markdown form."""
+    date_str = f"[{lesson['date']}] " if lesson.get("date") else ""
+    title = lesson.get("title") or lesson.get("cue", "")[:60]
+    proj_tag = f" (Project: [[projects/{lesson['project']}/{lesson['project']}|{lesson['project']}]])" if lesson.get("project") else ""
+    return (
+        f"### {date_str}{title}\n"
+        f"- **Cue (When)**: {lesson['cue']}{proj_tag}\n"
+        f"- **Mistake / User Correction**: {lesson['mistake']}\n"
+        f"- **Mandatory Rule**: {lesson['rule']}"
+    )
+
+
+def score_lesson_relevance(lesson: dict[str, str], query: str | None, task_type: str | None) -> float:
+    """Score cross-project lesson relevance via token overlap."""
+    q_tokens = tokenize_words(f"{query or ''} {task_type or ''}")
+    if not q_tokens:
+        return 0.1
+    l_tokens = tokenize_words(f"{lesson.get('cue', '')} {lesson.get('rule', '')} {lesson.get('title', '')}")
+    if not l_tokens:
+        return 0.0
+    overlap = len(q_tokens & l_tokens)
+    return float(overlap) / (len(q_tokens) ** 0.5)
+
+
+def classify_lesson_scope(cue: str, rule: str, project: str | None = None) -> dict[str, object]:
+    """Classify whether a lesson is project-specific or globally applicable.
+
+    Bridges to decision_router.DecisionRouter.classify_lesson_scope when available.
+    """
+    if not project or not project.strip():
+        return {"scope": "global", "confidence": 1.0, "reason": "no_project_specified"}
+
+    p_norm = project.strip().lower()
+    text = f"{cue} {rule}".lower()
+
+    # Try importing decision router if available
+    try:
+        cur_dir = Path(__file__).resolve().parent
+        for cand in (cur_dir, cur_dir.parent.parent / ".antigravity" / "scripts"):
+            if str(cand) not in sys.path:
+                sys.path.insert(0, str(cand))
+        import decision_router  # type: ignore
+        if hasattr(decision_router, "DecisionRouter"):
+            dr = decision_router.DecisionRouter()
+            if hasattr(dr, "classify_lesson_scope"):
+                return dr.classify_lesson_scope(cue, rule, project=project)
+    except Exception:
+        pass
+
+    # Calibrated fallback
+    has_proj_name = p_norm in text
+    has_proj_paths = bool(re.search(
+        r"(?:services/|components/|models/|src/|api/|database/|migrations/|\.py|\.ts|\.tsx|\.sql|alembic|fastapi|docker-compose|endpoint)",
+        text,
+    ))
+
+    universal_keywords = [
+        "utf-8", "bom", "encoding", "subprocess", "timeout", "tempfile",
+        "json.loads", "yaml frontmatter", "try-except", "jaccard",
+        "mock.patch", "pytest tmp_path", "windows and linux", "cross-platform",
+    ]
+    has_universal = any(kw in text for kw in universal_keywords)
+
+    if has_proj_name or (has_proj_paths and not has_universal):
+        return {
+            "scope": "project",
+            "confidence": 0.90,
+            "reason": f"project_specific_references_to_{p_norm}",
+        }
+
+    if has_universal and not has_proj_name:
+        return {
+            "scope": "global",
+            "confidence": 0.85,
+            "reason": "universal_engineering_rule",
+        }
+
+    return {
+        "scope": "project",
+        "confidence": 0.75,
+        "reason": "scoped_to_active_project_by_default",
+    }
+
+
+def prune_vault(
+    vault_dir: Path | str | None = None,
+    home_dir: Path | None = None,
+) -> dict[str, object]:
+    """Move project-tagged lessons into project notes, deduplicate near-duplicates, and back up modified files."""
+    v_dir = resolve_vault_dir(vault_dir, home_dir=home_dir)
+    init_vault(v_dir, home_dir=home_dir)
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_dir = v_dir / ".obsidian" / "backups" / timestamp
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    global_file = v_dir / "lessons" / "Engineering Lessons and Anti-Patterns.md"
+    if not global_file.is_file():
+        return {
+            "status": "pruned",
+            "backup_dir": str(backup_dir),
+            "moved_to_projects": 0,
+            "global_lessons_remaining": 0,
+            "duplicates_merged": 0,
+        }
+
+    shutil.copy2(global_file, backup_dir / global_file.name)
+
+    global_txt = global_file.read_text(encoding="utf-8", errors="replace")
+    all_lessons = parse_lesson_blocks(global_txt)
+
+    universal_lessons: list[dict[str, str]] = []
+    project_lessons_map: dict[str, list[dict[str, str]]] = {}
+    moved_count = 0
+
+    for l in all_lessons:
+        p_name = l.get("project")
+        if p_name:
+            project_lessons_map.setdefault(p_name, []).append(l)
+            moved_count += 1
+        else:
+            universal_lessons.append(l)
+
+    # Deduplicate universal lessons (Jaccard similarity >= 0.72 on rule or cue+rule)
+    merged_count = 0
+    deduped_universal: list[dict[str, str]] = []
+    for l in universal_lessons:
+        is_dup = False
+        l_text = f"{l['cue']} {l['rule']}"
+        for existing in deduped_universal:
+            ex_text = f"{existing['cue']} {existing['rule']}"
+            sim_score = max(
+                jaccard_similarity(l.get("rule", ""), existing.get("rule", "")),
+                jaccard_similarity(l_text, ex_text),
+            )
+            if sim_score >= 0.72:
+                if len(l.get("rule", "")) > len(existing.get("rule", "")):
+                    existing.update(l)
+                is_dup = True
+                merged_count += 1
+                break
+        if not is_dup:
+            deduped_universal.append(l)
+
+    header = (
+        "---\n"
+        "tags: [lessons, anti-patterns, engineering, best-practices]\n"
+        "type: lessons\n"
+        "created: 2026-10-21\n"
+        f"updated: {datetime.date.today().isoformat()}\n"
+        "---\n\n"
+        "# Global Engineering Lessons & Universal Anti-Patterns\n\n"
+        "Self-learning memory ledger capturing cross-cutting engineering gotchas, boundary traps, and non-negotiable rules.\n\n"
+        "## Universal Anti-Patterns & Invariants\n"
+    )
+    blocks_str = "\n\n".join(format_lesson_full(l) for l in deduped_universal)
+    global_file.write_text(header + "\n" + blocks_str + "\n", encoding="utf-8", newline="\n")
+
+    for p_name, p_lessons in project_lessons_map.items():
+        p_dir = v_dir / "projects" / p_name
+        p_file = p_dir / "Project Lessons.md"
+        p_dir.mkdir(parents=True, exist_ok=True)
+
+        existing_p_lessons: list[dict[str, str]] = []
+        if p_file.is_file():
+            shutil.copy2(p_file, backup_dir / f"{p_name}_Project_Lessons.md")
+            existing_p_lessons = parse_lesson_blocks(p_file.read_text(encoding="utf-8", errors="replace"))
+
+        for new_l in p_lessons:
+            is_dup = False
+            new_text = f"{new_l['cue']} {new_l['rule']}"
+            for ex in existing_p_lessons:
+                ex_text = f"{ex['cue']} {ex['rule']}"
+                sim_score = max(
+                    jaccard_similarity(new_l.get("rule", ""), ex.get("rule", "")),
+                    jaccard_similarity(new_text, ex_text),
+                )
+                if sim_score >= 0.72:
+                    is_dup = True
+                    break
+            if not is_dup:
+                existing_p_lessons.append(new_l)
+
+        p_header = (
+            "---\n"
+            f"tags: [lesson, gotchas, project/{p_name}]\n"
+            "type: lessons\n"
+            f'project: "[[projects/{p_name}/{p_name}|{p_name}]]"\n'
+            f"updated: {datetime.date.today().isoformat()}\n"
+            "---\n\n"
+            f"# {p_name} — Project Lessons & Regression Traps\n\n"
+            f"Parent Project: [[projects/{p_name}/{p_name}|{p_name}]]\n"
+            "Global Ledger: [[lessons/Engineering Lessons and Anti-Patterns|Global Engineering Lessons]]\n\n"
+            "## Project-Specific Lessons\n"
+        )
+        p_blocks_str = "\n\n".join(format_lesson_full(l) for l in existing_p_lessons)
+        p_file.write_text(p_header + "\n" + p_blocks_str + "\n", encoding="utf-8", newline="\n")
+
+    return {
+        "status": "pruned",
+        "backup_dir": str(backup_dir),
+        "moved_to_projects": moved_count,
+        "global_lessons_remaining": len(deduped_universal),
+        "duplicates_merged": merged_count,
+    }
+
+
+def slice_rules(
+    mode: str | None = None,
+    prompt: str | None = None,
+    rules_path: Path | None = None,
+) -> str:
+    """Extract only core rules + mode-specific section + UI section from GLOBAL_DEVELOPMENT_RULES.md."""
+    if rules_path is None:
+        candidates = [
+            Path.cwd() / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md",
+            Path.cwd() / ".antigravity" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md",
+            Path(__file__).resolve().parent.parent / "rules" / "GLOBAL_DEVELOPMENT_RULES.md",
+            Path(__file__).resolve().parent.parent.parent / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md",
+        ]
+        for c in candidates:
+            if c.is_file():
+                rules_path = c
+                break
+    if not rules_path or not Path(rules_path).is_file():
+        raise FileNotFoundError(f"Cannot resolve GLOBAL_DEVELOPMENT_RULES.md (checked {rules_path})")
+
+    content = Path(rules_path).read_text(encoding="utf-8", errors="replace")
+
+    requires_gui = False
+    resolved_mode = (mode or "").strip().lower()
+
+    if prompt and (not resolved_mode or prompt):
+        try:
+            import decision_router  # type: ignore
+            router = decision_router.DecisionRouter()
+            r_res = router.route_prompt(prompt)
+            if not resolved_mode:
+                resolved_mode = str(r_res.get("execution_mode", "mode_2"))
+            if bool(r_res.get("requires_gui_verification")):
+                requires_gui = True
+        except Exception:
+            if not resolved_mode:
+                resolved_mode = "mode_2"
+            if any(kw in prompt.lower() for kw in ("ui", "gui", "dashboard", "browser", "playwright")):
+                requires_gui = True
+
+    if not resolved_mode:
+        resolved_mode = "mode_2"
+
+    m_match = re.search(r"(\d)", resolved_mode)
+    mode_num = m_match.group(1) if m_match else "2"
+    mode_target_header = f"### Mode {mode_num} — "
+
+    sections_by_h2: dict[str, str] = {}
+    curr_h2 = "Header"
+    curr_lines: list[str] = []
+    for line in content.splitlines():
+        if line.startswith("## "):
+            sections_by_h2[curr_h2] = "\n".join(curr_lines)
+            curr_h2 = line.strip()
+            curr_lines = [line]
+        else:
+            curr_lines.append(line)
+    sections_by_h2[curr_h2] = "\n".join(curr_lines)
+
+    sliced_parts: list[str] = [
+        "# Generic Development Agent Rules (Sliced Ruleset)\n"
+    ]
+
+    for k, v in sections_by_h2.items():
+        if "1. Core Operating Principles" in k:
+            summary_lines = ["## 1. Core Operating Principles (Essential Invariants)\n"]
+            for line in v.splitlines():
+                m_item = re.match(r"^(\d+\.\s+\*\*.*?\*\*\.?\s+[^.]+\.)", line)
+                if m_item:
+                    num = int(re.match(r"^(\d+)", line).group(1))
+                    if num <= 8 or num in (21, 24):
+                        summary_lines.append(m_item.group(1))
+            sliced_parts.append("\n".join(summary_lines))
+            break
+
+    for k, v in sections_by_h2.items():
+        if "2. Instruction Priority" in k:
+            sliced_parts.append(v)
+            break
+
+    for k, v in sections_by_h2.items():
+        if "3. Execution Modes" in k:
+            m_sec = re.search(rf"({re.escape(mode_target_header)}.*?)(?=\n### Mode|\Z)", v, re.DOTALL)
+            if m_sec:
+                sliced_parts.append(f"## 3. Execution Mode (Target: Mode {mode_num})\n\n" + m_sec.group(1).strip())
+            break
+
+    for k, v in sections_by_h2.items():
+        if "19. Git and Workspace Safety" in k:
+            sliced_parts.append(v)
+            break
+
+    for k, v in sections_by_h2.items():
+        if "29. Mandatory RTK" in k:
+            sliced_parts.append(v)
+            break
+
+    if requires_gui:
+        for k, v in sections_by_h2.items():
+            if "18. UI / UX Validation Trigger" in k:
+                sliced_parts.append(v)
+                break
+
+    return "\n\n---\n\n".join(sliced_parts) + "\n"
+
+
 def record_lesson(
     *,
     vault_dir: Path | str | None = None,
@@ -761,6 +1138,7 @@ def record_lesson(
     mistake: str,
     rule: str,
     project: str | None = None,
+    global_scope: bool = False,
     home_dir: Path | None = None,
 ) -> list[Path]:
     """Record a self-learning engineering lesson from a user correction or bug fix."""
@@ -783,11 +1161,15 @@ def record_lesson(
     )
 
     updated_files: list[Path] = []
-    global_lessons = v_dir / "lessons" / "Engineering Lessons and Anti-Patterns.md"
-    g_txt = global_lessons.read_text(encoding="utf-8", errors="replace")
-    if r_str not in g_txt:
-        global_lessons.write_text(g_txt.rstrip() + "\n" + block, encoding="utf-8", newline="\n")
-    updated_files.append(global_lessons)
+    scope_info = classify_lesson_scope(c_str, r_str, project=project)
+    is_project_scoped = bool(project and project.strip() and not global_scope and scope_info.get("scope") == "project")
+
+    if not is_project_scoped or global_scope or not project:
+        global_lessons = v_dir / "lessons" / "Engineering Lessons and Anti-Patterns.md"
+        g_txt = global_lessons.read_text(encoding="utf-8", errors="replace")
+        if r_str not in g_txt:
+            global_lessons.write_text(g_txt.rstrip() + "\n" + block, encoding="utf-8", newline="\n")
+        updated_files.append(global_lessons)
 
     if project and project.strip():
         p_name = project.strip()
@@ -798,7 +1180,7 @@ def record_lesson(
                 f"---\n"
                 f"tags: [lesson, gotchas, project/{p_name}]\n"
                 f"type: lessons\n"
-                f"project: \"[[projects/{p_name}/{p_name}|{p_name}]]\"\n"
+                f'project: "[[projects/{p_name}/{p_name}|{p_name}]]"\n'
                 f"created: {today}\n"
                 f"---\n\n"
                 f"# {p_name} — Project Lessons & Regression Traps\n\n"
@@ -872,6 +1254,11 @@ def recall_context(
     project: str | None = None,
     project_path: Path | str | None = None,
     task_type: str = "general",
+    query: str | None = None,
+    top_k: int = 5,
+    full: bool = False,
+    max_tokens: int = 2450,
+    session_cache: bool = False,
     home_dir: Path | None = None,
 ) -> str:
     """Assemble a compact, high-signal pre-task memory bundle from the Obsidian Vault."""
@@ -886,6 +1273,40 @@ def recall_context(
             resolved_project_name = resolved_project_name or p_path.name
             if not (v_dir / "projects" / resolved_project_name / f"{resolved_project_name}.md").is_file():
                 index_project(p_path, vault_dir=v_dir, project_name=resolved_project_name, home_dir=home_dir)
+
+    # Session cache lookup
+    cache_files: list[Path] = []
+    cache_key = None
+    if session_cache:
+        v_cache_dir = v_dir / ".asw" / "cache"
+        v_cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_files.append(v_cache_dir / "recall_cache.json")
+        if (Path.cwd() / ".asw").is_dir() and Path.cwd().resolve() != v_dir.resolve():
+            cwd_cache = Path.cwd() / ".asw" / "cache"
+            cwd_cache.mkdir(parents=True, exist_ok=True)
+            cache_files.append(cwd_cache / "recall_cache.json")
+
+        mtimes_str = ""
+        check_dirs = ["profile", "domains", "lessons"]
+        if resolved_project_name:
+            check_dirs.append(f"projects/{resolved_project_name}")
+        for sub in check_dirs:
+            s_dir = v_dir / sub
+            if s_dir.is_dir():
+                for f in sorted(s_dir.rglob("*.md")):
+                    st = f.stat()
+                    mtimes_str += f"{f.name}:{st.st_mtime_ns}:{st.st_size};"
+        vault_hash = hashlib.sha256(mtimes_str.encode("utf-8")).hexdigest()[:16]
+        cache_key = f"{resolved_project_name}:{task_type}:{query}:{top_k}:{full}:{max_tokens}:{vault_hash}"
+
+        for cf in cache_files:
+            if cf.is_file():
+                try:
+                    c_data = json.loads(cf.read_text(encoding="utf-8"))
+                    if isinstance(c_data, dict) and cache_key in c_data:
+                        return str(c_data[cache_key])
+                except Exception:
+                    pass
 
     sections: list[str] = [
         f"# Antigravity Swarm Memory Recall (`{v_dir}`)",
@@ -907,12 +1328,84 @@ def recall_context(
         if code_f.is_file():
             sections.append("## 2B. Coding & Architecture Preferences\n" + code_f.read_text(encoding="utf-8", errors="replace").strip())
 
-    # 3. Global Engineering Lessons
-    lessons_f = v_dir / "lessons" / "Engineering Lessons and Anti-Patterns.md"
-    if lessons_f.is_file():
-        sections.append("## 3. Global Engineering Lessons & Anti-Patterns\n" + lessons_f.read_text(encoding="utf-8", errors="replace").strip())
+    # 3. Engineering Lessons & Anti-Patterns (Project-Scoped + Extractive Distillation + Top-K Cross-Project)
+    global_lessons_file = v_dir / "lessons" / "Engineering Lessons and Anti-Patterns.md"
+    all_global_lessons: list[dict[str, str]] = []
+    if global_lessons_file.is_file():
+        all_global_lessons = parse_lesson_blocks(global_lessons_file.read_text(encoding="utf-8", errors="replace"))
 
-    # 4. Project Context
+    universal_lessons = [l for l in all_global_lessons if not l.get("project")]
+
+    # Active project lessons: read from project folder + global file tagged with active project
+    active_project_lessons: list[dict[str, str]] = []
+    seen_active_rules: set[str] = set()
+    if resolved_project_name:
+        p_lessons_f = v_dir / "projects" / resolved_project_name / "Project Lessons.md"
+        if p_lessons_f.is_file():
+            p_parsed = parse_lesson_blocks(p_lessons_f.read_text(encoding="utf-8", errors="replace"))
+            for l in p_parsed:
+                r_norm = l["rule"].strip()
+                if r_norm and r_norm not in seen_active_rules:
+                    seen_active_rules.add(r_norm)
+                    active_project_lessons.append(l)
+
+        for l in all_global_lessons:
+            if l.get("project") == resolved_project_name:
+                r_norm = l["rule"].strip()
+                if r_norm and r_norm not in seen_active_rules:
+                    seen_active_rules.add(r_norm)
+                    active_project_lessons.append(l)
+
+    # Cross-project lessons
+    cross_project_lessons: list[dict[str, str]] = []
+    for l in all_global_lessons:
+        p_tag = l.get("project")
+        if p_tag and p_tag != resolved_project_name:
+            cross_project_lessons.append(l)
+
+    p_root = v_dir / "projects"
+    if p_root.is_dir():
+        for other_p_dir in p_root.iterdir():
+            if other_p_dir.is_dir() and other_p_dir.name != resolved_project_name:
+                other_pl = other_p_dir / "Project Lessons.md"
+                if other_pl.is_file():
+                    for l in parse_lesson_blocks(other_pl.read_text(encoding="utf-8", errors="replace")):
+                        if l["rule"].strip() not in seen_active_rules:
+                            cross_project_lessons.append(l)
+
+    scored_cross = []
+    seen_cross_rules: set[str] = set()
+    for l in cross_project_lessons:
+        r_norm = l["rule"].strip()
+        if r_norm in seen_active_rules or r_norm in seen_cross_rules:
+            continue
+        seen_cross_rules.add(r_norm)
+        sc = score_lesson_relevance(l, query=query, task_type=task_type)
+        scored_cross.append((sc, l))
+
+    scored_cross.sort(key=lambda x: (x[0], x[1].get("date", "")), reverse=True)
+    top_cross = [item[1] for item in scored_cross[: max(0, top_k)]]
+
+    lesson_lines: list[str] = []
+    if universal_lessons:
+        lesson_lines.append("### Universal Lessons")
+        for l in universal_lessons:
+            lesson_lines.append(format_lesson_full(l) if full else format_lesson_distilled(l))
+
+    if active_project_lessons:
+        lesson_lines.append(f"\n### Active Project Lessons ({resolved_project_name})")
+        for l in active_project_lessons:
+            lesson_lines.append(format_lesson_full(l) if full else format_lesson_distilled(l))
+
+    if top_cross:
+        lesson_lines.append("\n### Relevant Cross-Project Lessons")
+        for l in top_cross:
+            lesson_lines.append(format_lesson_full(l) if full else format_lesson_distilled(l))
+
+    if lesson_lines:
+        sections.append("## 3. Engineering Lessons & Anti-Patterns\n" + "\n".join(lesson_lines))
+
+    # 4. Project Context (OMIT Project Lessons.md to avoid 2x duplicate rendering)
     if resolved_project_name:
         p_dir = v_dir / "projects" / resolved_project_name
         if p_dir.is_dir():
@@ -920,13 +1413,40 @@ def recall_context(
                 f"{resolved_project_name}.md",
                 "Architecture and Components.md",
                 "Decision Ledger.md",
-                "Project Lessons.md",
             ):
                 pf = p_dir / fname
                 if pf.is_file():
                     sections.append(f"## 4. Project Memory — `{fname}`\n" + pf.read_text(encoding="utf-8", errors="replace").strip())
 
-    return "\n\n---\n\n".join(sections) + "\n"
+    result = "\n\n---\n\n".join(sections) + "\n"
+
+    # Enforce max-tokens ceiling (1 token ~ 4 bytes, ceiling < 10,000 B)
+    if not full and max_tokens:
+        byte_limit = min(max_tokens * 4, 9800)
+        encoded = result.encode("utf-8")
+        if len(encoded) > byte_limit:
+            trunc_msg = "\n\n[... truncated by recall_context budget ...]\n".encode("utf-8")
+            cut_idx = max(0, byte_limit - len(trunc_msg))
+            result = encoded[:cut_idx].decode("utf-8", errors="ignore") + "\n\n[... truncated by recall_context budget ...]\n"
+
+    # Save to session cache
+    if session_cache and cache_files and cache_key:
+        for cf in cache_files:
+            try:
+                c_dict = {}
+                if cf.is_file():
+                    try:
+                        c_dict = json.loads(cf.read_text(encoding="utf-8"))
+                    except Exception:
+                        c_dict = {}
+                c_dict[cache_key] = result
+                tmp_f = cf.with_suffix(f".tmp.{os.getpid()}")
+                tmp_f.write_text(json.dumps(c_dict, indent=2), encoding="utf-8")
+                os.replace(tmp_f, cf)
+            except Exception:
+                pass
+
+    return result
 
 
 def main() -> int:
@@ -950,6 +1470,7 @@ def main() -> int:
     parser.add_argument("--mistake", type=str, default="", help="What went wrong or what the user corrected")
     parser.add_argument("--rule", type=str, default="", help="Mandatory rule to follow in the future")
     parser.add_argument("--project", type=str, default=None, help="Project name associated with the lesson or recall")
+    parser.add_argument("--global", dest="global_scope", action="store_true", help="Store lesson in global ledger")
     parser.add_argument("--update-project-note", action="store_true", help="Update a project's architecture, decision, or lesson note")
     parser.add_argument("--section", type=str, default="decision", help="Target section: decision, architecture, lesson, summary")
     parser.add_argument("--title", type=str, default="", help="Entry title")
@@ -957,6 +1478,15 @@ def main() -> int:
     parser.add_argument("--recall", action="store_true", help="Output assembled pre-task memory context")
     parser.add_argument("--project-path", type=Path, default=None, help="Project path to auto-index and recall")
     parser.add_argument("--task-type", type=str, default="general", help="Task type: code, presentation, research, general")
+    parser.add_argument("--query", "--prompt", type=str, default=None, help="Context query or prompt for BM25 ranking")
+    parser.add_argument("--top-k", type=int, default=5, help="Number of cross-project lessons to include")
+    parser.add_argument("--max-tokens", type=int, default=2450, help="Maximum token budget for recalled context (~4 bytes per token)")
+    parser.add_argument("--full", action="store_true", help="Emit full 3-bullet markdown blocks including mistake narrative")
+    parser.add_argument("--session-cache", action="store_true", help="Cache and reuse recall context in .asw/cache/recall_cache.json")
+    parser.add_argument("--prune-vault", action="store_true", help="Prune project lessons and deduplicate knowledge vault")
+    parser.add_argument("--slice-rules", action="store_true", help="Extract sliced GLOBAL_DEVELOPMENT_RULES subset")
+    parser.add_argument("--mode", type=str, default=None, help="Target execution mode for rules slicing (mode_0..5)")
+    parser.add_argument("--rules-path", type=Path, default=None, help="Path to GLOBAL_DEVELOPMENT_RULES.md")
 
     args = parser.parse_args()
 
@@ -997,8 +1527,27 @@ def main() -> int:
                 mistake=args.mistake,
                 rule=args.rule,
                 project=args.project,
+                global_scope=args.global_scope,
             )
             print(json.dumps({"status": "recorded", "files": [str(p) for p in out_paths]}, indent=2))
+            return 0
+
+        if args.prune_vault:
+            res = prune_vault(vault_dir=args.vault_dir)
+            print(json.dumps(res, indent=2))
+            return 0
+
+        if args.slice_rules:
+            out_rules = slice_rules(
+                mode=args.mode,
+                prompt=args.query,
+                rules_path=args.rules_path,
+            )
+            try:
+                sys.stdout.write(out_rules)
+                sys.stdout.flush()
+            except (BrokenPipeError, OSError):
+                pass
             return 0
 
         if args.update_project_note:
@@ -1018,6 +1567,11 @@ def main() -> int:
                 project=args.project,
                 project_path=args.project_path,
                 task_type=args.task_type,
+                query=args.query,
+                top_k=args.top_k,
+                full=args.full,
+                max_tokens=args.max_tokens,
+                session_cache=args.session_cache,
             )
             try:
                 sys.stdout.write(out_md)

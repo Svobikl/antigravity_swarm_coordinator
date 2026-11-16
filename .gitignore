@@ -19,4 +19,5 @@ ehthumbs.db
 
 # Agent Workspace & Logs
 .agent-workspace/
+.asw/
 *.log

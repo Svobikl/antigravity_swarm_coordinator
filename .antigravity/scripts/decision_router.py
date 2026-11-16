@@ -497,8 +497,8 @@ class DecisionRouter:
 
         # Feature verbs (CZ & EN)
         feature_verbs = [
-            "uprav", "přidej", "vytvoř", "implementuj", "postav", "oprav", "integruj", "změň",
-            "implement", "build", "add", "create", "integrate", "refactor", "update", "develop",
+            "uprav", "přidej", "vytvoř", "implementuj", "postav", "oprav", "integruj", "změň", "otestuj",
+            "implement", "build", "add", "create", "integrate", "refactor", "update", "develop", "fix", "repair", "patch", "modify",
         ]
         has_feature_verb = any(re.search(rf"\b{v}\b", lower) for v in feature_verbs)
 
@@ -536,7 +536,7 @@ class DecisionRouter:
             choice="mode_1",
             execution_mode="mode_1",
             recommended_tier="carbon_plan_research",
-            requires_gui_verification=False,
+            requires_gui_verification=has_gui,
             requires_subagent_plan_wave=False,
             answer_confidence=0.75,
             noul=0.2,
@@ -689,6 +689,69 @@ class DecisionRouter:
                 "explanation": "Standard review item routed for verification and patch",
             }
 
+    def classify_lesson_scope(self, cue: str, rule: str, project: str | None = None) -> dict[str, object]:
+        """Classify whether an engineering lesson is project-scoped or global.
+
+        Uses Laya noul/choice if active, or calibrated universal-vs-project heuristics.
+        """
+        if not project or not project.strip():
+            return {"scope": "global", "confidence": 1.0, "reason": "no_project_specified"}
+
+        p_norm = project.strip().lower()
+        combined = f"{cue} {rule}".lower()
+
+        if self._laya_router is not None:
+            try:
+                schema = {
+                    "is_project_specific": {
+                        "type": "noul",
+                        "instructions": f"Does this lesson apply exclusively to project '{project}' rather than universal software engineering?",
+                    }
+                }
+                res = self._laya_router.predict(f"Project: {project}\nCue: {cue}\nRule: {rule}", schema)
+                noul = float(res.get("answers", {}).get("is_project_specific", {}).get("noul", 0.5))
+                scope = "project" if noul >= 0.5 else "global"
+                return {
+                    "scope": scope,
+                    "confidence": round(noul if scope == "project" else (1.0 - noul), 4),
+                    "reason": "laya_noul_classification",
+                }
+            except Exception:
+                pass
+
+        has_proj_name = p_norm in combined
+        has_proj_paths = bool(re.search(
+            r"(?:services/|components/|models/|src/|api/|database/|migrations/|\.py|\.ts|\.tsx|\.sql|alembic|fastapi|docker-compose|endpoint)",
+            combined,
+        ))
+
+        universal_keywords = [
+            "utf-8", "bom", "encoding", "subprocess", "timeout", "tempfile",
+            "json.loads", "yaml frontmatter", "try-except", "jaccard",
+            "mock.patch", "pytest tmp_path", "windows and linux", "cross-platform",
+        ]
+        has_universal = any(kw in combined for kw in universal_keywords)
+
+        if has_proj_name or (has_proj_paths and not has_universal):
+            return {
+                "scope": "project",
+                "confidence": 0.90,
+                "reason": f"project_specific_references_to_{p_norm}",
+            }
+
+        if has_universal and not has_proj_name:
+            return {
+                "scope": "global",
+                "confidence": 0.85,
+                "reason": "universal_engineering_rule",
+            }
+
+        return {
+            "scope": "project",
+            "confidence": 0.75,
+            "reason": "scoped_to_active_project_by_default",
+        }
+
     def predict(self, text: str, context: dict | None = None) -> dict[str, object]:
         """Unified entrypoint matching Laya's predict contract."""
         route_res = self.route_prompt(text)
@@ -738,18 +801,22 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="System 1 Decision Router (Laya + Calibrated Fallback)")
     parser.add_argument(
         "--mode",
-        choices=["preflight", "predict", "route-prompt", "select-skills", "triage-finding"],
+        choices=["preflight", "predict", "route-prompt", "select-skills", "triage-finding", "classify-scope"],
         default="route-prompt",
     )
     parser.add_argument("--text", type=str, default="", help="Input prompt or finding text")
     parser.add_argument("--json", type=str, default=None, help="JSON input payload")
     parser.add_argument("--max-skills", type=int, default=8, help="Maximum skills to return")
     parser.add_argument("--format", choices=["json", "text"], default="json")
+    parser.add_argument("--compact", action="store_true", help="Output single-line deterministic JSON omitting volatile metrics for KV-cache stability")
     parser.add_argument("--enable", action="store_true", help="Enable System 1 Decision Router in config")
     parser.add_argument("--disable", action="store_true", help="Disable System 1 Decision Router in config")
     parser.add_argument("--status", action="store_true", help="Show current Decision Router status and configuration")
     parser.add_argument("--device-info", action="store_true", help="Print GPU/CPU device selection analysis")
     parser.add_argument("--preflight", action="store_true", help="Shorthand for --mode preflight")
+    parser.add_argument("--cue", type=str, default="", help="Lesson cue for scope classification")
+    parser.add_argument("--rule", type=str, default="", help="Lesson rule for scope classification")
+    parser.add_argument("--project", type=str, default=None, help="Project name for scope classification")
     args = parser.parse_args(argv)
     if args.preflight:
         args.mode = "preflight"
@@ -762,7 +829,10 @@ def main(argv: list[str] | None = None) -> int:
             "config_path": str(p),
             "message": "Decision model disabled successfully",
         }
-        print(json.dumps(res, indent=2))
+        if args.compact:
+            print(json.dumps(res, separators=(",", ":"), sort_keys=True))
+        else:
+            print(json.dumps(res, indent=2))
         return 0
 
     if args.enable:
@@ -773,17 +843,27 @@ def main(argv: list[str] | None = None) -> int:
             "config_path": str(p),
             "message": "Decision model enabled successfully",
         }
-        print(json.dumps(res, indent=2))
+        if args.compact:
+            print(json.dumps(res, separators=(",", ":"), sort_keys=True))
+        else:
+            print(json.dumps(res, indent=2))
         return 0
 
     if args.status:
         cfg = load_decision_config()
-        print(json.dumps(cfg, indent=2))
+        if args.compact:
+            print(json.dumps(cfg, separators=(",", ":"), sort_keys=True))
+        else:
+            print(json.dumps(cfg, indent=2))
         return 0
 
     if args.device_info:
         dev_info = select_optimal_device()
-        print(json.dumps(dev_info, indent=2))
+        if args.compact and isinstance(dev_info, dict):
+            dev_info = {k: v for k, v in dev_info.items() if k != "free_vram_mib"}
+            print(json.dumps(dev_info, separators=(",", ":"), sort_keys=True))
+        else:
+            print(json.dumps(dev_info, indent=2))
         return 0
 
     raw_input_text = args.text
@@ -809,10 +889,20 @@ def main(argv: list[str] | None = None) -> int:
         out = {"selected_skills": router.select_skills(raw_input_text, max_skills=args.max_skills)}
     elif args.mode == "triage-finding":
         out = router.triage_finding(raw_input_text)
+    elif args.mode == "classify-scope":
+        out = router.classify_lesson_scope(args.cue or raw_input_text, args.rule or "", project=args.project)
     else:  # predict
         out = router.predict(raw_input_text)
 
-    if args.format == "json":
+    # Stabilize device_info if compact requested (omit volatile free_vram_mib)
+    if args.compact and isinstance(out, dict):
+        out = dict(out)
+        if isinstance(out.get("device_info"), dict):
+            out["device_info"] = {
+                k: v for k, v in out["device_info"].items() if k != "free_vram_mib"
+            }
+        print(json.dumps(out, separators=(",", ":"), sort_keys=True, ensure_ascii=False))
+    elif args.format == "json":
         print(json.dumps(out, indent=2, ensure_ascii=False))
     else:
         print(out)

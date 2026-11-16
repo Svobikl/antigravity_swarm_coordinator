@@ -223,6 +223,121 @@ class TestDecisionRouter(unittest.TestCase):
         self.assertTrue(data_enable["enabled"])
         self.assertEqual(data_enable["status"], "enabled")
 
+    # --- Task 2: Deterministic Compact Prefix Serialization (M5) ---
+    def test_compact_deterministic_serialization_hash_parity(self):
+        """M5: --compact outputs single-line deterministic JSON omitting volatile free_vram_mib for KV-cache stability."""
+        import hashlib
+        script_path = CORE_SCRIPTS / "decision_router.py"
+        prompt = "Uprav výpočet marže v edgerelay a otestuj dashboard v prohlížeči"
+
+        # Run 1
+        p1 = subprocess.run(
+            [sys.executable, str(script_path), "--mode", "route-prompt", "--compact", "--text", prompt],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        out1 = p1.stdout.strip()
+
+        # Run 2
+        p2 = subprocess.run(
+            [sys.executable, str(script_path), "--mode", "route-prompt", "--compact", "--text", prompt],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        out2 = p2.stdout.strip()
+
+        # 1. Single-line check
+        self.assertNotIn("\n", out1, "--compact must produce single-line JSON")
+
+        # 2. free_vram_mib must be omitted from device_info in compact mode
+        data1 = json.loads(out1)
+        self.assertNotIn("free_vram_mib", data1.get("device_info", {}), "Volatile free_vram_mib must be omitted in compact mode")
+
+        # 3. Exact deterministic hash parity
+        hash1 = hashlib.sha256(out1.encode("utf-8")).hexdigest()
+        hash2 = hashlib.sha256(out2.encode("utf-8")).hexdigest()
+        self.assertEqual(hash1, hash2, "Repeated compact calls must produce identical SHA-256 string for KV-cache stability")
+
+    # --- Task 2: Lesson Scope Classification ---
+    def test_classify_lesson_scope_router_and_cli(self):
+        """classify_lesson_scope accurately distinguishes project-scoped vs universal lessons."""
+        # 1. Method test
+        project_cue = "When updating services/control_plane/api_admin_v1.py in edgerelay"
+        project_rule = "Never blindly replace .timestamp in edgerelay admin events"
+        res_proj = self.router.classify_lesson_scope(project_cue, project_rule, project="edgerelay")
+        self.assertEqual(res_proj["scope"], "project")
+
+        universal_cue = "When reading text files across platforms in Python"
+        universal_rule = "Always pass encoding='utf-8' and errors='replace' to read_text"
+        res_univ = self.router.classify_lesson_scope(universal_cue, universal_rule, project=None)
+        self.assertEqual(res_univ["scope"], "global")
+
+        # 2. CLI --mode classify-scope
+        script_path = CORE_SCRIPTS / "decision_router.py"
+        p_cli = subprocess.run(
+            [
+                sys.executable, str(script_path), "--mode", "classify-scope",
+                "--cue", project_cue, "--rule", project_rule, "--project", "edgerelay",
+                "--compact",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        data_cli = json.loads(p_cli.stdout)
+        self.assertEqual(data_cli["scope"], "project")
+
+    # --- Task 2: Mode-Sliced Rules (M4) ---
+    def test_slice_rules_mode_and_gui_triggers(self):
+        """M4: slice_rules extracts < 6,500 bytes (>85% reduction) of targeted rules."""
+        import memory_manager
+        rules_path = REPO_ROOT / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md"
+        full_size = rules_path.stat().st_size
+
+        # 1. Mode 2 slice
+        sliced_mode2 = memory_manager.slice_rules(mode="mode_2", rules_path=rules_path)
+        sliced_bytes = len(sliced_mode2.encode("utf-8"))
+
+        self.assertLess(sliced_bytes, 6500, f"Sliced rules size {sliced_bytes} exceeds 6,500 B target")
+        self.assertIn("Mode 2 — Small Controlled Change", sliced_mode2)
+        self.assertNotIn("Mode 5 — Long-Horizon Program", sliced_mode2)
+        reduction = (1.0 - sliced_bytes / full_size) * 100.0
+        self.assertGreater(reduction, 85.0, f"Reduction {reduction:.1f}% must be > 85%")
+
+        # 2. UI / GUI prompt trigger
+        sliced_gui = memory_manager.slice_rules(prompt="Fix dashboard UI chart with Playwright", rules_path=rules_path)
+        self.assertIn("UI / UX Validation Trigger", sliced_gui)
+
+    # --- Task 2: Negative & Boundary Tests for Slicing and Compact Router ---
+    def test_slice_rules_and_compact_negative_and_boundary_cases(self):
+        """Negative and boundary coverage: invalid mode, empty cues, and unroutable inputs."""
+        import memory_manager
+        rules_path = REPO_ROOT / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md"
+
+        # Boundary: unknown/invalid mode falls back safely to general rules without crashing
+        fallback_slice = memory_manager.slice_rules(mode="invalid_mode_99", rules_path=rules_path)
+        self.assertNotEqual(len(fallback_slice), 0, "Fallback slice for invalid mode must not be empty")
+        self.assertIn("Core Operating Principles", fallback_slice, "Fallback slice must retain core operating invariants")
+        self.assertFalse("Mode 99" in fallback_slice, "Non-existent mode must not appear in output")
+
+        # Boundary: empty cue and rule defaults to global scope
+        empty_res = self.router.classify_lesson_scope("", "")
+        self.assertEqual(empty_res["scope"], "global")
+        self.assertFalse(empty_res["scope"] == "project", "Empty cue/rule must not be project specific")
+
+        # Negative: CLI with missing required fields in classify-scope exits non-zero or handles gracefully
+        script_path = CORE_SCRIPTS / "decision_router.py"
+        p_err = subprocess.run(
+            [sys.executable, str(script_path), "--mode", "classify-scope", "--cue", ""],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(p_err.returncode, 0)
+        out_err = json.loads(p_err.stdout)
+        self.assertEqual(out_err["scope"], "global")
+
 
 if __name__ == "__main__":
     unittest.main()

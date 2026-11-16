@@ -21,4 +21,4 @@ Evaluate all changes since `baseline_revision` across the 5 orthogonal BMAD + Op
 
 # Output & Triage
 
-Log every verified finding in `## Review Triage Log` in `.asw/plans/<slug>.md`, routing each finding to `[intent_gap]`, `[bad_plan]`, `[patch]`, or `[defer]`, and return `Verdict: ASW APPROVED` or `Verdict: ASW REJECTED`.
+Log every verified finding in `## Review Triage Log` in `.asw/plans/<slug>.md`, routing each finding to `[intent_gap]`, `[bad_plan]`, `[patch]`, or `[defer]`, and return a concise structured review receipt bounded to **<= 250 tokens** in external messages containing findings summary, triage routing, evidence paths, and `Verdict: ASW APPROVED` or `Verdict: ASW REJECTED`. Internal `<thought>` reasoning tokens remain **100% unconstrained** so deep adversarial inspection is never restricted.
