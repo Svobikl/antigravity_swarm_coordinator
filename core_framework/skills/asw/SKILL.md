@@ -42,6 +42,7 @@ In Antigravity, the UI model selector only sets the model of the **main conversa
 5. Run the real user-facing surface through tmux, HTTP, browser, or computer-use QA.
 6. Capture the artifact path or transcript and clean up spawned state.
 7. Use Antigravity subagents (`asw-planner`, `asw-implementer`, `asw-reviewer`, `asw-explorer`, `asw-librarian`) across the Quad-Model architecture.
+8. Default developer commands (git status/diff/log, pytest, find, read -l aggressive, json) to `rtk` CLI proxy (`rtk-token-killer`) for 50-98% token reduction, bypassing `rtk tree` on Windows.
 
 ## Hook Aliases
 

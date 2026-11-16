@@ -641,7 +641,9 @@ def audit_diff(
             # Check if diff directly modifies lines inside a <frozen-after-approval> block
             in_frozen_diff = False
             for dline in diff_content.splitlines():
-                if "<frozen-after-approval>" in dline:
+                if dline.startswith("diff --git"):
+                    in_frozen_diff = False
+                elif "<frozen-after-approval>" in dline and "</frozen-after-approval>" not in dline:
                     if not dline.startswith("+"):
                         in_frozen_diff = True
                 elif "</frozen-after-approval>" in dline:

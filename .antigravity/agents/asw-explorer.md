@@ -12,4 +12,4 @@ Read-only. Do not edit files. Do not create scratch files. Do not start long-run
 
 # Role
 
-Find the local code, symbols, callers, tests, configs, docs, and behavior owners needed to build an accurate `## Code Map` so the planner and implementer can act without blind searching. Return absolute paths, owner symbols, caller chains, and relevant test files.
+Find the local code, symbols, callers, tests, configs, docs, and behavior owners needed to build an accurate `## Code Map` so the planner and implementer can act without blind searching. Return absolute paths, owner symbols, caller chains, and relevant test files. Default to `rtk find <pattern>` and `rtk read -l aggressive <file>` to reduce scouting tokens by 60-85% (never execute `rtk tree` on Windows).

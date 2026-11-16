@@ -17,6 +17,8 @@ Use this skill when a plan exists or the work is clear enough to execute.
 6. Record cleanup.
 7. Re-run the full relevant suite.
 
+Default all routine developer commands (git status/diff/log, pytest, file reads) to the `rtk` proxy (`rtk-token-killer`) for 50-98% token reduction, bypassing `rtk tree` on Windows.
+
 Never claim completion from tests alone.
 
 ## Subagent Use & Mandatory Model-Tier Escalation Gate

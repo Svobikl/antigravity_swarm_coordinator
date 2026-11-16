@@ -48,6 +48,7 @@ Use **`Gemini 4 Hydrogen (High)`** for actual implementation and routine tasks:
   - Every subagent receives a strict task contract (Task ID, Model tier, allowed files, exact output format, 3-layer verification requirement).
   - Subagents are **strictly forbidden** from declaring global completion or editing global control-plane state.
   - **Shared State Serialization**: Parallel subagents must never edit overlapping files or state. Coordinator serializes shared state updates.
+- **Mandatory RTK CLI Pre-Filtering & Token Economics (`rtk-token-killer`)**: All developer commands (git status/diff/log, pytest, file/directory discovery, JSON analysis) must default to the `rtk` CLI proxy, delivering an 87.8% benchmarked token reduction. On Windows (`win32`), bypass `rtk tree` (retaining native `tree`) to avoid `tree.com` parameter mismatches.
 - **Context-Pressure Checkpointing**: Under context pressure, checkpoint partial state to `PROGRAM_STATE.md`, `TASK_GRAPH.json`, or `.asw/plans/<slug>.md` on disk. Never compress unfinished tasks into an optimistic "completed" summary.
 
 ## Execution Modes

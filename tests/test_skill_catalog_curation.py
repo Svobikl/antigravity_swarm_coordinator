@@ -16,7 +16,7 @@ CORE_COORDINATOR_SKILLS = frozenset({
     "asw", "asw-cleanup", "asw-comment-check", "asw-debug", "asw-goal",
     "asw-harness-adapt", "asw-loop", "asw-lsp", "asw-plan", "asw-programming",
     "asw-refactor", "asw-remove-ai-slops", "asw-review", "asw-rules",
-    "asw-start-work", "asw-test-gui", "asw-ui-ux", "obs-memory", "agent-memory", "agent-memory-mcp",
+    "asw-start-work", "asw-test-gui", "asw-ui-ux", "rtk-token-killer", "obs-memory", "agent-memory", "agent-memory-mcp",
     "obsidian-markdown", "obsidian-cli", "obsidian-bases",
 })
 
@@ -304,6 +304,75 @@ class TestSkillCatalogCuration(unittest.TestCase):
             stop_data = json.loads(res_stop.stdout)
             self.assertEqual(stop_data.get("decision"), "continue")
             self.assertIn("Remaining task", stop_data.get("reason", ""))
+
+    def test_asw_rtk_rewrite_matrix_m1_to_m4(self):
+        """Verifies asw-rtk-rewrite.mjs fulfills Matrix M1..M4 (git, pytest, Windows tree guard, compound commands)."""
+        import json
+        import subprocess
+
+        repo_root = Path(__file__).resolve().parent.parent
+        rewrite_script = repo_root / "plugins" / "antigravity-swarm" / "scripts" / "asw-rtk-rewrite.mjs"
+        self.assertTrue(rewrite_script.is_file(), f"Missing {rewrite_script}")
+
+        # Helper to invoke rewriteCommandToRtk via node eval
+        def run_rewrite(cmd: str, is_win: bool) -> str:
+            js = f"""
+            import {{ rewriteCommandToRtk }} from "./plugins/antigravity-swarm/scripts/asw-rtk-rewrite.mjs";
+            process.stdout.write(rewriteCommandToRtk({json.dumps(cmd)}, {str(is_win).lower()}));
+            """
+            proc = subprocess.run(
+                ["node", "--input-type=module", "-e", js],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(proc.returncode, 0, f"Node error: {proc.stderr}")
+            return proc.stdout
+
+        # M1: git commands -> rtk git
+        self.assertEqual(run_rewrite("git status", True), "rtk git status")
+        self.assertEqual(run_rewrite("git log -n 30", True), "rtk git log -n 30")
+        self.assertEqual(run_rewrite("git diff HEAD~2 HEAD", True), "rtk git diff HEAD~2 HEAD")
+        # Idempotence: already rtk prefixed
+        self.assertEqual(run_rewrite("rtk git status", True), "rtk git status")
+
+        # M2: pytest commands -> rtk pytest
+        self.assertEqual(run_rewrite("pytest tests/test_curation.py", True), "rtk pytest tests/test_curation.py")
+        self.assertEqual(run_rewrite("python -m pytest tests/", True), "rtk pytest tests/")
+        self.assertEqual(run_rewrite("python3 -m pytest tests/ -v", True), "rtk pytest tests/ -v")
+
+        # M3: Windows tree guard (win32 must bypass rtk tree; POSIX rewrites)
+        self.assertEqual(run_rewrite("tree", True), "tree")
+        self.assertEqual(run_rewrite("tree /F", True), "tree /F")
+        self.assertEqual(run_rewrite("tree", False), "rtk tree")
+        self.assertEqual(run_rewrite("tree -L 2", False), "rtk tree -L 2")
+
+        # M4: PowerShell compound commands with operators (;, &&, ||, |)
+        self.assertEqual(
+            run_rewrite("git status; pytest tests/ -v", True),
+            "rtk git status; rtk pytest tests/ -v",
+        )
+        self.assertEqual(
+            run_rewrite("git diff HEAD~1 && python -m pytest tests/", True),
+            "rtk git diff HEAD~1 && rtk pytest tests/",
+        )
+        # Quoted operator preservation
+        self.assertEqual(
+            run_rewrite('git commit -m "fix; bug" && pytest', True),
+            'rtk git commit -m "fix; bug" && rtk pytest',
+        )
+
+        # CLI invocation with argument
+        cli_proc = subprocess.run(
+            ["node", str(rewrite_script), "git status; pytest tests/ -v"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(cli_proc.returncode, 0)
+        self.assertEqual(cli_proc.stdout.strip(), "rtk git status; rtk pytest tests/ -v")
 
 
 if __name__ == "__main__":

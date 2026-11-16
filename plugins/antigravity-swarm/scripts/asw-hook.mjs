@@ -96,6 +96,7 @@ Required behavior:
   * Implementation coding, TDD RED-to-GREEN, test runner, and routine lanes MUST use Gemini 4 Hydrogen (High) (Model="flash").
 - Write the plan to .asw/plans/<slug>.md with ## TL;DR, <!-- <frozen-after-approval> --> enclosing ## User Intent & Anti-Shortcut Contract (Intent, Boundaries & Constraints, and ## I/O & Edge-Case Matrix), <!-- </frozen-after-approval> -->, ## Code Map (for context-free subagent handoff), ## Execution Tasks / ## TODOs (using - [ ] top-level checkboxes), ## Plan Change Log, and ## Review Triage Log. Keep plans to a single goal (900-1600 tokens), splitting secondary goals into .asw/plans/deferred-work.md.
 - Make every TODO atomic: assigned model tier (Hydrogen High vs Argon High vs Carbon High), lane, files, Layer 1 (Static/Build check), Layer 2 (RED-to-GREEN happy + negative domain + artifact parity test covering I/O & Edge-Case Matrix rows), Layer 3 (real-surface runtime QA command), artifact path, and cleanup receipt.
+- Mandate RTK (Token Killer) pre-filtering: default high-volume developer commands (git status/log/diff, pytest, find, read -l aggressive, json) to rtk CLI proxy (rtk-token-killer) for 50-98% token savings, bypassing rtk tree on Windows.
 - Include happy-path, edge-case/negative, and adjacent-surface regression QA scenarios; mocked unit tests never substitute for Layer 3 real-surface runtime proof.
 - Include privacy/package safeguards and cleanup receipts for any spawned QA state.
 - End with Next: start-work <plan-name>; do not end with a passive "let me know" handoff.
@@ -122,6 +123,7 @@ Required behavior:
 - Select the named plan, or the only active plan under .asw/plans when the user did not name one.
 - Re-read the plan from disk before each step and execute the first unchecked top-level checkbox (- [ ]).
 - Strictly obey the User Intent & Anti-Shortcut Contract and Zero Heuristic Substitution Law: never substitute trained models, formulas, or external APIs with hand-coded heuristics, catch-all side-effect fallbacks, or synthetic data.
+- Default developer command executions (git status/log/diff, pytest, inspection) to rtk CLI proxy (rtk-token-killer) to preserve context budget (87.8% benchmark token reduction), bypassing rtk tree on Windows.
 - Dispatch Gemini 4 Hydrogen (High) (Model="flash") subagents for independent implementation, TDD subtasks, and routine work; use Gemini 4 Argon (High) (Model="pro") for root-cause debugging and QA verification, and Claude Opus 5.5 for opposing reviews.
 - For every checkbox, capture 3-Layer Verification (Layer 1 Static/Build, Layer 2 RED-to-GREEN happy + negative domain + parity tests, Layer 3 real-surface runtime proof) and cleanup receipts before marking it - [x].
 - Keep local continuation state in .asw/start-work/ and update the plan only after verification passes.
@@ -149,6 +151,7 @@ Required behavior:
 - Enforce Mandatory Rendered DOM & Shadow-Root Zero-Error-Card Gate ("Configuration error", "Custom element doesn't exist", "Unhandled Runtime Error"), Boundary-to-Boundary System/Hardware Fidelity (halt in BLOCKED_ON_HARDWARE_AUTH if target device/service is unauthorized or offline), Feature-Flag Negative-State Isolation, and the 3-Strike Anti-Thrashing Circuit Breaker (stop after 3 failed attempts; never binary-patch third-party packages).
 - Enforce Multi-Tenant State Isolation & Pre-Exchange Idempotency (scope idempotency_key as {principal_id}:{operation_key} and persist PENDING DB rows before external side effects), Production-Volume Distribution (never divide sums by capped min(K, len(...)); verify non-degenerate time series), Public-Repo Privacy (\`--scan-public-repo\` & \`--forbid-terms\` before public repo pushes), Baseline Feature Survival (dual-mode regression matrix), and Stale Asset Cache Verification (\`--assert-asset-version\`).
 - Write failing RED tests (covering happy path, artifact parity, and negative domain/edge cases, never tautological 'is not None' checks) before production changes.
+- Default developer command executions (git status/diff/log, pytest, read -l aggressive, find, json) to rtk CLI proxy (rtk-token-killer) for an 87.8% benchmark token reduction, bypassing rtk tree on Windows (win32) and preserving compound shell operators.
 - Run the smallest genuine implementation on Gemini 4 Hydrogen (High) (Model="flash") that flips RED to GREEN.
 - Drive the real surface (Layer 3) through CLI, tmux, HTTP, browser, or computer-use QA — never rely on mocks alone.
 - Capture artifacts, cleanup receipts, and a Prompt-to-Code Traceability Matrix verifying every user requirement.

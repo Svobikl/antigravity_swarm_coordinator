@@ -237,7 +237,7 @@ GOLDEN_CATALOG: dict[str, str] = {
     "bash-pro": "Writes defensive POSIX and Bash scripts with strict error handling and quoting.",
     "jq": "Filters, transforms, and queries JSON streams and config files from the command line.",
     "git-advanced-workflows": "Executes safe Git rebases, worktrees, bisect debugging, and clean branch workflows.",
-    "resolving-merge-conflicts": "Resolves complex Git merge and rebase conflicts while preserving both sides' intent.",
+    "rtk-token-killer": "Token-optimized CLI proxy (rtk) reducing git, pytest, file-read, and search output tokens by 50-98%.",
 }
 
 

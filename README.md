@@ -65,6 +65,17 @@ In Antigravity, the Swarm Coordinator functions under the **Single Orchestrator 
 
 ---
 
+## ⚡ RTK Token Killer Integration (87.8% Benchmark Token Reduction)
+
+The Swarm Coordinator integrates `rtk 0.48.0` (`rtk-token-killer`) as its mandatory CLI execution proxy across all agents (`asw-implementer`, `asw-explorer`, `asw-reviewer`), coordinator directives, and background hooks. By condensing verbose git, pytest, file search, and JSON inspect outputs, `rtk` achieves an **87.8% average token reduction** across high-frequency developer workflows (saving 94,591 tokens across 107,704 baseline tokens in real-world benchmarks), preserving precious LLM context windows and avoiding token budget exhaustion:
+
+- **Git Operations (`50% - 90% Savings`):** `rtk git status`, `rtk git log -n 10`, `rtk git diff` produce ultra-condensed status matrices and omit uninformative unchanged hunk lines.
+- **Pytest Suite Runs (`90% - 98% Savings`):** `rtk pytest ...` condenses multi-page pass/fail reports into compact single-line counters and isolates traceback frames to root cause failure assertions.
+- **File Discovery & Inspection (`60% - 85% Savings`):** `rtk find <pattern>`, `rtk read -l aggressive <file>`, `rtk json <path>` prune comments, whitespace, and structural overhead.
+- **Cross-Platform OS Safety & Rewriter Guard:** `asw-rtk-rewrite.mjs` identifies Windows environments (`win32`) and preserves native `tree` commands without rewriting, preventing `tree.com` parameter mismatches while handling complex PowerShell operators (`;`, `&&`, pipes).
+
+---
+
 ## 🧬 Harness² Recursive Adaptation Engine: What It Is & What It Does in Your Harness
 
 This coordinator integrates Google Research's **Harness²** (*Recursive Agent Harnessing for an Open World*, `.antigravity/harness2/`), hardened for cross-platform **macOS + Windows 11 + Linux** and **Python 3.12–3.14** execution.
@@ -294,7 +305,7 @@ To solve this permanently, we conducted a **full audit, deduplication, and front
 | **6** | **UI/UX, Frontend, Web, 3D, Motion & Video** | **18** | `frontend-design`, `ui-ux-pro-max`, `web-design-guidelines`, `ux-audit`, `ux-flow`, `ui-a11y`, `design-system`, `tailwind-design-system`, `shadcn`, `react-patterns`, `nextjs-best-practices`, `3d-ui`, `threejs-skills`, `animejs-animation`, `remotion-best-practices`, `claude-d3js-skill`, `mobile-design`, `hig-foundations` |
 | **7** | **Software Engineering, Odoo ERP, Embedded & Databases** | **39** | **Odoo (9):** `odoo-module-developer`, `odoo-orm-expert`, `odoo-xml-views-builder`, `odoo-qweb-templates`, `odoo-security-rules`, `odoo-rpc-api`, `odoo-accounting-setup`, `odoo-docker-deployment`, `odoo-upgrade-advisor`<br>**Embedded & Systems (6):** `firmware-analyst`, `arm-cortex-expert`, `c-pro`, `cpp-pro`, `rust-pro`, `protocol-reverse-engineering`<br>**Languages, Backend, DB & Mobile (24):** `python-pro`, `fastapi-pro`, `django-pro`, `pydantic-models-py`, `typescript-pro`, `nodejs-backend-patterns`, `golang-pro`, `csharp-pro`, `java-pro`, `php-pro`, `sql-pro`, `postgres-best-practices`, `drizzle-orm-expert`, `prisma-expert`, `graphql-architect`, `zustand-store-ts`, `flutter-expert`, `react-native-architecture`, `swiftui-expert-skill`, `electron-development`, `senior-architect`, `domain-driven-design`, `code-reviewer`, `simplify-code` |
 | **8** | **Data Science, Quantitative Research, AI/LLM & Science** | **20** | `quant-analyst`, `backtesting-frameworks`, `risk-metrics-calculation`, `data-scientist`, `data-engineer`, `polars`, `scikit-learn`, `statsmodels`, `matplotlib`, `plotly`, `ml-pipeline-workflow`, `ai-agents-architect`, `rag-engineer`, `embedding-strategies`, `prompt-engineer`, `gemini-api-dev`, `claude-api`, `mcp-builder`, `deep-research`, `ii-commons` |
-| **9** | **Testing, Debugging, DevOps, Cloud, Security & Shell** | **27** | `systematic-debugging`, `test-driven-development`, `test-guard`, `playwright-skill`, `browser-harness`, `pytest-skill`, `vitest-skill`, `api-security-best-practices`, `security-auditor`, `differential-review`, `secrets-management`, `docker-expert`, `kubernetes-architect`, `terraform-skill`, `aws-skills`, `cloudflare`, `vercel-deployment`, `supabase`, `github-actions-templates`, `grafana-dashboards`, `vps-server-management`, `powershell-windows`, `windows-shell-reliability`, `bash-pro`, `jq`, `git-advanced-workflows`, `resolving-merge-conflicts` |
+| **9** | **Testing, Debugging, DevOps, Cloud, Security & Shell** | **27** | `systematic-debugging`, `test-driven-development`, `test-guard`, `playwright-skill`, `browser-harness`, `pytest-skill`, `vitest-skill`, `api-security-best-practices`, `security-auditor`, `differential-review`, `secrets-management`, `docker-expert`, `kubernetes-architect`, `terraform-skill`, `aws-skills`, `cloudflare`, `vercel-deployment`, `supabase`, `github-actions-templates`, `grafana-dashboards`, `vps-server-management`, `powershell-windows`, `windows-shell-reliability`, `bash-pro`, `jq`, `git-advanced-workflows`, `rtk-token-killer` |
 
 ---
 

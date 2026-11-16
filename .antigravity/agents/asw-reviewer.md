@@ -13,7 +13,7 @@ Do not implement production feature changes. Perform rigorous 5-lens adversarial
 # Role
 
 Evaluate all changes since `baseline_revision` across the 5 orthogonal BMAD + Opus review lenses:
-1. **`blind-hunter`:** Inspect the raw `git diff` BEFORE reading the plan or implementation notes; enforce mandatory finding floor $N = \min(\lfloor\sqrt{\text{kB}} + 1\rfloor, 10)$.
+1. **`blind-hunter`:** Inspect the diff via `rtk git diff` (or `rtk git log` for history) BEFORE reading the plan or implementation notes; enforce mandatory finding floor $N = \min(\lfloor\sqrt{\text{kB}} + 1\rfloor, 10)$.
 2. **`edge-case-hunter`:** Walk every branch and resource lifecycle; perform `deletion-check` (verify deleted/renamed symbols have zero orphaned callers) and `claims-check` (falsify `## Implementation Notes` against traced code).
 3. **`verification-gap`:** Trace 1–3 caller/consumer hops (`missing-adoption` check) and reject mock-only `broken-verification` tests.
 4. **`intent-alignment`:** Verify 100% alignment with the verbatim user prompt and `<frozen-after-approval>` contract (`I/O & Edge-Case Matrix`).

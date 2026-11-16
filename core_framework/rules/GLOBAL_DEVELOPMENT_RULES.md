@@ -644,3 +644,19 @@ Final Handoff
    - **Append-Only Working Memory (`bmad_memlog.py`):** Long-running architecture, planning, and research sessions record chronological decisions, assumptions, and verified claims in `.memlog.md` via `python .antigravity/scripts/bmad_memlog.py` (`init`, `append`, `set`, `tally`).
    - **Research Firewall & 4-Agent Codebase Recon (`deep-research`):** Project context shapes *what to ask*, never *what is true* (zero unverified conclusions from training data alone); codebase recon dispatches bounded `locator`, `analyzer`, `historian`, and `verifier` passes tagged with the Git commit SHA.
    - **Verified Repo Pitfall Ledger (`<!-- bmad:context -->`):** Recurring repository-specific pitfalls discovered during review are either automated into hooks/linters (`automate`) or recorded inside `<!-- bmad:context -->` in `AGENTS.md` (`retain | rewrite | relocate | automate | delete`).
+
+---
+
+## 29. Mandatory RTK (Token Killer) CLI Pre-Filtering & Token Economics
+
+1. **Mandatory RTK CLI Proxy (`rtk-token-killer`):**
+   - Developer command executions across autonomous agents (`asw-implementer`, `asw-explorer`, `asw-reviewer`), coordinator directives, and background hooks MUST default to `rtk` (`rtk-token-killer`) for high-volume developer commands:
+     - `rtk git status`, `rtk git log`, `rtk git diff` (50% to 90% token reduction);
+     - `rtk pytest ...` (condensing verbose passing matrices and isolating failure tracebacks, 90% to 98% token reduction);
+     - `rtk find <pattern>`, `rtk read -l aggressive <path>`, `rtk json <path>` (structural pruning and AST summaries);
+     - Overall benchmark delivers an **87.8% average token reduction** across high-frequency workflows.
+2. **Windows Platform Guard & Isolation Rule:**
+   - On Windows (`win32`), NEVER execute `rtk tree`. Windows provides native `tree.com` with `/F /A` switches that conflict with Unix tree flags and trigger `Too many parameters` errors.
+   - Command rewriters (`asw-rtk-rewrite.mjs`) and agent instructions must detect Windows platforms and preserve native `tree` commands without rewriting.
+3. **PowerShell Compound Operator Handling:**
+   - Multi-segment commands joined by `;`, `&&`, `||`, or `|` must apply `rtk` per supported subcommand while strictly preserving operators and argument quotes.

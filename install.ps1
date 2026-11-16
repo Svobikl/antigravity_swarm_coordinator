@@ -20,7 +20,8 @@ param (
     [switch]$SkipPlugin,
     [switch]$SkipVault,
     [switch]$CleanSkills,
-    [switch]$InstallObsidianApp
+    [switch]$InstallObsidianApp,
+    [switch]$SkipRtk
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,6 +37,7 @@ if ($SkipPlugin)            { $PyArgs += "--skip-plugin" }
 if ($SkipVault)             { $PyArgs += "--skip-vault" }
 if ($CleanSkills)           { $PyArgs += "--clean-skills" }
 if ($InstallObsidianApp)    { $PyArgs += "--install-obsidian-app" }
+if ($SkipRtk)               { $PyArgs += "--skip-rtk" }
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "   Antigravity Swarm Coordinator Setup (Windows / PS)     " -ForegroundColor Cyan

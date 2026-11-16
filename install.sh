@@ -28,5 +28,5 @@ echo "=========================================================="
 "${PYTHON_BIN}" "${INSTALL_PY}" "$@"
 
 echo "=========================================================="
-echo " Setup complete! Swarm Coordinator + 200 skills ready.    "
+echo " Setup complete! Swarm Coordinator + 200 skills + RTK ready."
 echo "=========================================================="

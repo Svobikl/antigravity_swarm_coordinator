@@ -18,8 +18,10 @@ import importlib.util
 import json
 import os
 import platform
+import re
 import shutil
 import stat
+import subprocess
 import sys
 from pathlib import Path
 
@@ -52,6 +54,105 @@ def _load_memory_manager(repo_root: Path):
     return mod
 
 
+def ensure_rtk_installed(
+    *,
+    home_dir: Path | None = None,
+    attempt_install: bool = True,
+) -> dict[str, object]:
+    """Discover or install the rtk (Token Killer) CLI binary across Windows, macOS, and Linux.
+
+    Searches:
+      1. System PATH via shutil.which("rtk")
+      2. Windows WinGet package directories under %LOCALAPPDATA%/Microsoft/WinGet/Packages/rtk-ai.rtk*
+      3. Cargo binary directories (~/.cargo/bin/rtk)
+      4. macOS / Linux Homebrew paths (/opt/homebrew/bin/rtk, /usr/local/bin/rtk)
+    """
+    active_home = home_dir if home_dir is not None else Path.home()
+    is_win = platform.system() == "Windows"
+    bin_name = "rtk.exe" if is_win else "rtk"
+
+    candidate_paths: list[Path] = []
+
+    which_path = shutil.which("rtk")
+    if which_path:
+        candidate_paths.append(Path(which_path))
+
+    # Cargo bin
+    candidate_paths.append(active_home / ".cargo" / "bin" / bin_name)
+    candidate_paths.append(Path.home() / ".cargo" / "bin" / bin_name)
+
+    # Windows WinGet packages
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        winget_root = Path(local_appdata) / "Microsoft" / "WinGet" / "Packages"
+        if winget_root.is_dir():
+            try:
+                for pkg_dir in winget_root.glob("rtk-ai.rtk*"):
+                    if pkg_dir.is_dir():
+                        for exe in pkg_dir.rglob("rtk.exe"):
+                            if exe.is_file():
+                                candidate_paths.append(exe)
+            except Exception:
+                pass
+
+    # macOS / Linux Homebrew and standard bins
+    candidate_paths.append(Path("/opt/homebrew/bin/rtk"))
+    candidate_paths.append(Path("/usr/local/bin/rtk"))
+    candidate_paths.append(active_home / ".local" / "bin" / "rtk")
+
+    def _verify_bin(p: Path) -> str | None:
+        if not p.is_file():
+            return None
+        try:
+            res = subprocess.run([str(p), "--version"], capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                txt = (res.stdout or res.stderr).strip()
+                m = re.search(r"rtk\s+([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9._-]*)", txt)
+                if m:
+                    return m.group(1)
+                return txt or "unknown"
+        except Exception:
+            pass
+        return None
+
+    # Check candidates
+    for cand in candidate_paths:
+        v = _verify_bin(cand)
+        if v:
+            return {"installed": True, "version": v, "path": str(cand)}
+
+    # If missing and attempt_install=True, try platform package manager with 15s timeout
+    if attempt_install:
+        try:
+            if is_win:
+                subprocess.run(
+                    ["winget", "install", "--id", "rtk-ai.rtk", "--exact", "--accept-package-agreements", "--accept-source-agreements", "--silent"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+            elif platform.system() == "Darwin":
+                subprocess.run(["brew", "install", "rtk"], capture_output=True, text=True, timeout=15)
+            else:
+                subprocess.run(["cargo", "install", "rtk-ai"], capture_output=True, text=True, timeout=15)
+        except Exception:
+            pass
+
+        # Check again after install attempt
+        which_path = shutil.which("rtk")
+        if which_path:
+            v = _verify_bin(Path(which_path))
+            if v:
+                return {"installed": True, "version": v, "path": str(which_path)}
+
+        for cand in candidate_paths:
+            v = _verify_bin(cand)
+            if v:
+                return {"installed": True, "version": v, "path": str(cand)}
+
+    return {"installed": False, "version": None, "path": None}
+
+
 def run_install(
     *,
     repo_root: Path,
@@ -64,6 +165,7 @@ def run_install(
     skip_vault: bool = False,
     clean_skills: bool = False,
     install_obsidian_app: bool = False,
+    skip_rtk: bool = False,
 ) -> dict[str, object]:
     gemini_dir = home_dir / ".gemini"
     config_dir = gemini_dir / "config"
@@ -82,6 +184,9 @@ def run_install(
         "obsidian_vault_dir": None,
         "obsidian_projects_indexed": [],
         "obsidian_app_installed": False,
+        "rtk_installed": False,
+        "rtk_version": None,
+        "rtk_skill_mandatory": True,
     }
 
     # 1. Global Entry Point Prompt (~/.gemini/GEMINI.md & ~/.agents/AGENTS.md)
@@ -140,7 +245,7 @@ def run_install(
                 # When global skills are installed into ~/.gemini/config/skills, do NOT install a
                 # second copy into ~/.gemini/config/plugins/antigravity-swarm/skills (Antigravity
                 # deduplicates skills by file path, not by skill name).
-                if item.name == "skills" and not skip_skills:
+                if item.name == "skills" and (not skip_skills or (config_dir / "skills").is_dir()):
                     stale_plugin_skills = plugin_dst / "skills"
                     if stale_plugin_skills.exists():
                         shutil.rmtree(stale_plugin_skills, onerror=_remove_readonly)
@@ -150,7 +255,7 @@ def run_install(
                     copy_tree_clean(item, target)
                 else:
                     shutil.copy2(item, target)
-            if not skip_skills:
+            if not skip_skills or (config_dir / "skills").is_dir():
                 deployed_manifest = plugin_dst / "plugin.json"
                 if deployed_manifest.is_file():
                     try:
@@ -243,6 +348,43 @@ def run_install(
             )
             summary["obsidian_app_installed"] = bool(obs_status.get("installed"))
 
+    # 6. RTK (Token Killer) CLI Discovery & Rule Provisioning
+    if not skip_rtk:
+        rtk_status = ensure_rtk_installed(home_dir=home_dir, attempt_install=True)
+        summary["rtk_installed"] = bool(rtk_status.get("installed"))
+        summary["rtk_version"] = rtk_status.get("version")
+
+    # Always provision RTK rules in ~/.agents/rules and target_repo/.agents/rules
+    rtk_rules_src = repo_root / "core_framework" / "rules" / "antigravity-rtk-rules.md"
+    if not rtk_rules_src.is_file():
+        rtk_rules_src = repo_root / ".antigravity" / "rules" / "antigravity-rtk-rules.md"
+
+    rules_content = (
+        rtk_rules_src.read_text(encoding="utf-8")
+        if rtk_rules_src.is_file()
+        else (
+            "# Antigravity RTK (Token Killer) Rules\n\n"
+            "Mandatory pre-filtering directives for developer CLI commands:\n\n"
+            "1. **Mandatory RTK CLI Proxy (`rtk-token-killer`):**\n"
+            "   - Route `git status`, `git log`, and `git diff` through `rtk git ...` (50% to 90% token reduction).\n"
+            "   - Route `pytest` and `python -m pytest` through `rtk pytest ...` (90% to 98% token reduction).\n"
+            "   - Route file discovery and inspection through `rtk find <pattern>`, `rtk read -l aggressive <path>`, and `rtk json <path>`.\n"
+            "2. **Windows Platform Tree Guard:**\n"
+            "   - NEVER execute `rtk tree` on Windows (`win32`). Windows `tree.com` parameter conflicts trigger errors. Preserve native `tree`.\n"
+            "3. **Compound Operator Resilience:**\n"
+            "   - Multi-segment commands (`;`, `&&`, `||`, `|`) must apply `rtk` per supported subcommand while preserving quotes and shell logic.\n"
+        )
+    )
+
+    home_rules_dir = agents_home_dir / "rules"
+    home_rules_dir.mkdir(parents=True, exist_ok=True)
+    (home_rules_dir / "antigravity-rtk-rules.md").write_text(rules_content, encoding="utf-8")
+
+    if resolved_target is not None:
+        target_rules_dir = resolved_target / ".agents" / "rules"
+        target_rules_dir.mkdir(parents=True, exist_ok=True)
+        (target_rules_dir / "antigravity-rtk-rules.md").write_text(rules_content, encoding="utf-8")
+
     return summary
 
 
@@ -259,6 +401,7 @@ def main() -> int:
     parser.add_argument("--skip-vault", action="store_true", help="Skip initializing the local Obsidian Knowledge Vault")
     parser.add_argument("--clean-skills", action="store_true", help="Remove uncurated/duplicate skills from global skill folders")
     parser.add_argument("--install-obsidian-app", action="store_true", help="Attempt to install Obsidian desktop app if missing")
+    parser.add_argument("--skip-rtk", action="store_true", help="Skip discovering or installing the rtk CLI binary")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent
@@ -275,6 +418,7 @@ def main() -> int:
         skip_vault=args.skip_vault,
         clean_skills=args.clean_skills,
         install_obsidian_app=args.install_obsidian_app,
+        skip_rtk=args.skip_rtk,
     )
     print(json.dumps(res, indent=2))
     return 0

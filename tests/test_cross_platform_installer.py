@@ -125,6 +125,71 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
                 "install.py must index --target-repo into Obsidian Vault projects/",
             )
 
+    def test_rtk_installer_discovery_and_summary(self):
+        """Verifies ensure_rtk_installed discovers rtk, reports in summary dict, and provisions .agents/rules."""
+        import importlib.util
+
+        install_py = self.repo_root / "install.py"
+        spec = importlib.util.spec_from_file_location("installer_mod", install_py)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        # 1. ensure_rtk_installed function exists
+        self.assertTrue(hasattr(mod, "ensure_rtk_installed"))
+
+        # 2. Live/mock discovery
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_home = Path(tmp) / "fake_home"
+            fake_home.mkdir(parents=True)
+            res = mod.ensure_rtk_installed(home_dir=fake_home, attempt_install=False)
+            self.assertIn("installed", res)
+            self.assertIn("version", res)
+            self.assertIn("path", res)
+
+            # Negative test: missing binary when path/env empty
+            with (
+                mock.patch("shutil.which", return_value=None),
+                mock.patch.dict("os.environ", {"LOCALAPPDATA": str(fake_home / "nonexistent")}, clear=False),
+            ):
+                missing_res = mod.ensure_rtk_installed(home_dir=fake_home, attempt_install=False)
+                self.assertFalse(missing_res["installed"])
+                self.assertIsNone(missing_res["version"])
+                self.assertIsNone(missing_res["path"])
+
+            # 3. Test run_install summary and rule provisioning
+            fake_target = Path(tmp) / "target"
+            fake_target.mkdir(parents=True)
+            summary = mod.run_install(
+                repo_root=self.repo_root,
+                home_dir=fake_home,
+                target_repo=fake_target,
+                skip_skills=True,
+                skip_vault=True,
+                skip_plugin=True,
+            )
+            self.assertIn("rtk_installed", summary)
+            self.assertIn("rtk_version", summary)
+            self.assertTrue(summary.get("rtk_skill_mandatory"))
+
+            # Rules must be provisioned
+            home_rtk_rule = fake_home / ".agents" / "rules" / "antigravity-rtk-rules.md"
+            self.assertTrue(home_rtk_rule.is_file(), f"Missing {home_rtk_rule}")
+            self.assertIn("rtk-token-killer", home_rtk_rule.read_text(encoding="utf-8"))
+
+            target_rtk_rule = fake_target / ".agents" / "rules" / "antigravity-rtk-rules.md"
+            self.assertTrue(target_rtk_rule.is_file(), f"Missing {target_rtk_rule}")
+
+            # Test --skip-rtk
+            skip_summary = mod.run_install(
+                repo_root=self.repo_root,
+                home_dir=fake_home,
+                skip_skills=True,
+                skip_vault=True,
+                skip_plugin=True,
+                skip_rtk=True,
+            )
+            self.assertFalse(skip_summary["rtk_installed"])
+
 
 if __name__ == "__main__":
     unittest.main()

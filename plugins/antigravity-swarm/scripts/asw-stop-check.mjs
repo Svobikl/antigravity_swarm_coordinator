@@ -105,13 +105,10 @@ function findUncheckedActivePlan(cwd) {
 const payload = readPayload();
 const cwd = resolveWorkspaceCwd(payload);
 
-if (safeMode(payload)) {
+if (safeMode(payload) || payload.fullyIdle === false) {
+  // When fullyIdle === false, an async subagent or background task is running and Antigravity's
+  // reactive wakeup system will automatically resume this conversation when it finishes.
   process.stdout.write(JSON.stringify({ decision: "" }));
-} else if (payload.fullyIdle === false) {
-  process.stdout.write(JSON.stringify({
-    decision: "continue",
-    reason: "Antigravity Swarm detected active background work. Continue until spawned work is idle, verified, and cleaned up.",
-  }));
 } else {
   const unfinishedPlan = findUncheckedActivePlan(cwd);
   if (unfinishedPlan) {
