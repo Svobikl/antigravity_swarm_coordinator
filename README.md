@@ -2,7 +2,7 @@
 
 Complete backup, distribution, and cross-platform setup package (**Apple macOS**, **Windows**, and **Linux**) for the default **Swarm Coordinator**, **Google Research `Harness²` recursive adaptation engine**, **Quad-Model Cross-Family Governance Framework** (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 4 Argon High` + `Gemini 4 Hydrogen High`), and **200 Curated Multi-Domain Golden Catalog Skills** for **Google Antigravity** and **Gemini CLI**.
 
-This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 200 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **115 automated verification tests**.
+This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 200 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **122 automated verification tests**.
 
 ---
 
@@ -100,6 +100,62 @@ xychart-beta
 3. **Layer 3 — Antigravity Hook Channel Hygiene (`-100.0%` duplicate hook bloat):** Moves learned micro-skills into `SessionStart` `systemMessage` (`0.05×` KV-cache read weight), routes LSP/loop notices via single-turn `ephemeralMessage`, and blocks `PreInvocation` `invocationNum=1` double-injections. *Verified in [`tests/test_token_economizer_e2e.py`](./tests/test_token_economizer_e2e.py).*
 4. **Layer 4 — Zero-LLM `EnvFacts` + Live `TurnGuard` + Local `Laya` Loop Judge (`-39.61%` post-warmup `effective_tokens`, `0.0` `opt_tokens`):** Distills recurring repo command/path/flag repairs (`K=3`, $\gamma=0.8$, $\lambda=5.0$) and intercepts edit-churn spirals locally in `< 5 ms` CPU (`decision_router.py --mode judge-loop`). *Verified in [`tests/test_token_economizer.py`](./tests/test_token_economizer.py) & [`tests/test_decision_router.py`](./tests/test_decision_router.py).*
 5. **Layer 5 — BMAD V7 Context-Free `## Code Map` Subagent Dispatch & `<= 250`-Token Receipts:** Dispatches `Gemini 4 Hydrogen High` leaf workers with only `{plan_file}` (`900–1,600` token single-goal ceiling) instead of full parent chat history, returning compact `<= 250`-token external receipts while keeping internal `<thought>` reasoning unconstrained. *Verified in [`tests/test_bmad_integration.py`](./tests/test_bmad_integration.py).*
+
+</details>
+
+---
+
+## 🏆 Empirical Output Quality & Multi-Tier Token Benchmark (SWE-MiniBench-5)
+
+<p align="center">
+  <img src="./assets/quality-benchmark-telemetry.svg" alt="SWE-MiniBench-5 Quality vs Token Telemetry" width="100%" />
+</p>
+
+<p align="center">
+  <a href="./docs/quality-benchmark-report.json"><code>docs/quality-benchmark-report.json</code></a>
+  &nbsp;·&nbsp;
+  <code>python .antigravity/scripts/quality_benchmark.py --verify-oracle --json</code>
+</p>
+
+We evaluated **Stock `Gemini 4 Carbon (High)`** (single-agent baseline, `ASW_DECISION_MODEL_ENABLED=0`, no ASW/rtk) against **Antigravity Swarm Coordinator V4.1** across **`SWE-MiniBench-5` (`T1..T5`)** — five isolated 5-module Python repositories (`gateway/`, `cfgdag/`, `quantbt/`, `ratelimit/`, `outbox/`) with symptom-only GitHub issues (`ISSUE.md`) and **50 hidden `zlib+base64` holdout assertions** (`10` per task), audited for zero leakage across all 8 tool surfaces (`audit_transcript_isolation`) and summed over all 4 `MODEL_WEIGHTS` tiers from live `transcript.jsonl` logs.
+
+<details>
+<summary><b>📊 Full 3-Regime Comparison — Stock Carbon Baseline vs. Swarm Mode 2 (Fast) vs. Swarm Mode 3 (Full V4.1)</b></summary>
+<br/>
+
+```mermaid
+xychart-beta
+    title "SWE-MiniBench-5: Holdout Assertions Passed (out of 50)"
+    x-axis ["Unpatched Starter", "Stock Carbon (Baseline)", "Swarm Mode 2 (Fast)", "Swarm Mode 3 (Full V4.1)"]
+    y-axis "Holdout Assertions Passed (out of 50)" 0 --> 50
+    bar [10, 46, 46, 47]
+```
+
+| Regime / Arm | `Pass@1` (`10/10` + Public) | Holdout Assertions | Total `effective_tokens` | Frontier `Carbon` `effective_tokens` | Raw Tokens | Net Outcome vs. Stock `Carbon` |
+| :--- | :---: | :---: | ---: | ---: | ---: | :--- |
+| **Unpatched Starter** | `0/5` (`0.0%`) | `10/50` (`20.0%`) | `—` | `—` | `—` | Baseline `10/10` public pass; `< 40%` holdouts |
+| **Stock Orchestrator Carbon (Baseline)** | `2/5` (`40.0%`) | `46/50` (`92.0%`) | `2,175,656.9` | `2,175,656.9` (`100%`) | `3,871,113` | Reference single-agent frontier baseline |
+| **Swarm Mode 2 (Fast Swarm)** (`Hydrogen + rtk + Argon`) | `2/5` (`40.0%`) | `46/50` (`92.0%`) | **`1,648,667.0`** | **`0.0` (`-100%`)** | `4,328,797` | **`-24.22%` fewer `effective_tokens`** at equal quality |
+| **Swarm Mode 3 (Full Quad-Model V4.1)** (`Carbon` Matrix + `Hydrogen + rtk` + `Argon` Probe) | **`3/5` (`60.0%`)** | **`47/50` (`94.0%`)** | **`2,001,898.75`** | **`482,421.3` (`-77.8%`)** | `5,209,177` | **`+50%` relative `Pass@1` lift** (`2/5 ➔ 3/5`) & **`-7.99%` total `effective_tokens`** |
+
+</details>
+
+<details>
+<summary><b>🧪 Per-Task Scoreboard (<code>T1..T5</code>) &amp; Why Swarm Mode 3 Flipped <code>T2</code> (<code>9/10 ➔ 10/10</code>) While Cutting Frontier <code>Carbon</code> by <code>-77.8%</code></b></summary>
+<br/>
+
+| Task | Package (`5` modules) | Stock `Carbon` Holdouts | Swarm V4.1 Holdouts | Stock `Carbon` `effective_tokens` | Swarm V4.1 `effective_tokens` | Quality &amp; Routing Delta |
+| :---: | :--- | :---: | :---: | ---: | ---: | :--- |
+| **T1** | `gateway/` (Multi-tenant order ledger &amp; reconciler) | `8/10` | `8/10` | `497,080.55` | **`376,924.20`** | **`-24.2%`** `effective_tokens` |
+| **T2** | `cfgdag/` (Multi-layer config DAG &amp; snapshots) | `9/10` | **`10/10` (`Pass@1` ✅)** | `495,589.90` | **`491,725.90`** | **Flipped `9/10 ➔ 10/10`** (`Pass@1` gained) |
+| **T3** | `quantbt/` (Walk-forward backtester &amp; tearsheet) | `10/10` ✅ | `10/10` ✅ | `378,814.15` | **`369,897.40`** | **`-2.4%`** `effective_tokens` (`Pass@1` retained) |
+| **T4** | `ratelimit/` (2-level sliding window &amp; decorator) | `9/10` | `9/10` | `366,451.60` | `414,464.95` | `9/10` parity (reviewer probe overhead) |
+| **T5** | `outbox/` (Outbox dispatcher, DLQ &amp; replay) | `10/10` ✅ | `10/10` ✅ | `437,720.70` | **`348,886.30`** | **`-20.3%`** `effective_tokens` (`Pass@1` retained) |
+| **Total** | **`SWE-MiniBench-5` (`0` Leakage)** | **`46/50` (`2/5`)** | **`47/50` (`3/5`)** | **`2,175,656.90`** | **`2,001,898.75`** | **`+50%` relative `Pass@1` lift · `-7.99%` `effective_tokens`** |
+
+**Mechanistic Breakdown:**
+- **Why `T2` (`cfgdag/`) flipped `9/10 ➔ 10/10`:** Stock `Carbon` patched the obvious tombstone/diamond issues but missed the subtle **atomic rollback on `ConfigCycleError`** during `update_layer()`—leaving live engine layers partially mutated after a rejected cyclic patch. In **Swarm Mode 3**, `Gemini 4 Carbon (High)` drafted an explicit `I/O & Edge-Case Matrix` (`M1..Mn`), `Gemini 4 Hydrogen (High)` implemented with `rtk`, and the **`Gemini 4 Argon (High)` Adversarial Probe** specifically tested invalid cyclic `update_layer` calls, catching and fixing the state-corruption defect before closure.
+- **How `-77.8%` Frontier `Carbon` Offload Works:** Instead of running 100% of file exploration, edits, and test iterations on frontier `Carbon` (`2,175,656.9` eff. tok), Mode 3 restricts `Carbon` to up-front matrix planning (`482,421.3` eff. tok, `24.1%`), offloads **`48.8%`** (`976,836.25` eff. tok) of execution to high-velocity `Gemini 4 Hydrogen (High)` + `rtk`, and spends `542,641.2` eff. tok (`27.1%`) on `Gemini 4 Argon (High)` adversarial probing.
 
 </details>
 
@@ -346,9 +402,11 @@ antigravity_swarm_coordinator/
 ├── .gitignore                         # Git ignore rules for caches and temporary artifacts
 │
 ├── assets/
-│   └── token-efficiency-dashboard.svg # Animated Dark/Light SVG token telemetry dashboard for GitHub
+│   ├── token-efficiency-dashboard.svg # Animated Dark/Light SVG token telemetry dashboard for GitHub
+│   └── quality-benchmark-telemetry.svg # Animated Dark/Light SVG SWE-MiniBench-5 quality & token telemetry
 ├── docs/
-│   └── token-calculator.html          # Self-contained interactive HTML5 token savings slider calculator
+│   ├── token-calculator.html          # Self-contained interactive HTML5 token savings slider calculator
+│   └── quality-benchmark-report.json  # Redacted live SWE-MiniBench-5 dual-arm evaluation report
 │
 ├── global_entrypoint/
 │   └── GEMINI.md                      # Global instructions deployed to ~/.gemini/GEMINI.md & ~/.agents/AGENTS.md
@@ -381,6 +439,7 @@ antigravity_swarm_coordinator/
 │   │   ├── run_semantic_audit.py      # Semantic integrity audit runner
 │   │   ├── run_invariant_audit.py     # Invariant preservation auditor
 │   │   ├── run_report_consistency_audit.py # Cross-report contradiction detection runner
+│   │   ├── quality_benchmark.py       # SWE-MiniBench-5 hermetic benchmark, isolation & 4-tier evaluator
 │   │   └── migrate_v4_to_v4_1.py      # Migration script from V4 to V4.1
 │   ├── semantic/                      # Python semantic integrity engine (auditor, claims, memory, etc.)
 │   ├── skills/                        # All 200 curated Multi-Domain Golden Catalog skills (9 domains)
@@ -394,9 +453,10 @@ antigravity_swarm_coordinator/
 │       ├── scripts/                   # ESM/Node.js hook, RTK rewriter, LSP, and status scripts
 │       └── skills/                    # ASW utility skills (asw-plan, asw-loop, asw-harness-adapt, ...)
 │
-├── tests/                             # 115 automated unit, negative, E2E, and cross-platform tests
+├── tests/                             # 122 automated unit, negative, E2E, and cross-platform tests
 │   ├── test_token_economizer.py       # EnvFacts lifecycle, TurnGuard, EnvelopeTracker & effective_tokens
 │   ├── test_token_economizer_e2e.py   # Hook channel hygiene & 6-session A/B token benchmark
+│   ├── test_quality_benchmark.py      # SWE-MiniBench-5 oracle, 8-tool isolation, 4-tier & README parity
 │   ├── test_decision_router.py        # System 1 Laya routing & judge-loop latency/accuracy tests
 │   ├── test_harness2_windows.py       # Cross-platform locks, POSIX paths, symlink rejection
 │   ├── test_antigravity_substrate.py  # Immutable governance & 8-skill budget enforcement

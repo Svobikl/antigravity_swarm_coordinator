@@ -1,0 +1,841 @@
+{
+  "benchmark": "SWE-MiniBench-5",
+  "run_id": "swe-hardbench-5-mode3-live-2026-11-18",
+  "arms": {
+    "baseline": {
+      "label": "Stock Orchestrator Carbon (Baseline)",
+      "tasks_passed": 2,
+      "tasks_total": 5,
+      "pass_at_1_rate": 0.4,
+      "public_passed": 10,
+      "public_total": 10,
+      "holdout_passed": 46,
+      "holdout_total": 50,
+      "raw_tokens": 3871113,
+      "effective_tokens": 2175656.9,
+      "tokens_by_model": {
+        "gemini-4-carbon": {
+          "input_tokens": 523129,
+          "cache_read_tokens": 3047958,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 300026,
+          "requests": 58,
+          "raw_tokens": 3871113,
+          "effective_tokens": 2175656.9
+        },
+        "gemini-4-argon": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 0,
+          "requests": 0,
+          "raw_tokens": 0,
+          "effective_tokens": 0.0
+        },
+        "gemini-4-hydrogen": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 0,
+          "requests": 0,
+          "raw_tokens": 0,
+          "effective_tokens": 0.0
+        },
+        "claude-opus-5-5": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 0,
+          "requests": 0,
+          "raw_tokens": 0,
+          "effective_tokens": 0.0
+        }
+      },
+      "per_task": {
+        "T1": {
+          "pkg": "gateway",
+          "public_passed": 2,
+          "public_total": 2,
+          "holdout_passed": 8,
+          "holdout_total": 10,
+          "pass_at_1": false,
+          "raw_tokens": 828878,
+          "effective_tokens": 497080.55,
+          "tokens_by_model": {
+            "gemini-4-carbon": {
+              "input_tokens": 112661,
+              "cache_read_tokens": 645791,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 70426,
+              "requests": 11,
+              "raw_tokens": 828878,
+              "effective_tokens": 497080.55
+            },
+            "gemini-4-argon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-hydrogen": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "claude-opus-5-5": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            }
+          },
+          "transcripts": [
+            {
+              "conversation_id": "61884abe-781f-4e93-a04a-6863afc03de2",
+              "role": "stock-carbon-orchestrator",
+              "model": "gemini-4-carbon",
+              "sha256": "c3a4683c823de37d5e990b03746da70d53e010eada162cef2fae50133e8a8feb",
+              "input_tokens": 112661,
+              "cache_read_tokens": 645791,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 70426,
+              "requests": 11,
+              "raw_tokens": 828878,
+              "effective_tokens": 497080.55
+            }
+          ]
+        },
+        "T2": {
+          "pkg": "cfgdag",
+          "public_passed": 2,
+          "public_total": 2,
+          "holdout_passed": 9,
+          "holdout_total": 10,
+          "pass_at_1": false,
+          "raw_tokens": 871023,
+          "effective_tokens": 495589.9,
+          "tokens_by_model": {
+            "gemini-4-carbon": {
+              "input_tokens": 115934,
+              "cache_read_tokens": 686018,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 69071,
+              "requests": 11,
+              "raw_tokens": 871023,
+              "effective_tokens": 495589.9
+            },
+            "gemini-4-argon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-hydrogen": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "claude-opus-5-5": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            }
+          },
+          "transcripts": [
+            {
+              "conversation_id": "e90b7e1c-f99d-4bca-a1e9-10d9233472d2",
+              "role": "stock-carbon-orchestrator",
+              "model": "gemini-4-carbon",
+              "sha256": "bf278460159135d86af5320479992543d4663834a29ba934df7ac8d805347df1",
+              "input_tokens": 115934,
+              "cache_read_tokens": 686018,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 69071,
+              "requests": 11,
+              "raw_tokens": 871023,
+              "effective_tokens": 495589.9
+            }
+          ]
+        },
+        "T3": {
+          "pkg": "quantbt",
+          "public_passed": 2,
+          "public_total": 2,
+          "holdout_passed": 10,
+          "holdout_total": 10,
+          "pass_at_1": true,
+          "raw_tokens": 781672,
+          "effective_tokens": 378814.15,
+          "tokens_by_model": {
+            "gemini-4-carbon": {
+              "input_tokens": 101644,
+              "cache_read_tokens": 630903,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 49125,
+              "requests": 15,
+              "raw_tokens": 781672,
+              "effective_tokens": 378814.15
+            },
+            "gemini-4-argon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-hydrogen": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "claude-opus-5-5": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            }
+          },
+          "transcripts": [
+            {
+              "conversation_id": "17a9a579-f17a-4a1c-b00e-4a360e937ab8",
+              "role": "stock-carbon-orchestrator",
+              "model": "gemini-4-carbon",
+              "sha256": "429f3f43a08bdfeb0c982e4222aca12a6273e89baf7fe5ed7620a54851edde3a",
+              "input_tokens": 101644,
+              "cache_read_tokens": 630903,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 49125,
+              "requests": 15,
+              "raw_tokens": 781672,
+              "effective_tokens": 378814.15
+            }
+          ]
+        },
+        "T4": {
+          "pkg": "ratelimit",
+          "public_passed": 2,
+          "public_total": 2,
+          "holdout_passed": 9,
+          "holdout_total": 10,
+          "pass_at_1": false,
+          "raw_tokens": 713738,
+          "effective_tokens": 366451.6,
+          "tokens_by_model": {
+            "gemini-4-carbon": {
+              "input_tokens": 91680,
+              "cache_read_tokens": 572832,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 49226,
+              "requests": 12,
+              "raw_tokens": 713738,
+              "effective_tokens": 366451.6
+            },
+            "gemini-4-argon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-hydrogen": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "claude-opus-5-5": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            }
+          },
+          "transcripts": [
+            {
+              "conversation_id": "583407d8-ad7e-47c2-85a0-dd43a79cc52c",
+              "role": "stock-carbon-orchestrator",
+              "model": "gemini-4-carbon",
+              "sha256": "a0c57884fc2a81714f753d95ce238a2c1376ae50cea3224c32b9e76973431143",
+              "input_tokens": 91680,
+              "cache_read_tokens": 572832,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 49226,
+              "requests": 12,
+              "raw_tokens": 713738,
+              "effective_tokens": 366451.6
+            }
+          ]
+        },
+        "T5": {
+          "pkg": "outbox",
+          "public_passed": 2,
+          "public_total": 2,
+          "holdout_passed": 10,
+          "holdout_total": 10,
+          "pass_at_1": true,
+          "raw_tokens": 675802,
+          "effective_tokens": 437720.7,
+          "tokens_by_model": {
+            "gemini-4-carbon": {
+              "input_tokens": 101210,
+              "cache_read_tokens": 512414,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 62178,
+              "requests": 9,
+              "raw_tokens": 675802,
+              "effective_tokens": 437720.7
+            },
+            "gemini-4-argon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-hydrogen": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "claude-opus-5-5": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            }
+          },
+          "transcripts": [
+            {
+              "conversation_id": "0573489f-0a03-4372-a2f1-57e941f83964",
+              "role": "stock-carbon-orchestrator",
+              "model": "gemini-4-carbon",
+              "sha256": "8c25fc5c012773c2e5a857fc07d1915bf4a385275ac28be6a3f08fdf0059134b",
+              "input_tokens": 101210,
+              "cache_read_tokens": 512414,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 62178,
+              "requests": 9,
+              "raw_tokens": 675802,
+              "effective_tokens": 437720.7
+            }
+          ]
+        }
+      },
+      "shared_transcripts": [],
+      "leakage_violations": 0
+    },
+    "swarm": {
+      "label": "Antigravity Swarm Coordinator V4.1",
+      "tasks_passed": 3,
+      "tasks_total": 5,
+      "pass_at_1_rate": 0.6,
+      "public_passed": 10,
+      "public_total": 10,
+      "holdout_passed": 47,
+      "holdout_total": 50,
+      "raw_tokens": 5209177,
+      "effective_tokens": 2001898.75,
+      "tokens_by_model": {
+        "gemini-4-carbon": {
+          "input_tokens": 121614,
+          "cache_read_tokens": 752746,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 64634,
+          "requests": 13,
+          "raw_tokens": 938994,
+          "effective_tokens": 482421.3
+        },
+        "gemini-4-argon": {
+          "input_tokens": 151625,
+          "cache_read_tokens": 1032624,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 67877,
+          "requests": 13,
+          "raw_tokens": 1252126,
+          "effective_tokens": 542641.2
+        },
+        "gemini-4-hydrogen": {
+          "input_tokens": 388670,
+          "cache_read_tokens": 2537125,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 92262,
+          "requests": 68,
+          "raw_tokens": 3018057,
+          "effective_tokens": 976836.25
+        },
+        "claude-opus-5-5": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 0,
+          "requests": 0,
+          "raw_tokens": 0,
+          "effective_tokens": 0.0
+        }
+      },
+      "per_task": {
+        "T1": {
+          "pkg": "gateway",
+          "public_passed": 2,
+          "public_total": 2,
+          "holdout_passed": 8,
+          "holdout_total": 10,
+          "pass_at_1": false,
+          "raw_tokens": 863202,
+          "effective_tokens": 376924.2,
+          "tokens_by_model": {
+            "gemini-4-carbon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-argon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-hydrogen": {
+              "input_tokens": 62057,
+              "cache_read_tokens": 344394,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 18527,
+              "requests": 10,
+              "raw_tokens": 424978,
+              "effective_tokens": 171911.7
+            },
+            "claude-opus-5-5": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            }
+          },
+          "transcripts": [
+            {
+              "conversation_id": "5f900ab6-4484-4208-83a9-82aac9cb6adc",
+              "role": "asw-implementer",
+              "model": "gemini-4-hydrogen",
+              "sha256": "910b07710e3ce8bef79f14ae0cc96ef45dd872e396c0f5362fc84c965bb85b7d",
+              "input_tokens": 62057,
+              "cache_read_tokens": 344394,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 18527,
+              "requests": 10,
+              "raw_tokens": 424978,
+              "effective_tokens": 171911.7
+            }
+          ]
+        },
+        "T2": {
+          "pkg": "cfgdag",
+          "public_passed": 2,
+          "public_total": 2,
+          "holdout_passed": 10,
+          "holdout_total": 10,
+          "pass_at_1": true,
+          "raw_tokens": 1496245,
+          "effective_tokens": 491725.9,
+          "tokens_by_model": {
+            "gemini-4-carbon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-argon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-hydrogen": {
+              "input_tokens": 93726,
+              "cache_read_tokens": 935048,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 29247,
+              "requests": 20,
+              "raw_tokens": 1058021,
+              "effective_tokens": 286713.4
+            },
+            "claude-opus-5-5": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            }
+          },
+          "transcripts": [
+            {
+              "conversation_id": "c1f44637-f637-4b82-87d5-6c29fc83f230",
+              "role": "asw-implementer",
+              "model": "gemini-4-hydrogen",
+              "sha256": "e48880a7fc9c56552f46a3c4b7c7e5d0de5ce3650ce236fb696ee58b6323dc68",
+              "input_tokens": 93726,
+              "cache_read_tokens": 935048,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 29247,
+              "requests": 20,
+              "raw_tokens": 1058021,
+              "effective_tokens": 286713.4
+            }
+          ]
+        },
+        "T3": {
+          "pkg": "quantbt",
+          "public_passed": 2,
+          "public_total": 2,
+          "holdout_passed": 10,
+          "holdout_total": 10,
+          "pass_at_1": true,
+          "raw_tokens": 852194,
+          "effective_tokens": 369897.4,
+          "tokens_by_model": {
+            "gemini-4-carbon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-argon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-hydrogen": {
+              "input_tokens": 61013,
+              "cache_read_tokens": 335538,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 17419,
+              "requests": 10,
+              "raw_tokens": 413970,
+              "effective_tokens": 164884.9
+            },
+            "claude-opus-5-5": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            }
+          },
+          "transcripts": [
+            {
+              "conversation_id": "8eea3f09-fca2-487e-97fb-c4e1c7136604",
+              "role": "asw-implementer",
+              "model": "gemini-4-hydrogen",
+              "sha256": "5a59b4054cbb2e488af482e1db766c8c27b229bec58bf5bacdde81847a9ec060",
+              "input_tokens": 61013,
+              "cache_read_tokens": 335538,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 17419,
+              "requests": 10,
+              "raw_tokens": 413970,
+              "effective_tokens": 164884.9
+            }
+          ]
+        },
+        "T4": {
+          "pkg": "ratelimit",
+          "public_passed": 2,
+          "public_total": 2,
+          "holdout_passed": 9,
+          "holdout_total": 10,
+          "pass_at_1": false,
+          "raw_tokens": 1175148,
+          "effective_tokens": 414464.95,
+          "tokens_by_model": {
+            "gemini-4-carbon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-argon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-hydrogen": {
+              "input_tokens": 115960,
+              "cache_read_tokens": 608349,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 12615,
+              "requests": 18,
+              "raw_tokens": 736924,
+              "effective_tokens": 209452.45
+            },
+            "claude-opus-5-5": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            }
+          },
+          "transcripts": [
+            {
+              "conversation_id": "1ed9379b-eb49-4dc3-91e2-c681dab7932c",
+              "role": "asw-implementer",
+              "model": "gemini-4-hydrogen",
+              "sha256": "dcb1d750ee590d0b3f52567b46e3ded1bb51c1b8a0c9aa3c1f242fc08810dffd",
+              "input_tokens": 115960,
+              "cache_read_tokens": 608349,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 12615,
+              "requests": 18,
+              "raw_tokens": 736924,
+              "effective_tokens": 209452.45
+            }
+          ]
+        },
+        "T5": {
+          "pkg": "outbox",
+          "public_passed": 2,
+          "public_total": 2,
+          "holdout_passed": 10,
+          "holdout_total": 10,
+          "pass_at_1": true,
+          "raw_tokens": 822388,
+          "effective_tokens": 348886.3,
+          "tokens_by_model": {
+            "gemini-4-carbon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-argon": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            },
+            "gemini-4-hydrogen": {
+              "input_tokens": 55914,
+              "cache_read_tokens": 313796,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 14454,
+              "requests": 10,
+              "raw_tokens": 384164,
+              "effective_tokens": 143873.8
+            },
+            "claude-opus-5-5": {
+              "input_tokens": 0,
+              "cache_read_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 0,
+              "requests": 0,
+              "raw_tokens": 0,
+              "effective_tokens": 0.0
+            }
+          },
+          "transcripts": [
+            {
+              "conversation_id": "314ce871-774d-4b64-8859-7bebd024317b",
+              "role": "asw-implementer",
+              "model": "gemini-4-hydrogen",
+              "sha256": "4ff71c43dc2f4994a484969a471da5f6aca01f02343fd6dcf1b843add640aa56",
+              "input_tokens": 55914,
+              "cache_read_tokens": 313796,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 14454,
+              "requests": 10,
+              "raw_tokens": 384164,
+              "effective_tokens": 143873.8
+            }
+          ]
+        }
+      },
+      "shared_transcripts": [
+        {
+          "conversation_id": "8c82c5e9-f8d7-4b57-a829-965ae5026e31",
+          "role": "asw-planner-architect",
+          "model": "gemini-4-carbon",
+          "sha256": "1bfc674ab3926baba6d8682e53cf320c9a4eb32dd46a89c895afd9e2146ac07b",
+          "input_tokens": 121614,
+          "cache_read_tokens": 752746,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 64634,
+          "requests": 13,
+          "raw_tokens": 938994,
+          "effective_tokens": 482421.3
+        },
+        {
+          "conversation_id": "a04819c4-e184-4c99-9a6e-b7855157b340",
+          "role": "asw-adversarial-reviewer",
+          "model": "gemini-4-argon",
+          "sha256": "419335b7ecd00b3f63a2538b8d99ce55541523c2bac4f443d50f0e2d5a347b99",
+          "input_tokens": 151625,
+          "cache_read_tokens": 1032624,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 67877,
+          "requests": 13,
+          "raw_tokens": 1252126,
+          "effective_tokens": 542641.2
+        }
+      ],
+      "leakage_violations": 0
+    }
+  },
+  "comparison": {
+    "pass_at_1_delta": 0.2,
+    "holdout_passed_delta": 1,
+    "raw_tokens_saved": -1338064,
+    "raw_tokens_savings_pct": -34.57,
+    "effective_tokens_saved": 173758.15,
+    "effective_tokens_savings_pct": 7.99
+  },
+  "supplementary_arms": {
+    "mode2_fast_swarm": {
+      "label": "Swarm Mode 2 (Fast \u2014 Hydrogen + rtk + Argon Batch Review)",
+      "tasks_passed": 2,
+      "tasks_total": 5,
+      "holdout_passed": 46,
+      "holdout_total": 50,
+      "raw_tokens": 4328797,
+      "effective_tokens": 1648667.0,
+      "effective_tokens_savings_pct_vs_baseline": 24.22,
+      "transcripts": [
+        {
+          "conversation_id": "ff95575a-7f27-4ad9-ba6e-8bde769e4a09",
+          "role": "T1-implementer",
+          "model": "gemini-4-hydrogen",
+          "sha256": "e0a46994ac4c93db1d50f534a0bd1b5a155e7443f2e2ae61ee088ab322917791",
+          "raw_tokens": 618563,
+          "effective_tokens": 254699.4
+        },
+        {
+          "conversation_id": "76dbb502-57b0-4483-942e-560b48ece8d3",
+          "role": "T2-implementer",
+          "model": "gemini-4-hydrogen",
+          "sha256": "e576455998c499488f74c7af4ee323e1579f269df84e79aa1441295129789349",
+          "raw_tokens": 573031,
+          "effective_tokens": 268753.15
+        },
+        {
+          "conversation_id": "5e2c7109-dab6-43d6-b2ed-1bd5472e4987",
+          "role": "T3-implementer",
+          "model": "gemini-4-hydrogen",
+          "sha256": "b5cd9861c28b0c2db44b73a8ba240cd895a8e041e4814320cdf7d881191fcfca",
+          "raw_tokens": 398060,
+          "effective_tokens": 192127.7
+        },
+        {
+          "conversation_id": "2de5356d-7398-4ddc-94cf-24f9f5a5fc60",
+          "role": "T4-implementer",
+          "model": "gemini-4-hydrogen",
+          "sha256": "589cbdd7fc9bdbd6e1fbdeb2b09d419ea23949e7ea6ce4b00683a4b5ab75c13f",
+          "raw_tokens": 346760,
+          "effective_tokens": 179529.75
+        },
+        {
+          "conversation_id": "b7587973-f8c9-4e20-9270-8c4fcb57824a",
+          "role": "T5-implementer",
+          "model": "gemini-4-hydrogen",
+          "sha256": "4309f097e06ef3b6acc1c1c7d0716605da2f2103adf1edd0a8630df99b8af6d9",
+          "raw_tokens": 540845,
+          "effective_tokens": 266273.2
+        },
+        {
+          "conversation_id": "75e199f4-f3fd-4800-a38c-21b9dd6b2647",
+          "role": "swarm-batch-reviewer",
+          "model": "gemini-4-argon",
+          "sha256": "50af32ad585a37df4569f4c819e88fa39730912cc2cff9e35420feab7b7bc60c",
+          "raw_tokens": 1851538,
+          "effective_tokens": 487283.8
+        }
+      ]
+    }
+  }
+}
