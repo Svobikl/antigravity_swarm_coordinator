@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Curate and synchronize the Antigravity Multi-Domain Golden Skill Catalog (200 skills).
+"""Curate and synchronize the Antigravity Multi-Domain Golden Skill Catalog (201 skills).
 
 Eliminates duplicate, overlapping, placeholder, and foreign-language bloat across:
   - ~/.gemini/config/skills
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 GOLDEN_CATALOG: dict[str, str] = {
-    # === 1. Swarm Coordinator, ASW & Obsidian Memory Core (43 skills) ===
+    # === 1. Swarm Coordinator, ASW & Obsidian Memory Core (45 skills) ===
     "swarm-coordinator": "Global orchestration lead enforcing Mode 0-5 routing, Tri-Model gates, and verification.",
     "skill-router": "Selects a bounded active skill set (max 8 skills) from the catalog per leaf task.",
     "program-state-controller": "Manages Mode 5 control-plane files, task graphs, requirement ledgers, and state transitions.",
@@ -60,6 +60,7 @@ GOLDEN_CATALOG: dict[str, str] = {
     "asw-start-work": "Executes approved .asw/plans checklists wave-by-wave with persistent state tracking.",
     "asw-test-gui": "On-demand physical GUI and localhost Playwright verification for web, native, and mobile apps.",
     "asw-ui-ux": "Product-grade frontend UI/UX and README visual presentation workflow for ASW deliveries.",
+    "context-hub": "Fetches versioned API/SDK docs via chub CLI and saves sanitized self-improvement notes.",
     "obs-memory": "Orients sessions, queries project notes, and records recaps in the Obsidian Knowledge Vault.",
     "agent-memory": "Persistent hybrid knowledge and episodic memory patterns for autonomous agents.",
     "agent-memory-mcp": "Integrates Model Context Protocol memory tools with persistent agent knowledge graphs.",
@@ -112,7 +113,7 @@ GOLDEN_CATALOG: dict[str, str] = {
     "inventory-demand-planning": "Forecasts inventory demand, safety stock, reorder points, and supply-chain lead times.",
     "electronics-sourcing": "Sources electronic components, compares distributor stock/pricing, and audits hardware BOMs.",
 
-    # === 5. Marketing, SEO, GEO, Copywriting, CRO & Growth (14 skills) ===
+    # === 5. Marketing, SEO, GEO, Copywriting, CRO & Growth (13 skills) ===
     "marketing-plan": "Builds full-funnel B2B and B2C marketing plans, positioning, messaging, and channel budgets.",
     "content-creator": "Develops brand voice guidelines, editorial calendars, and multi-platform marketing content.",
     "copywriting": "Writes high-converting headlines, landing pages, value propositions, and product copy.",
@@ -271,8 +272,8 @@ def normalize_skill_frontmatter(skill_md: Path, skill_name: str, concise_desc: s
 
 
 def curate_catalog(*, dry_run: bool = False) -> dict[str, object]:
-    if len(GOLDEN_CATALOG) != 200:
-        raise ValueError(f"GOLDEN_CATALOG must have exactly 200 skills, got {len(GOLDEN_CATALOG)}")
+    if len(GOLDEN_CATALOG) != 201:
+        raise ValueError(f"GOLDEN_CATALOG must have exactly 201 skills, got {len(GOLDEN_CATALOG)}")
 
     home = Path.home()
     cfg_dir = home / ".gemini" / "config" / "skills"
@@ -280,18 +281,19 @@ def curate_catalog(*, dry_run: bool = False) -> dict[str, object]:
     ag_dir = home / ".agents" / "skills"
     repo_root = Path(__file__).resolve().parents[2]
     local_dir = repo_root / "core_framework" / "skills"
+    repo_ag_skills_dir = repo_root / ".antigravity" / "skills"
     repo_skill_roots = (
         local_dir,
-        repo_root / ".antigravity" / "skills",
+        repo_ag_skills_dir,
         repo_root / "plugins" / "antigravity-swarm" / "skills",
     )
 
-    # Step 1: Promote any Golden skills that currently live only in ide_dir or ag_dir into cfg_dir
+    # Step 1: Promote any Golden skills that currently live only in ide_dir, ag_dir, local_dir, or .antigravity/skills into cfg_dir
     promoted: list[str] = []
     for name in sorted(GOLDEN_CATALOG):
         target = cfg_dir / name
         if not (target / "SKILL.md").exists():
-            for donor_root in (ide_dir, ag_dir, local_dir):
+            for donor_root in (ide_dir, ag_dir, local_dir, repo_ag_skills_dir):
                 donor = donor_root / name
                 if (donor / "SKILL.md").exists():
                     if not dry_run:
@@ -326,7 +328,7 @@ def curate_catalog(*, dry_run: bool = False) -> dict[str, object]:
                 if local_md.exists():
                     normalize_skill_frontmatter(local_md, name, desc)
 
-        # Step 4: Synchronize all 200 normalized skills from cfg_dir into ide_dir and ag_dir
+        # Step 4: Synchronize all 201 normalized skills from cfg_dir into ide_dir and ag_dir
         for mirror_root in (ide_dir, ag_dir):
             mirror_root.mkdir(parents=True, exist_ok=True)
             for name in sorted(GOLDEN_CATALOG):
@@ -411,7 +413,7 @@ def verify_catalog() -> dict[str, object]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Curate and verify the Antigravity 200-skill Golden Catalog.")
+    parser = argparse.ArgumentParser(description="Curate and verify the Antigravity 201-skill Golden Catalog.")
     parser.add_argument("--dry-run", action="store_true", help="Report actions without modifying files.")
     parser.add_argument("--verify", action="store_true", help="Verify the curated catalog state.")
     args = parser.parse_args()

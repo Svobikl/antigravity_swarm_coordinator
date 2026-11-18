@@ -16,7 +16,7 @@ CORE_COORDINATOR_SKILLS = frozenset({
     "asw", "asw-cleanup", "asw-comment-check", "asw-debug", "asw-goal",
     "asw-harness-adapt", "asw-loop", "asw-lsp", "asw-plan", "asw-programming",
     "asw-refactor", "asw-remove-ai-slops", "asw-review", "asw-rules",
-    "asw-start-work", "asw-test-gui", "asw-ui-ux", "rtk-token-killer", "obs-memory", "agent-memory", "agent-memory-mcp",
+    "asw-start-work", "asw-test-gui", "asw-ui-ux", "rtk-token-killer", "context-hub", "obs-memory", "agent-memory", "agent-memory-mcp",
     "obsidian-markdown", "obsidian-cli", "obsidian-bases",
 })
 
@@ -48,12 +48,12 @@ class TestSkillCatalogCuration(unittest.TestCase):
         self.ag_dir = self.home / ".agents" / "skills"
 
     def test_catalog_size_under_antigravity_budget(self):
-        """Global skill catalog must contain exactly 200 curated skills (strictly <= 215 budget)."""
+        """Global skill catalog must contain exactly 201 curated skills (strictly <= 215 budget)."""
         cfg_skills = {d.name for d in self.cfg_dir.iterdir() if d.is_dir()}
         self.assertEqual(
             len(cfg_skills),
-            200,
-            f"Expected exactly 200 curated skills in .gemini/config/skills, found {len(cfg_skills)}",
+            201,
+            f"Expected exactly 201 curated skills in .gemini/config/skills, found {len(cfg_skills)}",
         )
         ide_skills = {d.name for d in self.ide_dir.iterdir() if d.is_dir()}
         ag_skills = {d.name for d in self.ag_dir.iterdir() if d.is_dir()}
@@ -593,6 +593,121 @@ class TestSkillCatalogCuration(unittest.TestCase):
             txt = raw.decode("utf-8")
             self.assertIn("rtk find", txt)
             self.assertIn("System32", txt)
+
+    def test_context_hub_skill_and_chub_installer_contract(self):
+        """Verifies M1, M2, M5: context-hub SKILL.md across all roots, BOM/length bounds, install.py --skip-chub & ~/.chub/config.yaml seeding, and workflow wiring."""
+        import importlib.util
+        import tempfile
+        from unittest import mock
+
+        repo_root = Path(__file__).resolve().parent.parent
+        skill_paths = [
+            repo_root / ".antigravity" / "skills" / "context-hub" / "SKILL.md",
+            self.cfg_dir / "context-hub" / "SKILL.md",
+            self.ide_dir / "context-hub" / "SKILL.md",
+            self.ag_dir / "context-hub" / "SKILL.md",
+        ]
+        for sp in skill_paths:
+            self.assertTrue(sp.is_file(), f"Missing context-hub SKILL.md at {sp}")
+            raw = sp.read_bytes()
+            self.assertFalse(raw.startswith(b"\xef\xbb\xbf"), f"BOM found in {sp}")
+            txt = raw.decode("utf-8")
+            m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", txt, re.S)
+            self.assertIsNotNone(m, f"Missing frontmatter in {sp}")
+            desc = ""
+            for line in m.group(1).splitlines():
+                if line.strip().startswith("description:"):
+                    desc = line.split(":", 1)[1].strip().strip("\"'")
+                    break
+            self.assertTrue(15 <= len(desc) <= 97, f"Invalid description length {len(desc)} in {sp}: {desc!r}")
+            for marker in ("chub search", "chub get", "chub annotate", "CHUB_TELEMETRY=0", "CHUB_FEEDBACK=0", "--sync-chub-annotations", "untrusted"):
+                self.assertIn(marker, txt, f"{sp} missing {marker}")
+
+        # Zero duplicate in plugin skills
+        plugin_chub = self.home / ".gemini" / "config" / "plugins" / "antigravity-swarm" / "skills" / "context-hub"
+        self.assertFalse(plugin_chub.exists(), "context-hub must not duplicate into deployed plugin skills/")
+
+        # Installer contract: ensure_chub_installed, --skip-chub, ~/.chub/config.yaml seeding & preservation
+        install_py = repo_root / "install.py"
+        spec = importlib.util.spec_from_file_location("installer_chub_mod", install_py)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.assertTrue(hasattr(mod, "ensure_chub_installed"))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_home = Path(tmp) / "fake_home"
+            fake_home.mkdir(parents=True)
+
+            # Seed ~/.chub/config.yaml when missing
+            res = mod.run_install(
+                repo_root=repo_root,
+                home_dir=fake_home,
+                skip_prompt=True,
+                skip_plugin=True,
+                skip_vault=True,
+                skip_rtk=True,
+                skip_chub=True,
+            )
+            self.assertIn("chub_installed", res)
+            self.assertFalse(res["chub_installed"])
+            self.assertTrue((fake_home / ".gemini" / "config" / "skills" / "context-hub" / "SKILL.md").is_file())
+            self.assertTrue((fake_home / ".gemini" / "antigravity-ide" / "skills" / "context-hub" / "SKILL.md").is_file())
+            self.assertTrue((fake_home / ".agents" / "skills" / "context-hub" / "SKILL.md").is_file())
+
+            chub_cfg = fake_home / ".chub" / "config.yaml"
+            self.assertTrue(chub_cfg.is_file(), "install.py must seed ~/.chub/config.yaml")
+            cfg_txt = chub_cfg.read_text(encoding="utf-8")
+            self.assertIn("telemetry: false", cfg_txt)
+            self.assertIn("feedback: false", cfg_txt)
+
+            # Preserve existing custom config.yaml
+            custom_yaml = "telemetry: false\nfeedback: false\nsources:\n  - name: custom\n    path: /tmp/docs\n"
+            chub_cfg.write_text(custom_yaml, encoding="utf-8")
+            with mock.patch("shutil.which", return_value=None):
+                missing_res = mod.ensure_chub_installed(home_dir=fake_home, attempt_install=False)
+                self.assertFalse(missing_res["installed"])
+            self.assertEqual(chub_cfg.read_text(encoding="utf-8"), custom_yaml)
+
+        # M5 workflow adoption across skills, agents, and rules (supports both upstream clone and deployed repo)
+        wiring_groups = [
+            (
+                repo_root / ".antigravity" / "skills" / "implementation-developer" / "SKILL.md",
+                repo_root / "core_framework" / "skills" / "implementation-developer" / "SKILL.md",
+                self.cfg_dir / "implementation-developer" / "SKILL.md",
+            ),
+            (
+                repo_root / "skills" / "asw-loop" / "SKILL.md",
+                repo_root / "core_framework" / "skills" / "asw-loop" / "SKILL.md",
+                repo_root / "plugins" / "antigravity-swarm" / "skills" / "asw-loop" / "SKILL.md",
+            ),
+            (
+                repo_root / ".antigravity" / "skills" / "swarm-coordinator" / "SKILL.md",
+                repo_root / "core_framework" / "skills" / "swarm-coordinator" / "SKILL.md",
+                repo_root / "skills" / "swarm-coordinator" / "SKILL.md",
+            ),
+            (
+                repo_root / "core_framework" / "skills" / "obs-memory" / "SKILL.md",
+                self.cfg_dir / "obs-memory" / "SKILL.md",
+            ),
+            (repo_root / ".antigravity" / "agents" / "asw-implementer.md",),
+            (repo_root / "plugins" / "antigravity-swarm" / "agents" / "asw-implementer.md",),
+            (repo_root / ".antigravity" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md",),
+            (
+                repo_root / "GEMINI.md",
+                repo_root / "global_entrypoint" / "GEMINI.md",
+            ),
+        ]
+        for group in wiring_groups:
+            existing = [p for p in group if p.is_file()]
+            self.assertTrue(existing, f"Missing M5 wiring target among: {group}")
+            for wt in existing:
+                w_raw = wt.read_bytes()
+                self.assertFalse(w_raw.startswith(b"\xef\xbb\xbf"), f"BOM found in {wt}")
+                w_txt = w_raw.decode("utf-8")
+                self.assertIn("chub search", w_txt, f"Missing chub search in {wt}")
+                self.assertIn("chub get", w_txt, f"Missing chub get in {wt}")
+                self.assertIn("chub annotate", w_txt, f"Missing chub annotate in {wt}")
+                self.assertIn("--sync-chub-annotations", w_txt, f"Missing --sync-chub-annotations in {wt}")
 
 
 if __name__ == "__main__":

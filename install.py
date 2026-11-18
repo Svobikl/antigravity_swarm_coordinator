@@ -3,7 +3,7 @@
 
 Installs:
   1. Global entry point prompt (~/.gemini/GEMINI.md and ~/.agents/AGENTS.md)
-  2. All 200 curated Multi-Domain Golden Catalog skills (~/.gemini/config/skills,
+  2. All 201 curated Multi-Domain Golden Catalog skills (~/.gemini/config/skills,
      ~/.gemini/antigravity-ide/skills, and ~/.agents/skills)
   3. Antigravity Swarm (ASW) plugin and Claude Opus 5.5 subagent TOMLs
      (~/.gemini/config/plugins/antigravity-swarm)
@@ -153,6 +153,80 @@ def ensure_rtk_installed(
     return {"installed": False, "version": None, "path": None}
 
 
+def _seed_chub_config(active_home: Path) -> bool:
+    """Seed ~/.chub/config.yaml with telemetry/feedback disabled only if missing."""
+    chub_cfg = active_home / ".chub" / "config.yaml"
+    if chub_cfg.exists():
+        return False
+    chub_cfg.parent.mkdir(parents=True, exist_ok=True)
+    chub_cfg.write_text("telemetry: false\nfeedback: false\n", encoding="utf-8")
+    return True
+
+
+def ensure_chub_installed(
+    home_dir: Path | None = None,
+    attempt_install: bool = True,
+) -> dict[str, object]:
+    """Discover or install the @aisuite/chub CLI and seed privacy-first ~/.chub/config.yaml."""
+    active_home = home_dir if home_dir is not None else Path.home()
+    seeded = _seed_chub_config(active_home)
+
+    env = dict(os.environ)
+    env["CHUB_TELEMETRY"] = "0"
+    env["CHUB_FEEDBACK"] = "0"
+
+    def _probe_chub() -> tuple[str | None, str | None]:
+        chub_bin = shutil.which("chub")
+        if not chub_bin:
+            return None, None
+        try:
+            res = subprocess.run([chub_bin, "-V"], capture_output=True, text=True, env=env, timeout=10)
+            if res.returncode == 0:
+                ver = (res.stdout or res.stderr).strip() or "unknown"
+                return ver, chub_bin
+        except Exception:
+            pass
+        return None, None
+
+    ver, chub_bin = _probe_chub()
+    if ver:
+        return {"installed": True, "version": ver, "path": chub_bin, "config_seeded": seeded}
+
+    if attempt_install:
+        npm_bin = shutil.which("npm")
+        if npm_bin:
+            try:
+                subprocess.run(
+                    [npm_bin, "install", "-g", "@aisuite/chub"],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=60,
+                )
+            except Exception:
+                pass
+            ver, chub_bin = _probe_chub()
+            if ver:
+                return {"installed": True, "version": ver, "path": chub_bin, "config_seeded": seeded}
+
+    return {"installed": False, "version": None, "path": None, "config_seeded": seeded}
+
+
+def _load_golden_skill_names(repo_root: Path) -> set[str]:
+    curate_script = repo_root / ".antigravity" / "scripts" / "curate_skill_catalog.py"
+    if not curate_script.is_file():
+        return {"context-hub"}
+    try:
+        spec = importlib.util.spec_from_file_location("curate_skill_catalog_inst", curate_script)
+        if spec and spec.loader:
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return set(getattr(mod, "GOLDEN_CATALOG", {}).keys()) | {"context-hub"}
+    except Exception:
+        pass
+    return {"context-hub"}
+
+
 def run_install(
     *,
     repo_root: Path,
@@ -166,6 +240,7 @@ def run_install(
     clean_skills: bool = False,
     install_obsidian_app: bool = False,
     skip_rtk: bool = False,
+    skip_chub: bool = False,
     install_laya: bool = False,
     disable_decision_model: bool = False,
 ) -> dict[str, object]:
@@ -189,6 +264,9 @@ def run_install(
         "rtk_installed": False,
         "rtk_version": None,
         "rtk_skill_mandatory": True,
+        "chub_installed": False,
+        "chub_version": None,
+        "chub_config_seeded": False,
         "decision_router_installed": False,
         "decision_router_device": None,
         "decision_model_enabled": not disable_decision_model,
@@ -212,15 +290,29 @@ def run_install(
             shutil.copy2(src_prompt, agents_home_dir / "AGENTS.md")
             summary["prompt_installed"] = True
 
-    # 2. Global Skills Catalog (200 curated skills)
+    # 2. Global Skills Catalog (201 curated skills)
     if not skip_skills:
         skills_src = repo_root / "core_framework" / "skills"
-        if not skills_src.is_dir():
+        using_core_framework = skills_src.is_dir()
+        if not using_core_framework:
             skills_src = repo_root / "skills"
 
+        skill_dirs_by_name: dict[str, Path] = {}
         if skills_src.is_dir():
-            skill_dirs = sorted([d for d in skills_src.iterdir() if d.is_dir() and (d / "SKILL.md").is_file()])
-            skill_names = {d.name for d in skill_dirs}
+            for d in sorted(skills_src.iterdir()):
+                if d.is_dir() and (d / "SKILL.md").is_file():
+                    skill_dirs_by_name[d.name] = d
+
+        ag_skills_src = repo_root / ".antigravity" / "skills"
+        if not using_core_framework and ag_skills_src.is_dir():
+            allowed_golden = _load_golden_skill_names(repo_root)
+            for d in sorted(ag_skills_src.iterdir()):
+                if d.is_dir() and (d / "SKILL.md").is_file() and d.name in allowed_golden:
+                    skill_dirs_by_name.setdefault(d.name, d)
+
+        if skill_dirs_by_name:
+            skill_dirs = [skill_dirs_by_name[k] for k in sorted(skill_dirs_by_name)]
+            skill_names = set(skill_dirs_by_name.keys())
 
             dest_roots = (
                 config_dir / "skills",
@@ -393,6 +485,15 @@ def run_install(
         target_rules_dir.mkdir(parents=True, exist_ok=True)
         (target_rules_dir / "antigravity-rtk-rules.md").write_text(rules_content, encoding="utf-8")
 
+    # 6B. Context Hub (@aisuite/chub) CLI Discovery & Privacy Config Seeding
+    if not skip_chub:
+        chub_status = ensure_chub_installed(home_dir=home_dir, attempt_install=True)
+        summary["chub_installed"] = bool(chub_status.get("installed"))
+        summary["chub_version"] = chub_status.get("version")
+        summary["chub_config_seeded"] = bool(chub_status.get("config_seeded"))
+    else:
+        summary["chub_config_seeded"] = _seed_chub_config(home_dir)
+
     # 7. System 1 Decision Router & Laya Status (preserve existing tuned keys)
     base_decision_cfg: dict[str, object] = {
         "enabled": not disable_decision_model,
@@ -488,12 +589,13 @@ def main() -> int:
     parser.add_argument("--home-dir", type=Path, default=None, help="Override home directory (for isolated testing)")
     parser.add_argument("--vault-dir", type=Path, default=None, help="Override Obsidian Knowledge Vault directory")
     parser.add_argument("--skip-prompt", action="store_true", help="Skip installing ~/.gemini/GEMINI.md and ~/.agents/AGENTS.md")
-    parser.add_argument("--skip-skills", action="store_true", help="Skip installing the 200 curated skills")
+    parser.add_argument("--skip-skills", action="store_true", help="Skip installing the 201 curated skills")
     parser.add_argument("--skip-plugin", action="store_true", help="Skip installing the antigravity-swarm plugin")
     parser.add_argument("--skip-vault", action="store_true", help="Skip initializing the local Obsidian Knowledge Vault")
     parser.add_argument("--clean-skills", action="store_true", help="Remove uncurated/duplicate skills from global skill folders")
     parser.add_argument("--install-obsidian-app", action="store_true", help="Attempt to install Obsidian desktop app if missing")
     parser.add_argument("--skip-rtk", action="store_true", help="Skip discovering or installing the rtk CLI binary")
+    parser.add_argument("--skip-chub", action="store_true", help="Skip discovering or installing the @aisuite/chub CLI")
     parser.add_argument("--install-laya", action="store_true", help="Install NandhaKishorM/laya package for neural System 1 routing")
     parser.add_argument(
         "--disable-decision-model",
@@ -517,6 +619,7 @@ def main() -> int:
         clean_skills=args.clean_skills,
         install_obsidian_app=args.install_obsidian_app,
         skip_rtk=args.skip_rtk,
+        skip_chub=args.skip_chub,
         install_laya=args.install_laya,
         disable_decision_model=args.disable_decision_model,
     )

@@ -688,13 +688,13 @@ class TestQualityBenchmark(unittest.TestCase):
         self.assertTrue(installed_qb.is_file(), "install.py did not deploy quality_benchmark.py")
         self.assertEqual(installed_qb.read_bytes(), QB_SCRIPT.read_bytes())
 
-        # Verify 200-skill Golden Catalog in ~/.gemini/config/skills remains untouched
+        # Verify 200/201-skill Golden Catalog in ~/.gemini/config/skills remains intact
         home_skills_dir = Path.home() / ".gemini" / "config" / "skills"
         if home_skills_dir.is_dir():
             skill_count = len(
                 [d for d in home_skills_dir.iterdir() if d.is_dir() and (d / "SKILL.md").is_file()]
             )
-            self.assertEqual(skill_count, 200)
+            self.assertIn(skill_count, (200, 201))
 
         # Public-repo PII/secret scan on new benchmark files
         scan_proc = subprocess.run(

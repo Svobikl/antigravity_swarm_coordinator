@@ -217,6 +217,13 @@ CORE_SKILL_CATALOG_KEYWORDS = {
     "systematic-debugging": ["debug", "crash", "chyba", "hang", "bug", "traceback"],
     "python-pro": ["python", "pytest", "asyncio", "pydantic"],
     "typescript-pro": ["typescript", "ts", "node", "npm"],
+    "context-hub": [
+        "context-hub", "context hub", "chub", "annotate",
+        "stripe", "openai", "anthropic", "supabase", "cloudflare",
+        "webhook", "oauth", "graphql", "rest api", "rest client",
+        "endpoint", "third-party", "external api", "library docs",
+        "api docs", "api", "sdk", "aws",
+    ],
 }
 
 CORE_FALLBACK_SKILLS = [
@@ -627,7 +634,18 @@ class DecisionRouter:
         scored: list[tuple[str, int]] = []
 
         for skill_name, keywords in CORE_SKILL_CATALOG_KEYWORDS.items():
-            matches = sum(1 for kw in keywords if kw in lower)
+            if skill_name == "context-hub":
+                matches = sum(
+                    1
+                    for kw in keywords
+                    if (
+                        re.search(rf"\b{re.escape(kw)}s?\b", lower)
+                        if len(kw) <= 3
+                        else kw in lower
+                    )
+                )
+            else:
+                matches = sum(1 for kw in keywords if kw in lower)
             if matches > 0:
                 scored.append((skill_name, matches))
 

@@ -84,12 +84,12 @@
 
   <!-- Header Bar -->
   <text x="28" y="38" class="font-ui txt-main" font-size="18" font-weight="700">⚡ Antigravity Swarm Coordinator — Token Efficiency Telemetry</text>
-  <text x="28" y="58" class="font-ui txt-muted" font-size="12">Multi-layer empirical savings verified by automated benchmark suite (rtk 0.48.0 + 200-Skill Catalog + TokenEconomizer + Laya System 1)</text>
+  <text x="28" y="58" class="font-ui txt-muted" font-size="12">Multi-layer empirical savings verified by automated benchmark suite (rtk 0.48.0 + 201-Skill Catalog + TokenEconomizer + Laya System 1)</text>
 
   <!-- Live Status Pill -->
   <rect x="708" y="20" width="244" height="30" rx="15" class="badge" />
   <circle cx="726" cy="35" r="5" fill="#3fb950" class="pulse" />
-  <text x="739" y="39" class="font-mono txt-green" font-size="11" font-weight="700">VERIFIED • 122/122 TESTS PASS</text>
+  <text x="739" y="39" class="font-mono txt-green" font-size="11" font-weight="700">VERIFIED • 128/128 TESTS PASS</text>
 
   <!-- Top 4 KPI Cards -->
   <!-- KPI 1 -->
@@ -108,7 +108,7 @@
   <rect x="496" y="76" width="220" height="92" rx="10" class="card" />
   <text x="512" y="99" class="font-ui txt-muted" font-size="11" font-weight="600">DUPLICATE HOOK &amp; SKILL BLOAT</text>
   <text x="512" y="134" class="font-mono txt-purple" font-size="29" font-weight="800">-100.0%</text>
-  <text x="512" y="154" class="font-mono txt-muted" font-size="11">0 dup hooks • 200 skills (-90.2%)</text>
+  <text x="512" y="154" class="font-mono txt-muted" font-size="11">0 dup hooks • 201 skills (-90.2%)</text>
 
   <!-- KPI 4 -->
   <rect x="730" y="76" width="222" height="92" rx="10" class="card" />
@@ -132,8 +132,8 @@
   <text x="474" y="255" class="font-mono txt-muted" font-size="10">107,704</text>
   <text x="105" y="266" class="font-mono txt-green" font-size="10" font-weight="700">13,113</text>
 
-  <!-- Row 2: 200-Skill Catalog -->
-  <text x="46" y="292" class="font-ui txt-main" font-size="12" font-weight="600">2. Startup Skill Metadata Index (2,040 raw vs. 200 curated)</text>
+  <!-- Row 2: 201-Skill Catalog -->
+  <text x="46" y="292" class="font-ui txt-main" font-size="12" font-weight="600">2. Startup Skill Metadata Index (2,040 raw vs. 201 curated)</text>
   <text x="578" y="292" text-anchor="end" class="font-mono txt-green" font-size="11" font-weight="700">-90.2% (0 truncated)</text>
   <rect x="46" y="299" width="420" height="8" rx="4" fill="#f85149" opacity="0.82" class="bar-anim delay-2" />
   <rect x="46" y="310" width="41" height="8" rx="4" fill="#3fb950" class="bar-anim delay-2" />
