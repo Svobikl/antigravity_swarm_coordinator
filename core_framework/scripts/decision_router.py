@@ -238,6 +238,11 @@ class DecisionRouter:
     ):
         self.config = config if config is not None else load_decision_config()
         self.enabled = bool(self.config.get("enabled", True))
+        self._daemon_configured = bool(
+            server_url
+            or os.environ.get("LAYA_SERVER_URL")
+            or self.config.get("use_daemon", False)
+        )
         self.server_url = server_url or os.environ.get("LAYA_SERVER_URL", "http://127.0.0.1:8765")
         if enable_inproc is None:
             self.enable_inproc = os.environ.get("LAYA_ENABLE_INPROC", "0").lower() in ("1", "true")
@@ -752,6 +757,160 @@ class DecisionRouter:
             "reason": "scoped_to_active_project_by_default",
         }
 
+    def _query_laya_loop_head(self, digest: str) -> tuple[str, float | None]:
+        """Query local Laya in-proc or daemon head for unproductive loop score."""
+        schema = {
+            "is_trajectory_stuck_in_unproductive_loop": {
+                "type": "noul",
+                "instructions": "Is the trajectory stuck in an unproductive repeated-failure loop?",
+            }
+        }
+        if self._laya_router is not None:
+            try:
+                raw = self._laya_router.predict(digest, schema)
+                if isinstance(raw, dict):
+                    ans = raw.get("answers", {}).get("is_trajectory_stuck_in_unproductive_loop", {})
+                    if isinstance(ans, dict) and "noul" in ans:
+                        return "laya_inproc", float(ans["noul"])
+            except Exception:
+                pass
+        if self._daemon_configured:
+            try:
+                payload = json.dumps({"text": digest, "questions": schema}).encode("utf-8")
+                req = urllib.request.Request(
+                    f"{self.server_url.rstrip('/')}/predict",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=0.025) as resp:
+                    if resp.status == 200:
+                        raw = json.loads(resp.read().decode("utf-8"))
+                        ans = raw.get("answers", {}).get("is_trajectory_stuck_in_unproductive_loop", {})
+                        if isinstance(ans, dict) and "noul" in ans:
+                            return "laya_daemon", float(ans["noul"])
+            except Exception:
+                pass
+        return "system1_calibrated_fallback", None
+
+    def judge_loop_digest(self, digest: str) -> dict[str, object]:
+        """Local System 1 stuck-loop judge (M3) evaluating trajectory telemetry digests."""
+        if not self.enabled:
+            return {
+                "enabled": False,
+                "status": "disabled",
+                "backend": "disabled",
+                "stuck": None,
+                "confidence": 0.0,
+                "reason": "decision_model_disabled",
+            }
+
+        raw = digest if isinstance(digest, str) else ""
+
+        def _parse_int(key: str) -> tuple[int, bool]:
+            m = re.search(rf"\b{key}\s*[:=]\s*(\d+)", raw, re.IGNORECASE)
+            return (int(m.group(1)), True) if m else (0, False)
+
+        def _parse_float(key: str) -> tuple[float | None, bool]:
+            m = re.search(rf"\b{key}\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)", raw, re.IGNORECASE)
+            return (float(m.group(1)), True) if m else (None, False)
+
+        turns, _ = _parse_int("turns")
+        edit_churn, _ = _parse_int("edit_churn")
+        distinct_edit_files, _ = _parse_int("distinct_edit_files")
+        error_outputs, _ = _parse_int("error_outputs")
+        test_runs, _ = _parse_int("test_runs")
+        repeated_identical_failures, has_rep_hdr = _parse_int("repeated_identical_failures")
+        stagnation_val, has_stag_hdr = _parse_float("stagnation")
+        repo_context, _ = _parse_float("repo_context")
+
+        err_hashes = re.findall(r"\[err#([A-Za-z0-9_.-]+)\]", raw)
+        if not has_rep_hdr and err_hashes:
+            counts: dict[str, int] = {}
+            for h in err_hashes:
+                counts[h] = counts.get(h, 0) + 1
+            repeated_identical_failures = sum(c - 1 for c in counts.values())
+        if not has_stag_hdr:
+            if err_hashes:
+                counts_s: dict[str, int] = {}
+                for h in err_hashes:
+                    counts_s[h] = counts_s.get(h, 0) + 1
+                stagnation = sum(c - 1 for c in counts_s.values()) / len(err_hashes)
+            else:
+                stagnation = 0.0
+        else:
+            stagnation = float(stagnation_val or 0.0)
+        stagnation = max(0.0, min(1.0, stagnation))
+
+        telemetry: dict[str, object] = {
+            "turns": turns,
+            "edit_churn": edit_churn,
+            "distinct_edit_files": distinct_edit_files,
+            "error_outputs": error_outputs,
+            "test_runs": test_runs,
+            "repeated_identical_failures": repeated_identical_failures,
+            "stagnation": round(stagnation, 4),
+            "err_marker_count": len(err_hashes),
+            "unique_err_hashes": len(set(err_hashes)),
+        }
+        if repo_context is not None:
+            telemetry["repo_context"] = round(repo_context, 4)
+
+        backend, laya_noul = self._query_laya_loop_head(raw)
+
+        stuck: bool | None
+        if not raw.strip() or (turns == 0 and error_outputs == 0 and not err_hashes):
+            stuck = None
+            confidence = 0.25
+            reason = "ambiguous_early_or_mixed"
+        elif (stagnation == 0.0 or repeated_identical_failures == 0) and (
+            error_outputs >= 2 or turns >= 12 or len(err_hashes) >= 2
+        ):
+            stuck = False
+            prod_conf = 0.82 + 0.02 * min(distinct_edit_files, 5) + (
+                0.03 if stagnation == 0.0 and repeated_identical_failures == 0 else 0.0
+            )
+            if laya_noul is not None:
+                prod_conf = 0.80 * prod_conf + 0.20 * max(0.80, 1.0 - laya_noul)
+            confidence = round(min(0.95, max(0.80, prod_conf)), 4)
+            reason = "productive_changing_failures"
+        elif (
+            turns >= 12
+            and (edit_churn >= 4 or distinct_edit_files >= 3)
+            and error_outputs >= 5
+            and repeated_identical_failures >= 2
+            and stagnation >= 0.20
+        ):
+            stag_term = min(1.0, max(0.0, (stagnation - 0.20) / 0.65))
+            rep_term = min(1.0, max(0.0, (repeated_identical_failures - 2) / 5.0))
+            churn_term = min(1.0, max(0.0, (max(edit_churn, distinct_edit_files) - 3) / 6.0))
+            ctx_bonus = 0.02 if (repo_context is not None and repo_context >= 1.0) else 0.0
+            raw_conf = 0.72 + 0.24 * (0.50 * stag_term + 0.30 * rep_term + 0.20 * churn_term) + ctx_bonus
+            if laya_noul is not None:
+                raw_conf = 0.80 * raw_conf + 0.20 * max(0.72, min(0.96, laya_noul))
+            stuck = True
+            confidence = round(min(0.96, max(0.72, raw_conf)), 4)
+            reason = "stagnant_repeated_failure_loop"
+        else:
+            borderline = 0.35 + 0.15 * min(1.0, stagnation) + 0.10 * min(1.0, repeated_identical_failures / 3.0)
+            stuck = None
+            confidence = round(min(0.65, max(0.25, borderline)), 4)
+            reason = "ambiguous_early_or_mixed"
+
+        out: dict[str, object] = {
+            "enabled": True,
+            "status": "enabled",
+            "backend": backend,
+            "stuck": stuck,
+            "confidence": confidence,
+            "reason": reason,
+            "telemetry": telemetry,
+            "device_info": self.device_info,
+        }
+        if laya_noul is not None:
+            out["laya_noul"] = round(laya_noul, 4)
+        return out
+
     def predict(self, text: str, context: dict | None = None) -> dict[str, object]:
         """Unified entrypoint matching Laya's predict contract."""
         route_res = self.route_prompt(text)
@@ -801,7 +960,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="System 1 Decision Router (Laya + Calibrated Fallback)")
     parser.add_argument(
         "--mode",
-        choices=["preflight", "predict", "route-prompt", "select-skills", "triage-finding", "classify-scope"],
+        choices=["preflight", "predict", "route-prompt", "select-skills", "triage-finding", "classify-scope", "judge-loop"],
         default="route-prompt",
     )
     parser.add_argument("--text", type=str, default="", help="Input prompt or finding text")
@@ -891,6 +1050,8 @@ def main(argv: list[str] | None = None) -> int:
         out = router.triage_finding(raw_input_text)
     elif args.mode == "classify-scope":
         out = router.classify_lesson_scope(args.cue or raw_input_text, args.rule or "", project=args.project)
+    elif args.mode == "judge-loop":
+        out = router.judge_loop_digest(raw_input_text)
     else:  # predict
         out = router.predict(raw_input_text)
 

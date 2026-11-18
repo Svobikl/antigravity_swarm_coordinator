@@ -68,7 +68,7 @@ def resolve_vault_dir(vault_dir: Path | str | None = None, home_dir: Path | None
     if vault_dir is not None and str(vault_dir).strip():
         return Path(vault_dir).expanduser().resolve()
     env_vault = os.environ.get("OBSIDIAN_VAULT_PATH")
-    if env_vault and env_vault.strip():
+    if env_vault and env_vault.strip() and home_dir is None:
         return Path(env_vault).expanduser().resolve()
     base_home = home_dir.expanduser().resolve() if home_dir else Path.home()
     return (base_home / "Documents" / "AgentMemory").resolve()
@@ -604,6 +604,10 @@ def index_project(
     dir_bullets = "\n".join(f"- {d}" for d in meta["top_dirs"]) if meta["top_dirs"] else "- Root-level files"
     entry_bullets = "\n".join(f"- {e}" for e in meta["entrypoints"]) if meta["entrypoints"] else "- Standard repository scripts"
 
+    micro_link = ""
+    if (proj_vault_dir / "Environment Micro-Skills.md").is_file():
+        micro_link = f"- [[projects/{p_name}/Environment Micro-Skills|{p_name} — Environment Micro-Skills]]\n"
+
     overview_content = (
         f"---\n"
         f"tags: [project, project/{p_name}]\n"
@@ -618,6 +622,7 @@ def index_project(
         f"- [[projects/{p_name}/Architecture and Components|{p_name} — Architecture & Components]]\n"
         f"- [[projects/{p_name}/Decision Ledger|{p_name} — Decision Ledger (ADRs)]]\n"
         f"- [[projects/{p_name}/Project Lessons|{p_name} — Project Lessons & Gotchas]]\n"
+        f"{micro_link}"
         f"- [[lessons/Engineering Lessons and Anti-Patterns|Global Engineering Lessons]]\n\n"
         f"## Tech Stack & Frameworks\n"
         f"{stack_bullets}\n\n"
@@ -1248,6 +1253,164 @@ def update_project_note(
     return target
 
 
+def _is_token_economizer_enabled(project_path: Path | str | None = None) -> bool:
+    """Return False when ASW_TOKEN_ECONOMIZER_ENABLED or decision_config.json disables TokenEconomizer."""
+    val = os.environ.get("ASW_TOKEN_ECONOMIZER_ENABLED")
+    if val is not None:
+        return val.strip().lower() not in ("0", "false", "no", "off")
+    cfg_candidates: list[Path] = []
+    if project_path is not None:
+        cfg_candidates.append(Path(project_path).expanduser().resolve() / ".antigravity" / "decision_config.json")
+    cfg_candidates.extend([
+        Path.cwd() / ".antigravity" / "decision_config.json",
+        Path.home() / ".gemini" / "decision_config.json",
+    ])
+    for cp in cfg_candidates:
+        if cp.is_file():
+            try:
+                parsed = json.loads(cp.read_text(encoding="utf-8", errors="replace"))
+                if isinstance(parsed, dict) and "token_economizer_enabled" in parsed:
+                    return bool(parsed["token_economizer_enabled"])
+            except Exception:
+                pass
+    return True
+
+
+def _derive_repo_slug(project_path: Path) -> str:
+    """Derive AD-1 repo_slug from resolved project directory name."""
+    return re.sub(r"[^a-zA-Z0-9._-]", "_", project_path.expanduser().resolve().name)
+
+
+def _load_envfacts(project_path: Path) -> tuple[Path, dict | None]:
+    """Load AD-1 envfacts.json from <project_path>/.antigravity/token_economizer_state/<repo_slug>/."""
+    p_resolved = project_path.expanduser().resolve()
+    slug = _derive_repo_slug(p_resolved)
+    ef_path = p_resolved / ".antigravity" / "token_economizer_state" / slug / "envfacts.json"
+    if not ef_path.is_file():
+        return ef_path, None
+    try:
+        data = json.loads(ef_path.read_text(encoding="utf-8", errors="replace"))
+        if isinstance(data, dict):
+            return ef_path, data
+    except Exception:
+        pass
+    return ef_path, None
+
+
+def _extract_active_envfacts(data: dict) -> list[dict]:
+    """Extract ACTIVE facts from an AD-1 envfacts.json payload."""
+    facts_obj = data.get("facts")
+    if not isinstance(facts_obj, dict):
+        return []
+    active: list[dict] = []
+    for fid, fval in facts_obj.items():
+        if not isinstance(fval, dict):
+            continue
+        life = fval.get("life")
+        status = ""
+        if isinstance(life, dict):
+            status = str(life.get("status", "")).upper()
+        if not status:
+            status = str(fval.get("status", "")).upper()
+        if status == "ACTIVE":
+            item = dict(fval)
+            item.setdefault("id", str(fid))
+            active.append(item)
+    return active
+
+
+def sync_envfacts_to_vault(
+    project_path: Path | str,
+    vault_dir: Path | str | None = None,
+    home_dir: Path | None = None,
+    project_name: str | None = None,
+) -> dict[str, object]:
+    """Sync ACTIVE EnvFacts from AD-1 envfacts.json into the Obsidian Vault and link from <project>.md."""
+    if not _is_token_economizer_enabled(project_path):
+        return {"enabled": False, "status": "disabled", "synced": 0, "file": None}
+
+    proj_dir = Path(project_path).expanduser().resolve()
+    if not proj_dir.is_dir():
+        raise FileNotFoundError(f"Project directory does not exist: {proj_dir}")
+
+    repo_slug = _derive_repo_slug(proj_dir)
+    p_name = (project_name.strip() if project_name and project_name.strip() else proj_dir.name)
+    ef_path, ef_data = _load_envfacts(proj_dir)
+    if ef_data is None:
+        return {
+            "enabled": True,
+            "status": "no_envfacts",
+            "project": p_name,
+            "repo_slug": repo_slug,
+            "synced": 0,
+            "file": None,
+            "envfacts_path": str(ef_path),
+        }
+
+    active_facts = _extract_active_envfacts(ef_data)
+    v_dir = resolve_vault_dir(vault_dir, home_dir=home_dir)
+    init_vault(v_dir, home_dir=home_dir)
+
+    proj_vault_dir = v_dir / "projects" / p_name
+    overview_file = proj_vault_dir / f"{p_name}.md"
+    if not overview_file.is_file():
+        index_project(proj_dir, vault_dir=v_dir, project_name=p_name, home_dir=home_dir)
+
+    today = datetime.date.today().isoformat()
+    lines = [
+        "---",
+        f"tags: [microskills, envfacts, project/{p_name}]",
+        "type: microskills",
+        f'project: "[[projects/{p_name}/{p_name}|{p_name}]]"',
+        f"repo_slug: {repo_slug}",
+        f"updated: {today}",
+        "---",
+        "",
+        f"# {p_name} — Environment Micro-Skills",
+        "",
+        f"Parent Project: [[projects/{p_name}/{p_name}|{p_name}]]",
+        "",
+        "## Active Learned Facts",
+    ]
+    if active_facts:
+        for f in active_facts:
+            fam = str(f.get("family", "Fact")).strip()
+            claim = str(f.get("claim", "")).strip()
+            fid = str(f.get("id", "")).strip()
+            life = f.get("life") if isinstance(f.get("life"), dict) else {}
+            helpful = life.get("n_helpful", life.get("fires", ""))
+            fired = life.get("n_fired", life.get("exposures", ""))
+            stats = f" (helpful: {helpful}/{fired})" if helpful != "" and fired != "" else ""
+            lines.append(f"- **[{fam}]** {claim} (`{fid}`){stats}")
+    else:
+        lines.append("- _No active environment micro-skills._")
+
+    micro_file = proj_vault_dir / "Environment Micro-Skills.md"
+    micro_file.parent.mkdir(parents=True, exist_ok=True)
+    micro_file.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+    if overview_file.is_file():
+        ov_txt = overview_file.read_text(encoding="utf-8", errors="replace")
+        link_entry = f"- [[projects/{p_name}/Environment Micro-Skills|{p_name} — Environment Micro-Skills]]"
+        if "Environment Micro-Skills" not in ov_txt:
+            m_links = re.search(r"(## Knowledge Graph Links\s*\n(?:- .*\n)+)", ov_txt)
+            if m_links:
+                ov_txt = ov_txt.replace(m_links.group(1), m_links.group(1) + link_entry + "\n", 1)
+            else:
+                ov_txt = ov_txt.rstrip() + f"\n\n## Knowledge Graph Links\n{link_entry}\n"
+            overview_file.write_text(ov_txt, encoding="utf-8", newline="\n")
+
+    return {
+        "enabled": True,
+        "status": "synced",
+        "project": p_name,
+        "repo_slug": repo_slug,
+        "synced": len(active_facts),
+        "file": str(micro_file),
+        "overview_file": str(overview_file),
+    }
+
+
 def recall_context(
     *,
     vault_dir: Path | str | None = None,
@@ -1266,13 +1429,21 @@ def recall_context(
     init_vault(v_dir, home_dir=home_dir)
 
     resolved_project_name = project.strip() if project and project.strip() else None
+    resolved_project_dir: Path | None = None
     if project_path is not None and str(project_path).strip():
         p_path = Path(project_path).expanduser().resolve()
         if p_path.is_dir():
+            resolved_project_dir = p_path
             ensure_project_antigravity(p_path, home_dir=home_dir)
             resolved_project_name = resolved_project_name or p_path.name
             if not (v_dir / "projects" / resolved_project_name / f"{resolved_project_name}.md").is_file():
                 index_project(p_path, vault_dir=v_dir, project_name=resolved_project_name, home_dir=home_dir)
+
+    economizer_enabled = _is_token_economizer_enabled(resolved_project_dir)
+    ef_path: Path | None = None
+    ef_data: dict | None = None
+    if resolved_project_dir is not None and economizer_enabled:
+        ef_path, ef_data = _load_envfacts(resolved_project_dir)
 
     # Session cache lookup
     cache_files: list[Path] = []
@@ -1286,7 +1457,10 @@ def recall_context(
             cwd_cache.mkdir(parents=True, exist_ok=True)
             cache_files.append(cwd_cache / "recall_cache.json")
 
-        mtimes_str = ""
+        mtimes_str = f"econ:{int(economizer_enabled)};"
+        if ef_path is not None and ef_path.is_file():
+            ef_st = ef_path.stat()
+            mtimes_str += f"envfacts:{ef_st.st_mtime_ns}:{ef_st.st_size};"
         check_dirs = ["profile", "domains", "lessons"]
         if resolved_project_name:
             check_dirs.append(f"projects/{resolved_project_name}")
@@ -1418,6 +1592,25 @@ def recall_context(
                 if pf.is_file():
                     sections.append(f"## 4. Project Memory — `{fname}`\n" + pf.read_text(encoding="utf-8", errors="replace").strip())
 
+    # 5. Learned Environment Micro-Skills (AD-1 envfacts.json)
+    envfacts_section = ""
+    if ef_data is not None and economizer_enabled:
+        rendered_ef = str(ef_data.get("rendered", "") or "").strip()
+        if rendered_ef:
+            envfacts_section = "## 5. Learned Environment Micro-Skills\n" + rendered_ef
+        else:
+            active_ef = _extract_active_envfacts(ef_data)
+            ef_lines = [
+                f"- [{str(f.get('family', 'Fact')).strip()}] {str(f.get('claim', '')).strip()}"
+                for f in active_ef
+                if str(f.get("claim", "")).strip()
+            ]
+            if ef_lines:
+                envfacts_section = "## 5. Learned Environment Micro-Skills\n" + "\n".join(ef_lines)
+
+    if envfacts_section:
+        sections.append(envfacts_section)
+
     result = "\n\n---\n\n".join(sections) + "\n"
 
     # Enforce max-tokens ceiling (1 token ~ 4 bytes, ceiling < 10,000 B)
@@ -1425,9 +1618,24 @@ def recall_context(
         byte_limit = min(max_tokens * 4, 9800)
         encoded = result.encode("utf-8")
         if len(encoded) > byte_limit:
-            trunc_msg = "\n\n[... truncated by recall_context budget ...]\n".encode("utf-8")
-            cut_idx = max(0, byte_limit - len(trunc_msg))
-            result = encoded[:cut_idx].decode("utf-8", errors="ignore") + "\n\n[... truncated by recall_context budget ...]\n"
+            trunc_str = "\n\n[... truncated by recall_context budget ...]\n"
+            trunc_msg = trunc_str.encode("utf-8")
+            if envfacts_section:
+                env_suffix = ("\n\n---\n\n" + envfacts_section + "\n").encode("utf-8")
+                if len(env_suffix) + len(trunc_msg) + 200 <= byte_limit:
+                    body_before = ("\n\n---\n\n".join(sections[:-1])).encode("utf-8")
+                    cut_idx = max(0, byte_limit - len(trunc_msg) - len(env_suffix))
+                    result = (
+                        body_before[:cut_idx].decode("utf-8", errors="ignore")
+                        + trunc_str.rstrip("\n")
+                        + env_suffix.decode("utf-8")
+                    )
+                else:
+                    cut_idx = max(0, byte_limit - len(trunc_msg))
+                    result = encoded[:cut_idx].decode("utf-8", errors="ignore") + trunc_str
+            else:
+                cut_idx = max(0, byte_limit - len(trunc_msg))
+                result = encoded[:cut_idx].decode("utf-8", errors="ignore") + trunc_str
 
     # Save to session cache
     if session_cache and cache_files and cache_key:
@@ -1487,6 +1695,7 @@ def main() -> int:
     parser.add_argument("--slice-rules", action="store_true", help="Extract sliced GLOBAL_DEVELOPMENT_RULES subset")
     parser.add_argument("--mode", type=str, default=None, help="Target execution mode for rules slicing (mode_0..5)")
     parser.add_argument("--rules-path", type=Path, default=None, help="Path to GLOBAL_DEVELOPMENT_RULES.md")
+    parser.add_argument("--sync-envfacts", action="store_true", help="Sync ACTIVE EnvFacts from envfacts.json into the Obsidian Vault")
 
     args = parser.parse_args()
 
@@ -1559,6 +1768,16 @@ def main() -> int:
                 content=args.content,
             )
             print(json.dumps({"status": "updated", "file": str(out_path)}, indent=2))
+            return 0
+
+        if args.sync_envfacts:
+            target_proj = args.project_path or Path.cwd()
+            res = sync_envfacts_to_vault(
+                target_proj,
+                vault_dir=args.vault_dir,
+                project_name=args.project_name or args.project,
+            )
+            print(json.dumps(res, indent=2))
             return 0
 
         if args.recall:

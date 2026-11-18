@@ -213,13 +213,16 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
             )
             # 1. Summary reports decision_router status and hardware device
             self.assertTrue(summary.get("decision_router_installed"), "decision_router_installed must be True")
+            self.assertTrue(summary.get("token_economizer_installed"), "token_economizer_installed must be True")
             self.assertTrue(summary.get("decision_model_enabled"), "decision_model_enabled must default to True")
             self.assertIn("decision_router_device", summary)
             self.assertIn(summary["decision_router_device"], ("cpu", "cuda"))
 
-            # 2. Installed script file in ~/.gemini/scripts and decision_config.json
+            # 2. Installed script files in ~/.gemini/scripts and decision_config.json
             installed_script = fake_home / ".gemini" / "scripts" / "decision_router.py"
             self.assertTrue(installed_script.is_file(), f"Missing {installed_script}")
+            installed_te = fake_home / ".gemini" / "scripts" / "token_economizer.py"
+            self.assertTrue(installed_te.is_file(), f"Missing {installed_te}")
             installed_cfg = fake_home / ".gemini" / "decision_config.json"
             self.assertTrue(installed_cfg.is_file(), f"Missing {installed_cfg}")
             cfg_data = json.loads(installed_cfg.read_text(encoding="utf-8"))

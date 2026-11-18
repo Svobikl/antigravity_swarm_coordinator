@@ -67,6 +67,14 @@ export function rewriteSingleCommand(cmd, isWindows = process.platform === "win3
     return cmd.replace(/^tree(\s+|$)/i, "rtk tree$1");
   }
 
+  // Windows find guard: NEVER rewrite find on Windows (System32\find.exe parameter format conflict)
+  if (/^find(?:\.exe)?(\s+|$)/i.test(trimmed)) {
+    if (isWindows) {
+      return cmd;
+    }
+    return cmd.replace(/^find(\s+|$)/i, "rtk find$1");
+  }
+
   // Pytest commands: `pytest ...`, `python -m pytest ...`, `python3 -m pytest ...`, `py -m pytest ...`
   const pytestModuleMatch = cmd.match(/^((?:python3?|py)(?:\.exe)?\s+-m\s+pytest(?:\.exe)?)(\s.*)?$/i);
   if (pytestModuleMatch) {

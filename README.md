@@ -2,7 +2,106 @@
 
 Complete backup, distribution, and cross-platform setup package (**Apple macOS**, **Windows**, and **Linux**) for the default **Swarm Coordinator**, **Google Research `Harness²` recursive adaptation engine**, **Quad-Model Cross-Family Governance Framework** (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 4 Argon High` + `Gemini 4 Hydrogen High`), and **200 Curated Multi-Domain Golden Catalog Skills** for **Google Antigravity** and **Gemini CLI**.
 
-This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 200 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **71 automated verification tests**.
+This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 200 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **115 automated verification tests**.
+
+---
+
+## 📊 Interactive Token Efficiency & Savings Explorer (Test-Verified)
+
+<p align="center">
+  <img src="./assets/token-efficiency-dashboard.svg" alt="Antigravity Swarm Coordinator — Test-Verified Token Efficiency Telemetry" width="100%" />
+</p>
+
+<p align="center">
+  <a href="https://htmlpreview.github.io/?https://github.com/Svobikl/antigravity_swarm_coordinator/blob/main/docs/token-calculator.html"><b>🎚️ Open Live Interactive Slider Calculator (Browser Widget)</b></a>
+  &nbsp;·&nbsp;
+  <a href="./docs/token-calculator.html"><code>docs/token-calculator.html</code></a>
+  &nbsp;·&nbsp;
+  <code>python .antigravity/scripts/token_economizer.py --benchmark</code>
+</p>
+
+Click any scenario or telemetry panel below directly in GitHub to inspect how the Swarm Coordinator's multi-layer token architecture reduces raw context burn and provider-billed `effective_tokens` (`1.0× input + 0.05× cache_read + 5.0× output`) with **`0.0` optimizer API token overhead**:
+
+<details open>
+<summary><b>🔬 Benchmark Ground Truth — 6-Session A/B Test Suite (<code>S1 ➔ S6</code> · <code>-39.61%</code> Post-Warmup <code>effective_tokens</code>)</b></summary>
+<br/>
+
+Verified automatically by [`tests/test_token_economizer_e2e.py`](./tests/test_token_economizer_e2e.py) and `python .antigravity/scripts/token_economizer.py --benchmark` on `gemini-4-carbon`:
+
+```mermaid
+xychart-beta
+    title "A/B Benchmark: Baseline (Bars) vs. Swarm Coordinator (Line) — effective_tokens"
+    x-axis ["S1 Warmup", "S2 Warmup", "S3 Warmup", "S4 EnvFacts", "S5 TurnGuard+Laya", "S6 Safe Control"]
+    y-axis "Cache-Weighted effective_tokens" 0 --> 75000
+    bar [8935, 8935, 8935, 8935, 72690, 37300]
+    line [6385, 6385, 6385, 2230, 32290, 37300]
+```
+
+| Session | Phase & Scenario | Baseline Raw | Swarm Raw | Baseline `effective_tokens` | Swarm `effective_tokens` | Net Delta |
+| :---: | :--- | ---: | ---: | ---: | ---: | :---: |
+| **S1** | Warmup (`K=1/3` · Hook KV-Cache Hygiene active) | `22,745` | `17,825` | `8,935.0` | `6,385.0` | **`-28.54%`** (`4 ➔ 3` req) |
+| **S2** | Warmup (`K=2/3` · `invocationNum=1` dedup active) | `22,745` | `17,825` | `8,935.0` | `6,385.0` | **`-28.54%`** (`4 ➔ 3` req) |
+| **S3** | Warmup (`K=3/3` · `EnvFacts` reaches promotion gate) | `22,745` | `17,825` | `8,935.0` | `6,385.0` | **`-28.54%`** (`4 ➔ 3` req) |
+| **S4** | **Post-Warmup:** Promoted `EnvFacts` micro-skill prevents 3-step command retry | `22,745` | `6,200` | `8,935.0` | `2,230.0` | **`-75.04%`** (`4 ➔ 1` req) |
+| **S5** | **Post-Warmup:** Edit-churn spiral redirected at `r=1` by `TurnGuard` + `Laya` | `196,720` | `88,400` | `72,690.0` | `32,290.0` | **`-55.58%`** (`29 ➔ 13` req) |
+| **S6** | **Post-Warmup (Negative Control):** Productive multi-file work (`0` false nudges) | `102,100` | `102,100` | `37,300.0` | `37,300.0` | **`0.00%`** (`100%` precision) |
+| **Total** | **All 6 Sessions (`S1–S6`)** · `opt_tokens = 0.0` | **`389,800`** | **`250,175`** | **`145,730.0`** | **`90,975.0`** | **`-37.57%` (`-39.61%` post-warmup)** |
+
+</details>
+
+<details>
+<summary><b>🟢 Workload Preset A — Solo Feature &amp; TDD Sprint (10 Sessions · 25 CLI cmds/session) ➔ Saves ~277,414 <code>effective_tokens</code> (-56.5%)</b></summary>
+<br/>
+
+| Stack Component | Unoptimized Baseline | Swarm Coordinator | Verified Mechanism |
+| :--- | ---: | ---: | :--- |
+| **Agent Loop & Turns** (`3` warmup + `7` post-warmup, `20%` spiral) | `267,957` eff. tok | `187,320` eff. tok | `SessionStart` KV-cache (`0.05×`) + `EnvFacts` + `TurnGuard`/`Laya` |
+| **Developer CLI Output** (`250` `git`/`pytest`/`read` runs) | `176,813` eff. tok | `21,536` eff. tok | `rtk 0.48.0` CLI proxy (**`-87.8%`** raw stdout reduction) |
+| **Startup Skill Index** (`10` sessions) | `46,000` eff. tok | `4,500` eff. tok | `200-Skill Golden Catalog` (**`-90.2%`** vs. `2,040+` raw dump) |
+| **Optimizer Sidecall Overhead** | `0` eff. tok | **`0` eff. tok** | Zero cloud LLM sidecalls (`< 5 ms` local `Laya` System 1) |
+| **10-Session Sprint Total** | **`490,770` eff. tok** | **`213,356` eff. tok** | **🟢 `-277,414` `effective_tokens` (`-56.5%` / `-1.15M` raw tok)** |
+
+</details>
+
+<details>
+<summary><b>🔵 Workload Preset B — Active Weekly Repository (50 Sessions · 35 CLI cmds/session) ➔ Saves ~1,830,121 <code>effective_tokens</code> (-58.2%)</b></summary>
+<br/>
+
+| Stack Component | Unoptimized Baseline | Swarm Coordinator | Verified Mechanism |
+| :--- | ---: | ---: | :--- |
+| **Agent Loop & Turns** (`3` warmup + `47` post-warmup, `22%` spiral) | `1,679,234` eff. tok | `1,143,551` eff. tok | Promoted `EnvFacts` (`K>=3`) + `p90` `EnvelopeTracker` + `Laya` |
+| **Developer CLI Output** (`1,750` `git`/`pytest`/`read` runs) | `1,237,688` eff. tok | `150,750` eff. tok | `rtk 0.48.0` CLI proxy (**`-87.8%`** stdout compression) |
+| **Startup Skill Index** (`50` sessions) | `230,000` eff. tok | `22,500` eff. tok | `200-Skill Golden Catalog` + `<= 8` active skill budget |
+| **Optimizer Sidecall Overhead** | `0` eff. tok | **`0` eff. tok** | `opt_tokens = 0.0` (100% offline Python + `Laya`) |
+| **50-Session Weekly Total** | **`3,146,922` eff. tok** | **`1,316,801` eff. tok** | **🔵 `-1,830,121` `effective_tokens` (`-58.2%` / `-6.53M` raw tok)** |
+
+</details>
+
+<details>
+<summary><b>🟣 Workload Preset C — Long-Horizon Mode 5 Program (250 Sessions · 45 CLI cmds/session) ➔ Saves ~11.36M <code>effective_tokens</code> (-61.5%)</b></summary>
+<br/>
+
+| Stack Component | Unoptimized Baseline | Swarm Coordinator | Verified Mechanism |
+| :--- | ---: | ---: | :--- |
+| **Agent Loop & Turns** (`3` warmup + `247` post-warmup, `25%` spiral) | `9,369,050` eff. tok | `6,031,328` eff. tok | Persistent Obsidian-synced `EnvFacts` + `TurnGuard` + `BMAD` Code Map |
+| **Developer CLI Output** (`11,250` `git`/`pytest`/`read` runs) | `7,956,563` eff. tok | `969,109` eff. tok | `rtk 0.48.0` CLI proxy + Windows `tree`/`find` safety guards |
+| **Startup Skill Index** (`250` sessions) | `1,150,000` eff. tok | `112,500` eff. tok | `200-Skill Golden Catalog` (`0` silent customization evictions) |
+| **Optimizer Sidecall Overhead** | `0` eff. tok | **`0` eff. tok** | Zero external telemetry or paid LLM optimizer calls |
+| **250-Session Program Total** | **`18,475,613` eff. tok** | **`7,112,937` eff. tok** | **🟣 `-11,362,676` `effective_tokens` (`-61.5%` / `-35.7M` raw tok)** |
+
+</details>
+
+<details>
+<summary><b>🧩 Inspect All 5 Token-Saving Layers &amp; Their Automated Test Proofs</b></summary>
+<br/>
+
+1. **Layer 1 — `rtk 0.48.0` CLI Pre-Filtering (`-87.8%` CLI tokens):** Condenses `git status/diff/log`, `pytest`, `read -l aggressive`, and `json` outputs (`107,704 ➔ 13,113` tokens) while bypassing `tree` and `find` (`System32\find.exe`) on Windows (`win32`). *Verified in [`tests/test_skill_catalog_curation.py`](./tests/test_skill_catalog_curation.py).*
+2. **Layer 2 — 200-Skill Golden Catalog & `<= 8` Active Skill Budget (`-90.2%` startup metadata):** Replaces `2,040+` bloated community skill dumps with `200` BOM-free, `<= 97`-char normalized skills loaded strictly on demand. *Verified in [`tests/test_skill_catalog_curation.py`](./tests/test_skill_catalog_curation.py) & [`tests/test_antigravity_substrate.py`](./tests/test_antigravity_substrate.py).*
+3. **Layer 3 — Antigravity Hook Channel Hygiene (`-100.0%` duplicate hook bloat):** Moves learned micro-skills into `SessionStart` `systemMessage` (`0.05×` KV-cache read weight), routes LSP/loop notices via single-turn `ephemeralMessage`, and blocks `PreInvocation` `invocationNum=1` double-injections. *Verified in [`tests/test_token_economizer_e2e.py`](./tests/test_token_economizer_e2e.py).*
+4. **Layer 4 — Zero-LLM `EnvFacts` + Live `TurnGuard` + Local `Laya` Loop Judge (`-39.61%` post-warmup `effective_tokens`, `0.0` `opt_tokens`):** Distills recurring repo command/path/flag repairs (`K=3`, $\gamma=0.8$, $\lambda=5.0$) and intercepts edit-churn spirals locally in `< 5 ms` CPU (`decision_router.py --mode judge-loop`). *Verified in [`tests/test_token_economizer.py`](./tests/test_token_economizer.py) & [`tests/test_decision_router.py`](./tests/test_decision_router.py).*
+5. **Layer 5 — BMAD V7 Context-Free `## Code Map` Subagent Dispatch & `<= 250`-Token Receipts:** Dispatches `Gemini 4 Hydrogen High` leaf workers with only `{plan_file}` (`900–1,600` token single-goal ceiling) instead of full parent chat history, returning compact `<= 250`-token external receipts while keeping internal `<thought>` reasoning unconstrained. *Verified in [`tests/test_bmad_integration.py`](./tests/test_bmad_integration.py).*
+
+</details>
 
 ---
 
@@ -72,7 +171,7 @@ The Swarm Coordinator integrates `rtk 0.48.0` (`rtk-token-killer`) as its mandat
 - **Git Operations (`50% - 90% Savings`):** `rtk git status`, `rtk git log -n 10`, `rtk git diff` produce ultra-condensed status matrices and omit uninformative unchanged hunk lines.
 - **Pytest Suite Runs (`90% - 98% Savings`):** `rtk pytest ...` condenses multi-page pass/fail reports into compact single-line counters and isolates traceback frames to root cause failure assertions.
 - **File Discovery & Inspection (`60% - 85% Savings`):** `rtk find <pattern>`, `rtk read -l aggressive <file>`, `rtk json <path>` prune comments, whitespace, and structural overhead.
-- **Cross-Platform OS Safety & Rewriter Guard:** `asw-rtk-rewrite.mjs` identifies Windows environments (`win32`) and preserves native `tree` commands without rewriting, preventing `tree.com` parameter mismatches while handling complex PowerShell operators (`;`, `&&`, pipes).
+- **Cross-Platform OS Safety & Rewriter Guard:** `asw-rtk-rewrite.mjs` identifies Windows environments (`win32`) and preserves native `tree` and `find` commands without rewriting, preventing `tree.com` and `System32\find.exe` parameter mismatches while handling complex PowerShell operators (`;`, `&&`, pipes).
 
 ---
 
@@ -86,6 +185,22 @@ Antigravity Swarm Coordinator incorporates a local System 1 Decision Engine (`de
 - **Review Finding Triage:** Classifies review findings in `step-04-review` to `[patch]`, `[bad_plan]`, or `[defer]` based on defect severity.
 - **VRAM-Aware Hardware Device Selector (`select_optimal_device`):** Inspects GPU VRAM and compute capability via `nvidia-smi`. Automatically selects `"cuda"` when free VRAM `>= 2048 MiB` and total VRAM `>= 4096 MiB` (compute capability `>= 7.0`), and safely falls back to `"cpu"` (`max_loaded=1`) on low-VRAM GPUs like NVIDIA GTX 1060 3GB (`~600 MiB` free) to prevent CUDA OOM crashes.
 - **Configurable Enable/Disable Switch (Low-RAM / Constrained PC Protection):** Supports disabling the Decision Engine completely for low-RAM machines or constrained environments via CLI (`python .antigravity/scripts/decision_router.py --disable` / `--enable`), config file (`decision_config.json` in `.antigravity/` or `~/.gemini/`), installer flag (`python install.py --disable-decision-model`), or environment variable (`ASW_DECISION_MODEL_ENABLED=0`). When disabled, `asw-hook.mjs` and `decision_router.py` short-circuit in 0 ms with zero background processes, zero memory footprint, and zero side effects.
+
+---
+
+## 📉 TokenEconomizer Experience & Loop-Guard Engine (39.61% Post-Warmup Effective Token Reduction)
+
+Selective, zero-API-overhead integration of key mechanisms from `microsoft/TokenEconomizer` (`arXiv:2610.22732`), adapted specifically for **Antigravity's native hook contract** and paired with our local **`Laya` System 1 Decision Engine** (`token_economizer.py` + `decision_router.py` + `asw-hook.mjs`):
+
+- **Antigravity Hook Channel Hygiene (`SessionStart` + `ephemeralMessage` + Cascading Guard):**
+  - Injects learned repository micro-skills once at `SessionStart` via `systemMessage` so they sit inside the **KV-cached system prefix** (`0.05x` cached read weight on `Gemini 4` & `Claude Opus 5.5` instead of `1.0x` fresh input).
+  - Routes transient post-edit diagnostics (`asw-lsp-check.mjs`) and mid-turn loop redirects through Antigravity's `ephemeralMessage` channel (automatically dropped after the turn ends so historical turns never accumulate clutter), while blocking `PreInvocation` `invocationNum=1` cascading double-injections (`100%` duplicate hook token elimination).
+- **Zero-LLM Environment Micro-Skills Distiller (`EnvFacts`, `opt_tokens = 0.0`):**
+  - Incrementally observes finished Antigravity `transcript.jsonl` / `transcript_full.jsonl` logs across 6 deterministic fact families (`FormRepair`, `EnvValue`, `ArgRepair`, `AbsentTool`, `Boundary`, and Windows shell repairs) governed by a mathematical `Lifecycle` (`K_PROMOTE = 3`, recency decay $\gamma = 0.8$, contradiction retirement $\lambda = 5.0$, `FIRE_GATE = 0.40`, `<= 150` tokens, and `_LINT_RE` verification-safety filter), synced with Obsidian Vault (`memory_manager.py --sync-envfacts`).
+- **Live Mid-Turn `TurnGuard` + Per-Repo p90 `EnvelopeTracker` + Local `Laya` Judge (`0` API Tokens):**
+  - Folds active prompt-turn tool calls into `SpiralState` (edit churn, distinct files, MD5-normalized failure signature stagnation) and evaluates suspected loops locally in `< 40 ms` via `decision_router.py --mode judge-loop` (`Laya` head + calibrated System 1) against a resolved-turn `p90` `EnvelopeTracker`. Emits at most `r = 1` `ephemeralMessage` hypothesis redirect (`<= 95` tokens) per turn while sparing productive multi-file work with changing failure signatures (`0` false nudges).
+- **Cache-Aware `effective_tokens` Transcript Accounting & A/B Benchmark (`--benchmark`):**
+  - Measures true provider-billed cost equivalents (`1.0x` fresh `input_tokens`, `0.05x` `cache_read_tokens`, `5.0x` `output_tokens`), achieving **35.82% raw token reduction** and **39.61% post-warmup `effective_tokens` reduction** with `0.0` optimizer API token overhead.
 
 ---
 
@@ -230,6 +345,11 @@ antigravity_swarm_coordinator/
 ├── .gitattributes                     # Enforces LF on *.sh for macOS/Linux compatibility
 ├── .gitignore                         # Git ignore rules for caches and temporary artifacts
 │
+├── assets/
+│   └── token-efficiency-dashboard.svg # Animated Dark/Light SVG token telemetry dashboard for GitHub
+├── docs/
+│   └── token-calculator.html          # Self-contained interactive HTML5 token savings slider calculator
+│
 ├── global_entrypoint/
 │   └── GEMINI.md                      # Global instructions deployed to ~/.gemini/GEMINI.md & ~/.agents/AGENTS.md
 │
@@ -249,7 +369,9 @@ antigravity_swarm_coordinator/
 │   │   ├── V4_1_OPERATOR_GUIDE.md     # Operator guide for semantic integrity and 4-axis completion
 │   │   ├── ANTIGRAVITY_LONG_HORIZON_AUDIT_V4.md # Architecture audit and theoretical foundation
 │   │   └── RECOMMENDED_SKILLS.md      # Curated companion skills guide and budget rules
-│   ├── scripts/                       # Python validation, audit, curation, and Harness² bridge scripts
+│   ├── scripts/                       # Python validation, audit, TokenEconomizer, Laya, and Harness² scripts
+│   │   ├── token_economizer.py        # Zero-LLM EnvFacts, live TurnGuard, EnvelopeTracker & effective_tokens
+│   │   ├── decision_router.py         # Local System 1 Laya router & <40ms loop judge (--mode judge-loop)
 │   │   ├── invoke_opus_reviewer.py    # Claude Opus 5.5 Plan & Diff Opposition Review CLI
 │   │   ├── run_harness_adapt.py       # Harness² recursive adaptation CLI runner
 │   │   ├── sync_harness_experience.py # Path-independent Obsidian Vault experience sync
@@ -268,17 +390,20 @@ antigravity_swarm_coordinator/
 │   └── antigravity-swarm/             # Antigravity Swarm (ASW) Engine Plugin
 │       ├── plugin.json                # Plugin manifest (v0.2.4)
 │       ├── agents/                    # ASW subagents (including Claude Opus 5.5 reviewers)
-│       ├── hooks/                     # ASW task lifecycle hooks
-│       ├── scripts/                   # ESM/Node.js diagnostic and status scripts
+│       ├── hooks/                     # ASW SessionStart, PreInvocation, PostToolUse & Stop hooks
+│       ├── scripts/                   # ESM/Node.js hook, RTK rewriter, LSP, and status scripts
 │       └── skills/                    # ASW utility skills (asw-plan, asw-loop, asw-harness-adapt, ...)
 │
-├── tests/                             # 35 automated unit, negative, and cross-platform tests
+├── tests/                             # 115 automated unit, negative, E2E, and cross-platform tests
+│   ├── test_token_economizer.py       # EnvFacts lifecycle, TurnGuard, EnvelopeTracker & effective_tokens
+│   ├── test_token_economizer_e2e.py   # Hook channel hygiene & 6-session A/B token benchmark
+│   ├── test_decision_router.py        # System 1 Laya routing & judge-loop latency/accuracy tests
 │   ├── test_harness2_windows.py       # Cross-platform locks, POSIX paths, symlink rejection
 │   ├── test_antigravity_substrate.py  # Immutable governance & 8-skill budget enforcement
 │   ├── test_swarm_adapter.py          # Quad-Model channel routing & git worktree isolation
 │   ├── test_opus_reviewer.py          # Claude Opus 5.5 plan-review & diff-review gates
 │   ├── test_experience_obsidian_sync.py # Continual learning & Obsidian Vault sync
-│   ├── test_skill_catalog_curation.py # 200-skill Golden Catalog & BOM/frontmatter bounds
+│   ├── test_skill_catalog_curation.py # 200-skill Golden Catalog, Windows RTK find guard & BOM bounds
 │   ├── test_cross_platform_installer.py # macOS/Windows/Linux installer & runtime discovery
 │   └── test_path_independence.py      # Zero hardcoded user paths across the repository
 │

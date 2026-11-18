@@ -60,7 +60,34 @@ def read_text_resilient(path: Path | None) -> str:
 
 
 def clean_scratch_directory(scratch_dir: Path) -> int:
-    """Non-interactively remove all files and nested directories (including __pycache__) inside scratch_dir."""
+    """Non-interactively remove all files and nested directories (including __pycache__) inside a scratch/temp dir.
+
+    Safety Guard: Strictly refuses to wipe '.', cwd, home directory, or any repository/workspace root.
+    """
+    raw_str = str(scratch_dir).strip()
+    if raw_str in ("", ".", "./", ".\\", "..", "../", "..\\"):
+        sys.stderr.write(f"Refusing --clean-scratch on unsafe relative target: {raw_str!r}\n")
+        return 2
+    resolved = scratch_dir.resolve()
+    cwd_res = Path.cwd().resolve()
+    home_res = Path.home().resolve()
+    parts_low = [p.lower() for p in resolved.parts]
+    has_scratch_marker = any(
+        seg in ("scratch", "tmp", "temp", "test-artifacts")
+        or seg.startswith(("tmp", "temp", "scratch"))
+        for seg in parts_low
+    )
+    if (
+        resolved in (cwd_res, home_res)
+        or len(resolved.parts) <= 3
+        or (resolved / ".git").exists()
+        or (resolved / ".antigravity").exists()
+        or not has_scratch_marker
+    ):
+        sys.stderr.write(
+            f"Refusing --clean-scratch on non-scratch or repository directory: {resolved}\n"
+        )
+        return 2
     if not scratch_dir.exists():
         return 0
     if not scratch_dir.is_dir():

@@ -21,3 +21,4 @@ ehthumbs.db
 .agent-workspace/
 .asw/
 *.log
+.antigravity/token_economizer_state/

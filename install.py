@@ -192,6 +192,7 @@ def run_install(
         "decision_router_installed": False,
         "decision_router_device": None,
         "decision_model_enabled": not disable_decision_model,
+        "token_economizer_installed": False,
         "laya_sdk_installed": False,
     }
 
@@ -375,8 +376,9 @@ def run_install(
             "   - Route `git status`, `git log`, and `git diff` through `rtk git ...` (50% to 90% token reduction).\n"
             "   - Route `pytest` and `python -m pytest` through `rtk pytest ...` (90% to 98% token reduction).\n"
             "   - Route file discovery and inspection through `rtk find <pattern>`, `rtk read -l aggressive <path>`, and `rtk json <path>`.\n"
-            "2. **Windows Platform Tree Guard:**\n"
+            "2. **Windows Platform Tree & Find Guards:**\n"
             "   - NEVER execute `rtk tree` on Windows (`win32`). Windows `tree.com` parameter conflicts trigger errors. Preserve native `tree`.\n"
+            "   - NEVER execute `rtk find` on Windows (`win32`). `C:\\Windows\\System32\\find.exe` conflicts trigger `FIND: Parameter format not correct`. Preserve native `find` on Windows.\n"
             "3. **Compound Operator Resilience:**\n"
             "   - Multi-segment commands (`;`, `&&`, `||`, `|`) must apply `rtk` per supported subcommand while preserving quotes and shell logic.\n"
         )
@@ -391,14 +393,33 @@ def run_install(
         target_rules_dir.mkdir(parents=True, exist_ok=True)
         (target_rules_dir / "antigravity-rtk-rules.md").write_text(rules_content, encoding="utf-8")
 
-    # 7. System 1 Decision Router & Laya Status
-    decision_cfg = {
+    # 7. System 1 Decision Router & Laya Status (preserve existing tuned keys)
+    base_decision_cfg: dict[str, object] = {
         "enabled": not disable_decision_model,
         "prefer_gpu": True,
         "min_free_vram_mib": 2048,
         "min_total_vram_mib": 4096,
+        "cpu_threads": 12,
+        "flush_denormal": True,
+        "preferred_checkpoint": "multilingual",
+        "compact_question_schema": True,
+        "use_local_snapshot_fastload": True,
     }
-    cfg_json = json.dumps(decision_cfg, indent=2)
+    for src_cfg_cand in (
+        repo_root / ".antigravity" / "decision_config.json",
+        repo_root / "core_framework" / "decision_config.json",
+        gemini_dir / "decision_config.json",
+    ):
+        if src_cfg_cand.is_file():
+            try:
+                loaded_cfg = json.loads(src_cfg_cand.read_text(encoding="utf-8"))
+                if isinstance(loaded_cfg, dict):
+                    base_decision_cfg.update(loaded_cfg)
+                    break
+            except Exception:
+                pass
+    base_decision_cfg["enabled"] = not disable_decision_model
+    cfg_json = json.dumps(base_decision_cfg, indent=2) + "\n"
     gemini_dir.mkdir(parents=True, exist_ok=True)
     (gemini_dir / "decision_config.json").write_text(cfg_json, encoding="utf-8")
     if resolved_target is not None:
@@ -419,6 +440,17 @@ def run_install(
         summary["decision_router_installed"] = True
     elif dr_dest.is_file():
         summary["decision_router_installed"] = True
+
+    te_dest = gemini_dir / "scripts" / "token_economizer.py"
+    te_src = repo_root / ".antigravity" / "scripts" / "token_economizer.py"
+    if not te_src.is_file():
+        te_src = repo_root / "core_framework" / "scripts" / "token_economizer.py"
+    if te_src.is_file():
+        (gemini_dir / "scripts").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(te_src, te_dest)
+        summary["token_economizer_installed"] = True
+    elif te_dest.is_file():
+        summary["token_economizer_installed"] = True
 
     try:
         dr_spec = importlib.util.spec_from_file_location(

@@ -8,6 +8,132 @@ import { fileURLToPath } from "node:url";
 import { redactSecrets, safeMode } from "./asw-redact.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const SYNTHETIC_MODE_RE = /ASW\s+[A-Z0-9_-]+\s+MODE\s+ENABLED!/i;
+
+function pythonBin() {
+  return process.platform === "win32" ? "python" : "python3";
+}
+
+function resolveWorkspaceDir(payload) {
+  const candidates = [
+    payload?.cwd,
+    Array.isArray(payload?.workspacePaths) ? payload.workspacePaths[0] : undefined,
+    Array.isArray(payload?.workspaceUris) ? payload.workspaceUris[0] : undefined,
+  ];
+  for (const raw of candidates) {
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        if (raw.startsWith("file://")) {
+          return fileURLToPath(raw);
+        }
+        return raw.trim();
+      } catch {
+        // continue
+      }
+    }
+  }
+  return process.cwd();
+}
+
+function isTokenEconomizerEnabled(repoDir) {
+  const envVal = process.env.ASW_TOKEN_ECONOMIZER_ENABLED;
+  if (envVal !== undefined) {
+    const s = String(envVal).trim().toLowerCase();
+    if (s === "0" || s === "false" || s === "no" || s === "off") return false;
+    if (s === "1" || s === "true" || s === "yes" || s === "on") return true;
+  }
+  const configPaths = [
+    repoDir ? join(repoDir, ".antigravity", "decision_config.json") : "",
+    join(process.cwd(), ".antigravity", "decision_config.json"),
+    join(homedir(), ".gemini", "decision_config.json"),
+    join(homedir(), ".gemini", ".antigravity", "decision_config.json"),
+  ].filter(Boolean);
+  for (const cp of configPaths) {
+    if (existsSync(cp)) {
+      try {
+        const parsed = JSON.parse(readFileSync(cp, "utf8"));
+        if (typeof parsed?.token_economizer_enabled === "boolean") {
+          return parsed.token_economizer_enabled;
+        }
+      } catch {
+        // continue
+      }
+    }
+  }
+  return true;
+}
+
+function resolveTokenEconomizer(repoDir) {
+  const candidates = [
+    join(__dirname, "..", "..", "..", ".antigravity", "scripts", "token_economizer.py"),
+    repoDir ? join(repoDir, ".antigravity", "scripts", "token_economizer.py") : "",
+    join(process.cwd(), ".antigravity", "scripts", "token_economizer.py"),
+    join(homedir(), ".gemini", "scripts", "token_economizer.py"),
+    join(homedir(), ".gemini", ".antigravity", "scripts", "token_economizer.py"),
+  ].filter(Boolean);
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return null;
+}
+
+function isSessionStartEvent(payload) {
+  const idx = process.argv.indexOf("--event");
+  const argEvent = idx >= 0 ? String(process.argv[idx + 1] ?? "") : "";
+  const ev = argEvent || String(payload?.hookEventName ?? payload?.event ?? "");
+  return ev.trim().toLowerCase() === "sessionstart";
+}
+
+function querySessionStartEnvFacts(repoDir) {
+  if (!isTokenEconomizerEnabled(repoDir)) return "";
+  const tePath = resolveTokenEconomizer(repoDir);
+  if (!tePath) return "";
+  try {
+    const res = spawnSync(
+      pythonBin(),
+      [tePath, "--session-start", "--repo", repoDir, "--json"],
+      { timeout: 1500, encoding: "utf8" }
+    );
+    if (res.status === 0 && res.stdout) {
+      const parsed = JSON.parse(res.stdout);
+      if (parsed?.enabled === false || parsed?.status === "disabled") return "";
+      const rendered = String(parsed?.systemMessage ?? parsed?.rendered ?? "").trim();
+      return rendered;
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function queryTurnGuardNudge(transcriptPath, repoDir) {
+  if (!isTokenEconomizerEnabled(repoDir)) return "";
+  if (typeof transcriptPath !== "string" || !transcriptPath.trim() || !existsSync(transcriptPath)) {
+    return "";
+  }
+  const tePath = resolveTokenEconomizer(repoDir);
+  if (!tePath) return "";
+  try {
+    const res = spawnSync(
+      pythonBin(),
+      [tePath, "--check-turn", transcriptPath, "--repo", repoDir, "--json"],
+      { timeout: 1500, encoding: "utf8" }
+    );
+    if (res.status === 0 && res.stdout) {
+      const parsed = JSON.parse(res.stdout);
+      if (parsed?.enabled === false || parsed?.status === "disabled") return "";
+      const msg = String(
+        parsed?.ephemeralMessage ?? (typeof parsed?.nudge === "string" ? parsed.nudge : "")
+      ).trim();
+      if ((parsed?.nudge === true || parsed?.redirect === true || Boolean(msg)) && msg) {
+        return msg;
+      }
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
 
 function resolveDecisionRouter() {
   const candidates = [
@@ -291,10 +417,32 @@ function stripIgnoredPromptRegions(prompt) {
 }
 
 const payload = readPayload();
-const isSubsequentStep = Number(payload.invocationNum) > 1;
-const directive = safeMode(payload) || isSubsequentStep ? "" : directiveFor(promptFrom(payload), payload);
-if (!directive) {
-  process.stdout.write("{}");
+const repoDir = resolveWorkspaceDir(payload);
+
+if (isSessionStartEvent(payload)) {
+  const rendered = safeMode(payload) ? "" : querySessionStartEnvFacts(repoDir);
+  if (!rendered) {
+    process.stdout.write("{}");
+  } else {
+    process.stdout.write(JSON.stringify({ injectSteps: [{ systemMessage: { systemMessage: rendered } }] }));
+  }
 } else {
-  process.stdout.write(JSON.stringify({ injectSteps: [{ userMessage: directive }] }));
+  const rawPrompt = promptFrom(payload);
+  const isSyntheticCascade = SYNTHETIC_MODE_RE.test(rawPrompt);
+  const isSubsequentStep = Number(payload.invocationNum) > 1;
+  const directive =
+    safeMode(payload) || isSubsequentStep || isSyntheticCascade ? "" : directiveFor(rawPrompt, payload);
+
+  if (directive) {
+    process.stdout.write(JSON.stringify({ injectSteps: [{ userMessage: directive }] }));
+  } else if (!safeMode(payload) && Number(payload.invocationNum) >= 1 && payload.transcriptPath) {
+    const nudge = queryTurnGuardNudge(payload.transcriptPath, repoDir);
+    if (nudge) {
+      process.stdout.write(JSON.stringify({ injectSteps: [{ ephemeralMessage: nudge }] }));
+    } else {
+      process.stdout.write("{}");
+    }
+  } else {
+    process.stdout.write("{}");
+  }
 }

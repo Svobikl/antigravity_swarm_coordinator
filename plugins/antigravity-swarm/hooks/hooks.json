@@ -1,11 +1,19 @@
 {
   "antigravity-swarm": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node ../scripts/asw-hook.mjs --event SessionStart",
+        "timeout": 10,
+        "statusMessage": "ASW: loading KV-cached EnvFacts micro-skills"
+      }
+    ],
     "PreInvocation": [
       {
         "type": "command",
         "command": "node ../scripts/asw-hook.mjs",
         "timeout": 10,
-        "statusMessage": "ASW: routing workflow and Quad-Model subagent gates"
+        "statusMessage": "ASW: routing workflow, TurnGuard, and Quad-Model subagent gates"
       }
     ],
     "PostToolUse": [

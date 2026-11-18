@@ -60,7 +60,7 @@ if (diagnostic) {
     JSON.stringify({
       injectSteps: [
         {
-          userMessage: `ASW POST-EDIT DIAGNOSTIC: ${diagnostic}. Fix the syntax/structural error before proceeding to Layer-2 and Layer-3 verification.`,
+          ephemeralMessage: `ASW POST-EDIT DIAGNOSTIC: ${diagnostic}. Fix the syntax/structural error before proceeding to Layer-2 and Layer-3 verification.`,
         },
       ],
     })

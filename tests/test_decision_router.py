@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CORE_SCRIPTS = REPO_ROOT / "core_framework" / "scripts"
+CORE_SCRIPTS = (REPO_ROOT / "core_framework" / "scripts") if (REPO_ROOT / "core_framework" / "scripts").exists() else (REPO_ROOT / ".antigravity" / "scripts")
 AG_SCRIPTS = REPO_ROOT / ".antigravity" / "scripts"
 
 for p in (str(CORE_SCRIPTS), str(AG_SCRIPTS)):
@@ -200,28 +200,37 @@ class TestDecisionRouter(unittest.TestCase):
             self.assertFalse(pre_res["enabled"])
             self.assertEqual(pre_res["status"], "disabled")
 
-        # 2. CLI --disable and --enable flags
+        # 2. CLI --disable and --enable flags (restore original configs in finally)
         script_path = CORE_SCRIPTS / "decision_router.py"
-        proc_disable = subprocess.run(
-            [sys.executable, str(script_path), "--disable"],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(proc_disable.returncode, 0)
-        data_disable = json.loads(proc_disable.stdout)
-        self.assertFalse(data_disable["enabled"])
-        self.assertEqual(data_disable["status"], "disabled")
+        cfg_targets = [
+            REPO_ROOT / ".antigravity" / "decision_config.json",
+            Path.home() / ".gemini" / "decision_config.json",
+        ]
+        saved_cfgs = {cp: cp.read_text(encoding="utf-8") for cp in cfg_targets if cp.is_file()}
+        try:
+            proc_disable = subprocess.run(
+                [sys.executable, str(script_path), "--disable"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc_disable.returncode, 0)
+            data_disable = json.loads(proc_disable.stdout)
+            self.assertFalse(data_disable["enabled"])
+            self.assertEqual(data_disable["status"], "disabled")
 
-        # Re-enable via CLI --enable
-        proc_enable = subprocess.run(
-            [sys.executable, str(script_path), "--enable"],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(proc_enable.returncode, 0)
-        data_enable = json.loads(proc_enable.stdout)
-        self.assertTrue(data_enable["enabled"])
-        self.assertEqual(data_enable["status"], "enabled")
+            # Re-enable via CLI --enable
+            proc_enable = subprocess.run(
+                [sys.executable, str(script_path), "--enable"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc_enable.returncode, 0)
+            data_enable = json.loads(proc_enable.stdout)
+            self.assertTrue(data_enable["enabled"])
+            self.assertEqual(data_enable["status"], "enabled")
+        finally:
+            for cp, orig_txt in saved_cfgs.items():
+                cp.write_text(orig_txt, encoding="utf-8")
 
     # --- Task 2: Deterministic Compact Prefix Serialization (M5) ---
     def test_compact_deterministic_serialization_hash_parity(self):
@@ -293,7 +302,7 @@ class TestDecisionRouter(unittest.TestCase):
     def test_slice_rules_mode_and_gui_triggers(self):
         """M4: slice_rules extracts < 6,500 bytes (>85% reduction) of targeted rules."""
         import memory_manager
-        rules_path = REPO_ROOT / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md"
+        rules_path = (REPO_ROOT / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md") if (REPO_ROOT / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md").exists() else (REPO_ROOT / ".antigravity" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md")
         full_size = rules_path.stat().st_size
 
         # 1. Mode 2 slice
@@ -314,7 +323,7 @@ class TestDecisionRouter(unittest.TestCase):
     def test_slice_rules_and_compact_negative_and_boundary_cases(self):
         """Negative and boundary coverage: invalid mode, empty cues, and unroutable inputs."""
         import memory_manager
-        rules_path = REPO_ROOT / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md"
+        rules_path = (REPO_ROOT / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md") if (REPO_ROOT / "core_framework" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md").exists() else (REPO_ROOT / ".antigravity" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md")
 
         # Boundary: unknown/invalid mode falls back safely to general rules without crashing
         fallback_slice = memory_manager.slice_rules(mode="invalid_mode_99", rules_path=rules_path)
@@ -337,6 +346,202 @@ class TestDecisionRouter(unittest.TestCase):
         self.assertEqual(p_err.returncode, 0)
         out_err = json.loads(p_err.stdout)
         self.assertEqual(out_err["scope"], "global")
+
+    # --- Task 2 (TokenEconomizer M3): Local Laya Stuck-Loop Judge ---
+    def test_judge_loop_stagnant_vs_productive_and_ambiguous(self):
+        """M3: judge_loop_digest catches stagnant recurring-hash loops, spares productive changing failures, and returns None on early/mixed traces."""
+        stagnant_digest = (
+            "turns=22 edit_churn=5 distinct_edit_files=1 error_outputs=7 "
+            "test_runs=6 repeated_identical_failures=5 stagnation=0.71 "
+            "repo_context=1.18\n[err#deadbeef] AssertionError\n[err#deadbeef] AssertionError"
+        )
+        res_stuck = self.router.judge_loop_digest(stagnant_digest)
+        self.assertTrue(res_stuck["enabled"])
+        self.assertIs(res_stuck["stuck"], True)
+        self.assertGreaterEqual(res_stuck["confidence"], 0.72)
+        self.assertLessEqual(res_stuck["confidence"], 0.96)
+        self.assertEqual(res_stuck["reason"], "stagnant_repeated_failure_loop")
+        self.assertIn("device_info", res_stuck)
+
+        # Productive multi-file grind (stagnation == 0.0 / repeated_identical_failures == 0)
+        productive_digest = (
+            "turns=18 edit_churn=6 distinct_edit_files=5 error_outputs=6 "
+            "test_runs=5 repeated_identical_failures=0 stagnation=0.0 "
+            "[err#1111aaaa] [err#2222bbbb] [err#3333cccc]"
+        )
+        res_prod = self.router.judge_loop_digest(productive_digest)
+        self.assertIs(res_prod["stuck"], False)
+        self.assertGreaterEqual(res_prod["confidence"], 0.80)
+        self.assertEqual(res_prod["reason"], "productive_changing_failures")
+
+        # Early / borderline trace -> stuck is None, confidence < 0.70
+        early_digest = (
+            "turns=5 edit_churn=2 distinct_edit_files=1 error_outputs=2 "
+            "repeated_identical_failures=1 stagnation=0.25"
+        )
+        res_early = self.router.judge_loop_digest(early_digest)
+        self.assertIsNone(res_early["stuck"])
+        self.assertLess(res_early["confidence"], 0.70)
+        self.assertEqual(res_early["reason"], "ambiguous_early_or_mixed")
+
+    def test_judge_loop_cli_compact_parity_and_disabled_isolation(self):
+        """M3 + Negative Isolation: --mode judge-loop --compact is SHA-256 deterministic and ASW_DECISION_MODEL_ENABLED=0 short-circuits."""
+        import hashlib
+        import os
+
+        script_path = CORE_SCRIPTS / "decision_router.py"
+        digest = "turns=22 edit_churn=5 distinct_edit_files=1 error_outputs=7 repeated_identical_failures=5 stagnation=0.71"
+
+        p1 = subprocess.run(
+            [sys.executable, str(script_path), "--mode", "judge-loop", "--compact", "--text", digest],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        p2 = subprocess.run(
+            [sys.executable, str(script_path), "--mode", "judge-loop", "--compact", "--text", digest],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        out1 = p1.stdout.strip()
+        out2 = p2.stdout.strip()
+        self.assertNotIn("\n", out1)
+        data1 = json.loads(out1)
+        self.assertIs(data1["stuck"], True)
+        self.assertGreaterEqual(data1["confidence"], 0.70)
+        self.assertNotIn("free_vram_mib", data1.get("device_info", {}))
+        self.assertEqual(
+            hashlib.sha256(out1.encode("utf-8")).hexdigest(),
+            hashlib.sha256(out2.encode("utf-8")).hexdigest(),
+        )
+
+        # Negative isolation: ASW_DECISION_MODEL_ENABLED=0
+        with mock.patch.dict(os.environ, {"ASW_DECISION_MODEL_ENABLED": "0"}):
+            disabled_router = decision_router.DecisionRouter()
+            res_dis = disabled_router.judge_loop_digest(digest)
+            self.assertEqual(
+                res_dis,
+                {
+                    "enabled": False,
+                    "status": "disabled",
+                    "backend": "disabled",
+                    "stuck": None,
+                    "confidence": 0.0,
+                    "reason": "decision_model_disabled",
+                },
+            )
+
+        env_off = os.environ.copy()
+        env_off["ASW_DECISION_MODEL_ENABLED"] = "0"
+        p_off = subprocess.run(
+            [sys.executable, str(script_path), "--mode", "judge-loop", "--compact", "--text", digest],
+            capture_output=True,
+            text=True,
+            env=env_off,
+            check=True,
+        )
+        data_off = json.loads(p_off.stdout.strip())
+        self.assertFalse(data_off["enabled"])
+        self.assertEqual(data_off["status"], "disabled")
+        self.assertIsNone(data_off["stuck"])
+        self.assertEqual(data_off["confidence"], 0.0)
+
+    def test_judge_loop_envfacts_recall_sync_and_flag_isolation(self):
+        """AD-1: memory_manager.recall_context() and --sync-envfacts read envfacts.json and respect ASW_TOKEN_ECONOMIZER_ENABLED=0."""
+        import os
+        import re
+        import tempfile
+        import memory_manager
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            vault_dir = tmp_path / "AgentMemory"
+            proj_dir = tmp_path / "sample app@1"
+            proj_dir.mkdir(parents=True)
+            (proj_dir / "README.md").write_text("# Sample App\n\nTest repo.\n", encoding="utf-8")
+
+            repo_slug = re.sub(r"[^a-zA-Z0-9._-]", "_", proj_dir.resolve().name)
+            state_dir = proj_dir / ".antigravity" / "token_economizer_state" / repo_slug
+            state_dir.mkdir(parents=True)
+            envfacts_payload = {
+                "repo": str(proj_dir.resolve()),
+                "now": 4,
+                "rendered": "- [FormRepair] Use `python -m pytest` instead of bare `pytest`.",
+                "facts": {
+                    "fact-1": {
+                        "id": "fact-1",
+                        "family": "FormRepair",
+                        "claim": "Use `python -m pytest` instead of bare `pytest`.",
+                        "params": {"old": "pytest", "new": "python -m pytest"},
+                        "life": {"status": "ACTIVE", "fires": 4, "exposures": 5},
+                    },
+                    "fact-2": {
+                        "id": "fact-2",
+                        "family": "AbsentTool",
+                        "claim": "Old retired fact should not sync.",
+                        "params": {"tool": "flake8"},
+                        "life": {"status": "RETIRED", "fires": 1, "exposures": 6},
+                    },
+                },
+                "forgotten": {},
+            }
+            (state_dir / "envfacts.json").write_text(json.dumps(envfacts_payload, indent=2), encoding="utf-8")
+
+            # 1. recall_context includes Section 5 within < 10,000 byte budget
+            recalled = memory_manager.recall_context(
+                vault_dir=vault_dir,
+                project_path=proj_dir,
+                task_type="code",
+            )
+            self.assertLess(len(recalled.encode("utf-8")), 10000)
+            self.assertIn("## 5. Learned Environment Micro-Skills", recalled)
+            self.assertIn("python -m pytest", recalled)
+
+            # 2. --sync-envfacts CLI writes Environment Micro-Skills.md and links from <project>.md
+            mm_script = CORE_SCRIPTS / "memory_manager.py"
+            p_sync = subprocess.run(
+                [
+                    sys.executable,
+                    str(mm_script),
+                    "--sync-envfacts",
+                    "--project-path",
+                    str(proj_dir),
+                    "--vault-dir",
+                    str(vault_dir),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            sync_out = json.loads(p_sync.stdout)
+            self.assertEqual(sync_out["synced"], 1)
+
+            proj_name = proj_dir.resolve().name
+            micro_md = vault_dir / "projects" / proj_name / "Environment Micro-Skills.md"
+            overview_md = vault_dir / "projects" / proj_name / f"{proj_name}.md"
+            self.assertTrue(micro_md.is_file())
+            micro_txt = micro_md.read_text(encoding="utf-8")
+            self.assertIn(f"tags: [microskills, envfacts, project/{proj_name}]", micro_txt)
+            self.assertIn("python -m pytest", micro_txt)
+            self.assertNotIn("Old retired fact should not sync.", micro_txt)
+            self.assertIn("Environment Micro-Skills", overview_md.read_text(encoding="utf-8"))
+
+            # 3. Negative isolation: ASW_TOKEN_ECONOMIZER_ENABLED=0 disables recall injection & sync writes
+            micro_md.unlink()
+            with mock.patch.dict(os.environ, {"ASW_TOKEN_ECONOMIZER_ENABLED": "0"}):
+                recalled_off = memory_manager.recall_context(
+                    vault_dir=vault_dir,
+                    project_path=proj_dir,
+                    task_type="code",
+                )
+                self.assertNotIn("## 5. Learned Environment Micro-Skills", recalled_off)
+                self.assertNotIn("python -m pytest", recalled_off)
+
+                sync_off = memory_manager.sync_envfacts_to_vault(proj_dir, vault_dir=vault_dir)
+                self.assertFalse(sync_off["enabled"])
+                self.assertEqual(sync_off["status"], "disabled")
+                self.assertFalse(micro_md.exists())
 
 
 if __name__ == "__main__":

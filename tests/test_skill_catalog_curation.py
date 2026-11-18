@@ -374,6 +374,226 @@ class TestSkillCatalogCuration(unittest.TestCase):
         self.assertEqual(cli_proc.returncode, 0)
         self.assertEqual(cli_proc.stdout.strip(), "rtk git status; rtk pytest tests/ -v")
 
+    def test_m1_cascading_hook_guard_session_start_and_ephemeral_channel_split(self):
+        """Verifies M1: SessionStart systemMessage, synthetic ASW MODE cascade skip, TurnGuard & LSP ephemeralMessage, no PreToolUse, and malformed stdin fail-open."""
+        import json
+        import os
+        import subprocess
+        import sys
+        import tempfile
+
+        repo_root = Path(__file__).resolve().parent.parent
+        plugin_src = repo_root / "plugins" / "antigravity-swarm"
+        hook_script = plugin_src / "scripts" / "asw-hook.mjs"
+        lsp_script = plugin_src / "scripts" / "asw-lsp-check.mjs"
+
+        # 1. Both hooks.json files register SessionStart, PreInvocation, PostToolUse, Stop and NEVER PreToolUse
+        for hooks_path in (plugin_src / "hooks.json", plugin_src / "hooks" / "hooks.json"):
+            self.assertTrue(hooks_path.is_file(), f"Missing {hooks_path}")
+            hooks_data = json.loads(hooks_path.read_text(encoding="utf-8"))
+            swarm_hooks = hooks_data.get("antigravity-swarm", {})
+            for required_event in ("SessionStart", "PreInvocation", "PostToolUse", "Stop"):
+                self.assertIn(required_event, swarm_hooks, f"{hooks_path} missing {required_event}")
+            self.assertNotIn("PreToolUse", swarm_hooks, f"{hooks_path} must NEVER register PreToolUse")
+            self.assertIn("--event SessionStart", json.dumps(swarm_hooks["SessionStart"]))
+
+        # 2. Fresh /asw-plan with omitted invocationNum and invocationNum=1 emits userMessage
+        for inv in (None, 1):
+            payload = {"lastUserInput": "/asw-plan integrate token economizer"}
+            if inv is not None:
+                payload["invocationNum"] = inv
+            res = subprocess.run(
+                ["node", str(hook_script)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(res.returncode, 0)
+            out = json.loads(res.stdout)
+            msg = out.get("injectSteps", [{}])[0].get("userMessage", "")
+            self.assertIn("ASW PLAN MODE ENABLED!", msg)
+
+        # 3. Cascading synthetic hook-injected prompt at invocationNum=1 must return {} (M1)
+        for marker in (
+            "ASW PLAN MODE ENABLED! (Model Tier: Gemini 4 Carbon High)",
+            "ASW LOOP MODE ENABLED! /asw-plan follow-up",
+            "ASW START-WORK MODE ENABLED!",
+        ):
+            res_dup = subprocess.run(
+                ["node", str(hook_script)],
+                input=json.dumps({
+                    "invocationNum": 1,
+                    "lastUserInput": marker,
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(res_dup.returncode, 0)
+            self.assertEqual(json.loads(res_dup.stdout), {}, f"Synthetic marker must not re-inject: {marker}")
+
+        # 4. Malformed / empty stdin JSON fails open with {} and exit code 0
+        for bad_in in ("", "   ", "{not valid json"):
+            res_bad = subprocess.run(
+                ["node", str(hook_script)],
+                input=bad_in,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(res_bad.returncode, 0)
+            self.assertEqual(json.loads(res_bad.stdout), {})
+
+        # 5. SessionStart emits KV-cached systemMessage from EnvFacts and honors ASW_TOKEN_ECONOMIZER_ENABLED=0
+        with tempfile.TemporaryDirectory() as tmp:
+            ws_dir = Path(tmp) / "sample_ws"
+            ws_dir.mkdir(parents=True)
+            te_script = repo_root / ".antigravity" / "scripts" / "token_economizer.py"
+            for idx in range(1, 4):
+                tp = Path(tmp) / f"s{idx}.jsonl"
+                rows = [
+                    {"type": "PLANNER_RESPONSE", "step_index": 0, "tool_calls": [{"name": "run_command", "arguments": {"CommandLine": "pytest -q"}}]},
+                    {"type": "MODEL", "subtype": "GENERIC", "step_index": 1, "text": "Command exited with code 127\n'pytest' is not recognized"},
+                    {"type": "PLANNER_RESPONSE", "step_index": 2, "tool_calls": [{"name": "run_command", "arguments": {"CommandLine": "python -m pytest -q"}}]},
+                    {"type": "MODEL", "subtype": "GENERIC", "step_index": 3, "text": "Command exited with code 0\n5 passed"},
+                ]
+                tp.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+                fold_proc = subprocess.run(
+                    [sys.executable, str(te_script), "--fold", str(tp), "--repo", str(ws_dir), "--json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                self.assertEqual(fold_proc.returncode, 0, fold_proc.stderr)
+
+            ss_res = subprocess.run(
+                ["node", str(hook_script), "--event", "SessionStart"],
+                cwd=str(repo_root),
+                input=json.dumps({"hookEventName": "SessionStart", "workspacePaths": [ws_dir.as_uri()]}),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(ss_res.returncode, 0, ss_res.stderr)
+            ss_out = json.loads(ss_res.stdout)
+            sys_step = ss_out.get("injectSteps", [{}])[0].get("systemMessage", {})
+            sys_msg = sys_step.get("systemMessage", "") if isinstance(sys_step, dict) else sys_step
+            self.assertIn("python -m pytest", sys_msg)
+
+            env_off = dict(os.environ)
+            env_off["ASW_TOKEN_ECONOMIZER_ENABLED"] = "0"
+            ss_off = subprocess.run(
+                ["node", str(hook_script), "--event", "SessionStart"],
+                cwd=str(repo_root),
+                input=json.dumps({"hookEventName": "SessionStart", "workspacePaths": [ws_dir.as_uri()]}),
+                env=env_off,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(ss_off.returncode, 0)
+            self.assertEqual(json.loads(ss_off.stdout), {})
+
+            # 6. PreInvocation mid-turn TurnGuard emits ephemeralMessage on stagnant edit/test spiral
+            spiral_path = Path(tmp) / "spiral.jsonl"
+            spiral_rows = []
+            step = 0
+            for _ in range(7):
+                spiral_rows.extend([
+                    {"type": "PLANNER_RESPONSE", "step_index": step, "tool_calls": [{"name": "edit_file", "arguments": {"TargetFile": "app.py"}}]},
+                    {"type": "MODEL", "subtype": "GENERIC", "step_index": step + 1, "text": "Edited app.py"},
+                    {"type": "PLANNER_RESPONSE", "step_index": step + 2, "tool_calls": [{"name": "run_command", "arguments": {"CommandLine": "python -m pytest -q"}}]},
+                    {"type": "MODEL", "subtype": "GENERIC", "step_index": step + 3, "text": "Command exited with code 1\nAssertionError: invariant M3 failed"},
+                ])
+                step += 4
+            spiral_path.write_text("\n".join(json.dumps(r) for r in spiral_rows) + "\n", encoding="utf-8")
+            tg_res = subprocess.run(
+                ["node", str(hook_script)],
+                cwd=str(repo_root),
+                input=json.dumps({
+                    "invocationNum": 2,
+                    "transcriptPath": str(spiral_path),
+                    "workspacePaths": [ws_dir.as_uri()],
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(tg_res.returncode, 0, tg_res.stderr)
+            tg_out = json.loads(tg_res.stdout)
+            eph_msg = tg_out.get("injectSteps", [{}])[0].get("ephemeralMessage", "")
+            self.assertTrue(bool(eph_msg.strip()), f"Expected TurnGuard ephemeralMessage, got: {tg_out}")
+            self.assertNotIn("userMessage", tg_out.get("injectSteps", [{}])[0])
+
+            # 7. asw-lsp-check.mjs must emit ephemeralMessage (never userMessage) on syntax error
+            bad_js = Path(tmp) / "broken.mjs"
+            bad_js.write_text("const x = (;\n", encoding="utf-8")
+            lsp_res = subprocess.run(
+                ["node", str(lsp_script)],
+                input=json.dumps({"toolCall": {"args": {"TargetFile": str(bad_js)}}}),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(lsp_res.returncode, 0)
+            lsp_out = json.loads(lsp_res.stdout)
+            lsp_step = lsp_out.get("injectSteps", [{}])[0]
+            self.assertIn("ephemeralMessage", lsp_step, f"LSP check must emit ephemeralMessage, got: {lsp_out}")
+            self.assertNotIn("userMessage", lsp_step)
+            self.assertIn("Layer-1 Static Check FAILED", lsp_step["ephemeralMessage"])
+
+    def test_m4_windows_rtk_find_guard_and_rules_docs(self):
+        """Verifies M4: Windows win32 preserves native find while POSIX rewrites to rtk find, and rules/skill document it."""
+        import json
+        import subprocess
+
+        repo_root = Path(__file__).resolve().parent.parent
+        rewrite_script = repo_root / "plugins" / "antigravity-swarm" / "scripts" / "asw-rtk-rewrite.mjs"
+        self.assertTrue(rewrite_script.is_file(), f"Missing {rewrite_script}")
+
+        def run_rewrite(cmd: str, is_win: bool) -> str:
+            js = f"""
+            import {{ rewriteCommandToRtk }} from {json.dumps(rewrite_script.as_uri())};
+            process.stdout.write(rewriteCommandToRtk({json.dumps(cmd)}, {str(is_win).lower()}));
+            """
+            proc = subprocess.run(
+                ["node", "--input-type=module", "-e", js],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            return proc.stdout
+
+        # Windows preserves find and find.exe; POSIX rewrites find -> rtk find
+        self.assertEqual(run_rewrite("find . -name '*.py'", True), "find . -name '*.py'")
+        self.assertEqual(run_rewrite("find.exe . -name '*.py'", True), "find.exe . -name '*.py'")
+        self.assertEqual(run_rewrite("find . -name '*.py'", False), "rtk find . -name '*.py'")
+        self.assertEqual(run_rewrite("git status; find .", True), "rtk git status; find .")
+        self.assertEqual(run_rewrite("git status; find .", False), "rtk git status; rtk find .")
+
+        # Documentation & skill frontmatter check (supports both fresh git clone and deployed target repo)
+        required_docs = [
+            repo_root / ".antigravity" / "rules" / "antigravity-rtk-rules.md",
+            repo_root / ".antigravity" / "skills" / "rtk-token-killer" / "SKILL.md",
+        ]
+        for optional_mirror in (
+            repo_root / "core_framework" / "rules" / "antigravity-rtk-rules.md",
+            repo_root / ".agents" / "rules" / "antigravity-rtk-rules.md",
+            repo_root / "plugins" / "antigravity-swarm" / "skills" / "rtk-token-killer" / "SKILL.md",
+        ):
+            if optional_mirror.is_file():
+                required_docs.append(optional_mirror)
+
+        for doc_path in required_docs:
+            raw = doc_path.read_bytes()
+            self.assertFalse(raw.startswith(b"\xef\xbb\xbf"), f"BOM found in {doc_path}")
+            txt = raw.decode("utf-8")
+            self.assertIn("rtk find", txt)
+            self.assertIn("System32", txt)
+
 
 if __name__ == "__main__":
     unittest.main()

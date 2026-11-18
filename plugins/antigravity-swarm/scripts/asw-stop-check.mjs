@@ -1,12 +1,40 @@
 #!/usr/bin/env node
 
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { safeMode } from "./asw-redact.mjs";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const MAX_AUTO_CONTINUES = 3;
 const ACTIVE_PLAN_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+function foldTranscriptOnStop(payload, repoDir) {
+  const envVal = String(process.env.ASW_TOKEN_ECONOMIZER_ENABLED ?? "").trim().toLowerCase();
+  if (envVal === "0" || envVal === "false" || envVal === "no" || envVal === "off") return;
+  const transcriptPath = payload?.transcriptPath;
+  if (typeof transcriptPath !== "string" || !transcriptPath.trim() || !existsSync(transcriptPath)) return;
+  const candidates = [
+    join(__dirname, "..", "..", "..", ".antigravity", "scripts", "token_economizer.py"),
+    repoDir ? join(repoDir, ".antigravity", "scripts", "token_economizer.py") : "",
+    join(process.cwd(), ".antigravity", "scripts", "token_economizer.py"),
+    join(homedir(), ".gemini", "scripts", "token_economizer.py"),
+    join(homedir(), ".gemini", ".antigravity", "scripts", "token_economizer.py"),
+  ].filter(Boolean);
+  const tePath = candidates.find((c) => existsSync(c));
+  if (!tePath) return;
+  try {
+    spawnSync(
+      process.platform === "win32" ? "python" : "python3",
+      [tePath, "--fold", transcriptPath, "--repo", repoDir, "--json"],
+      { timeout: 1500, encoding: "utf8" }
+    );
+  } catch {
+    // fail-open
+  }
+}
 
 function resolveWorkspaceCwd(payload) {
   const candidates = [
@@ -120,6 +148,9 @@ if (safeMode(payload) || payload.fullyIdle === false) {
       reason: `${gateLabel} Next item: "${unfinishedPlan.nextItem}". Dispatch Gemini 4 Hydrogen (High) to complete and verify remaining items or explicitly log a blocker.`,
     }));
   } else {
+    if (payload.terminationReason === "NO_TOOL_CALL" || payload.fullyIdle === true) {
+      foldTranscriptOnStop(payload, cwd);
+    }
     process.stdout.write(JSON.stringify({ decision: "" }));
   }
 }

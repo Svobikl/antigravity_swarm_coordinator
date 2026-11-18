@@ -32,8 +32,8 @@ Pre-filter pytest execution to prevent context saturation from verbose test outp
 - **Error Capture:** `rtk err <command>` (isolates stderr and failure lines, dropping noisy stdout chatter)
 
 ## Windows PowerShell & OS Safety Rules
-- **NEVER execute `rtk tree` on Windows (`win32`):**
-  Windows includes `tree.com` which uses incompatible parameter switches (`/F /A`) compared to Unix `tree`. `rtk tree` fails on Windows. Always bypass `rtk tree` on Windows and use native `Get-ChildItem` or `tree`.
+- **NEVER execute `rtk tree` or `rtk find` on Windows (`win32`):**
+  Windows includes `tree.com` (`/F /A`) and `C:\Windows\System32\find.exe` which cause parameter format conflicts (`FIND: Parameter format not correct`). Always bypass `rtk tree` and `rtk find` on Windows and use native `Get-ChildItem`, `tree`, or `find` (while rewriting `find` -> `rtk find` on POSIX).
 - **PowerShell Stream Redirection:**
   Never use PowerShell `>` or `>>` redirection into files read by tools, as PowerShell may default to UTF-16LE. Use standard UTF-8 outputs or pass target file paths to tools directly.
 - **Compound Commands:**
