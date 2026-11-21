@@ -31,7 +31,7 @@ slug: "<plan_slug>"
 
 ## Governance & Invariants
 - **Mode:** Mode 2 / Mode 3 / Mode 5 (`GLOBAL_DEVELOPMENT_RULES.md`)
-- **Quad-Model Routing:** `Gemini 4 Carbon (High)` (Planner/Researcher) -> `Claude Opus 5.5` (Opposition Gate) -> `Gemini 4 Hydrogen (High)` (Implementation/Routine) -> `Gemini 4 Argon (High)` + `Claude Opus 5.5` (Review/QA)
+- **Quad-Model Routing:** `Gemini 4 Carbon (High)` (Planner/Researcher) -> `Claude Opus 5.5` (Opposition Gate) -> `Gemini 4 Hydrogen (High)` (Implementation/Routine) -> `Gemini 4 Neon (High)` + `Claude Opus 5.5` (Review/QA)
 
 <!-- <frozen-after-approval> — Human-owned contract; do not modify after approval -->
 

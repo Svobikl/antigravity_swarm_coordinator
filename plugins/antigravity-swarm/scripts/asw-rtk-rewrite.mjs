@@ -9,6 +9,25 @@
  * protects Windows platforms by bypassing `rtk tree` (avoiding tree.com parameter conflicts).
  */
 
+import { existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
+
+function hasRtkBinary() {
+  if (process.env.FORCE_RTK_REWRITE === "1") return true;
+  const pathVar = process.env.PATH || "";
+  if (!pathVar) return false;
+  const exts = process.platform === "win32" ? [".exe", ".cmd", ".bat", ""] : [""];
+  for (const dir of pathVar.split(delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      if (existsSync(join(dir, `rtk${ext}`))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function splitCommandSegments(cmd) {
   const segments = [];
   let current = "";
@@ -33,7 +52,7 @@ export function splitCommandSegments(cmd) {
         segments.push({ text: current, operator: char + next });
         current = "";
         i += 2;
-      } else if (char === ";" || char === "|" || char === "&") {
+      } else if (char === ";" || char === "|") {
         segments.push({ text: current, operator: char });
         current = "";
         i++;
@@ -146,12 +165,23 @@ if (isMain) {
       try {
         const parsed = JSON.parse(raw);
         if (typeof parsed === "object" && parsed !== null) {
+          const canRewrite = hasRtkBinary();
+          if (typeof parsed.toolCall?.args?.CommandLine === "string") {
+            const orig = parsed.toolCall.args.CommandLine;
+            const rewritten = canRewrite ? rewriteCommandToRtk(orig) : orig;
+            if (rewritten !== orig) {
+              process.stdout.write(JSON.stringify({ decision: "allow", overwrite: { CommandLine: rewritten } }));
+            } else {
+              process.stdout.write(JSON.stringify({ decision: "allow" }));
+            }
+            return;
+          }
           if (typeof parsed.command === "string") {
-            parsed.command = rewriteCommandToRtk(parsed.command);
+            if (canRewrite) parsed.command = rewriteCommandToRtk(parsed.command);
           } else if (parsed.args && typeof parsed.args.CommandLine === "string") {
-            parsed.args.CommandLine = rewriteCommandToRtk(parsed.args.CommandLine);
+            if (canRewrite) parsed.args.CommandLine = rewriteCommandToRtk(parsed.args.CommandLine);
           } else if (parsed.CommandLine && typeof parsed.CommandLine === "string") {
-            parsed.CommandLine = rewriteCommandToRtk(parsed.CommandLine);
+            if (canRewrite) parsed.CommandLine = rewriteCommandToRtk(parsed.CommandLine);
           }
           process.stdout.write(JSON.stringify(parsed));
           return;

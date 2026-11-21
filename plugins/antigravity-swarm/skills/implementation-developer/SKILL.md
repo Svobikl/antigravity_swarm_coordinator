@@ -6,7 +6,7 @@ description: Executes bounded production code diffs under a decision-complete ta
 # Implementation Developer
 
 ## Purpose
-Execute bounded leaf-level code changes at high velocity using **`Gemini 4 Hydrogen (High)` (`Model="flash"`)**, adhering strictly to the decision-complete task contract designed by `Gemini 4 Carbon (High)` (`software-architect` / `asw-planner`) and orchestrated by `Gemini 4 Argon (High)` (`swarm-coordinator`).
+Execute bounded leaf-level code changes at high velocity using **`Gemini 4 Hydrogen (High)` (`Model="flash"`)**, adhering strictly to the decision-complete task contract designed by `Gemini 4 Carbon (High)` (`software-architect` / `asw-planner`) and orchestrated by `Gemini 4 Neon (High)` (`swarm-coordinator`).
 
 ## Subagent Task Contract Compliance (`Gemini 4 Hydrogen High`)
 When executing as a subagent or bounded worker:

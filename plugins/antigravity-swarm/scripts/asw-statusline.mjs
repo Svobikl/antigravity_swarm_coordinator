@@ -59,8 +59,8 @@ function modelName(model) {
   if (hydrogen) return hydrogen[2] ? `G-H (${hydrogen[2]}) ${hydrogen[1]}` : `G-H ${hydrogen[1]}`;
   const carbon = text.match(/^Gemini\s+([\d.]+)\s+Carbon(?:\s+\(([^)]+)\))?/i);
   if (carbon) return carbon[2] ? `G-C (${carbon[2]}) ${carbon[1]}` : `G-C ${carbon[1]}`;
-  const argon = text.match(/^Gemini\s+([\d.]+)\s+Argon(?:\s+\(([^)]+)\))?/i);
-  if (argon) return argon[2] ? `G-A (${argon[2]}) ${argon[1]}` : `G-A ${argon[1]}`;
+  const neon = text.match(/^Gemini\s+([\d.]+)\s+Neon(?:\s+\(([^)]+)\))?/i);
+  if (neon) return neon[2] ? `G-N (${neon[2]}) ${neon[1]}` : `G-N ${neon[1]}`;
   const gemini = text.match(/^Gemini\s+([\d.]+)\s+Flash(?:\s+\(([^)]+)\))?/i);
   if (gemini) return gemini[2] ? `G-f (${gemini[2]}) ${gemini[1]}` : `G-f ${gemini[1]}`;
   const pro = text.match(/^Gemini\s+([\d.]+)\s+Pro(?:\s+\(([^)]+)\))?/i);
@@ -144,9 +144,9 @@ function remainingGauge(value) {
 
 function compactQuotaModelName(value) {
   const text = modelName({ display_name: redactSecrets(value) });
-  const tier = text.match(/^(G-[fp]) \(([^)]+)\) [\d.]+$/);
+  const tier = text.match(/^(G-[fpHCN]) \(([^)]+)\) [\d.]+$/);
   if (tier) return `${tier[1]}(${tier[2][0].toUpperCase()})`;
-  const plain = text.match(/^(G-[fp]) [\d.]+$/);
+  const plain = text.match(/^(G-[fpHCN]) [\d.]+$/);
   if (plain) return plain[1];
   return text.split(/\s+/).slice(0, 2).join("-");
 }

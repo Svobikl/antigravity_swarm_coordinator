@@ -81,8 +81,8 @@ class TestAswTestGui(unittest.TestCase):
             web_dir = tmp_path / "web_root"
             web_dir.mkdir(parents=True)
             (web_dir / "index.html").write_text(
-                "<!DOCTYPE html><html><head><title>EdgeRelay Admin</title></head>"
-                "<body><h1>EdgeRelay Live GUI</h1><button id='btn-sync'>Sync Nodes</button></body></html>",
+                "<!DOCTYPE html><html><head><title>Acme Admin</title></head>"
+                "<body><h1>Acme Live GUI</h1><button id='btn-sync'>Sync Nodes</button></body></html>",
                 encoding="utf-8",
             )
             port = _find_free_port()
@@ -101,7 +101,7 @@ class TestAswTestGui(unittest.TestCase):
                     "--url",
                     f"http://127.0.0.1:{port}/index.html",
                     "--assert-text",
-                    "EdgeRelay Live GUI",
+                    "Acme Live GUI",
                     "--assert-selector",
                     "button",
                     "--output",
@@ -203,25 +203,25 @@ class TestAswTestGui(unittest.TestCase):
             self.assertNotEqual(p_bad.returncode, 0)
             self.assertIn("Verdict: GUI_FAILED", report_native_bad.read_text(encoding="utf-8"))
 
-    def test_run_gui_test_rejects_hui_error_card_and_configuration_error_and_forbid_flags(self):
-        """Reproduces Home Assistant Step 853: run_gui_test.py must automatically reject <hui-error-card>, 'Configuration error', and custom --forbid-text / --forbid-selector."""
+    def test_run_gui_test_rejects_custom_error_card_and_configuration_error_and_forbid_flags(self):
+        """run_gui_test.py must automatically reject <*-error-card> (e.g. <widget-error-card>), 'Configuration error', and custom --forbid-text / --forbid-selector."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
-            web_dir = tmp_path / "ha_web"
+            web_dir = tmp_path / "dashboard_web"
             web_dir.mkdir(parents=True)
 
-            # Page 1: Contains <hui-error-card> and 'Configuration error' (even though HTTP is 200 and heading exists)
-            (web_dir / "lovelace.html").write_text(
+            # Page 1: Contains <widget-error-card> (without 'Configuration error' text on a companion test, or with it here)
+            (web_dir / "overview.html").write_text(
                 "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>"
-                "<h1>Chytrý dům Klabava</h1>"
-                "<hui-error-card>Configuration error: Custom element doesn't exist: klabava-cockpit-card</hui-error-card>"
+                "<h1>Smart Ops Dashboard</h1>"
+                "<widget-error-card>Custom element doesn't exist: custom-widget-card</widget-error-card>"
                 "</body></html>",
                 encoding="utf-8",
             )
             # Page 2: Healthy HTML but contains a forbidden placeholder ('0 USD' / '.stale-banner') tested via --forbid-text / --forbid-selector
             (web_dir / "dashboard.html").write_text(
                 "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>"
-                "<h1>StrataRelay Dashboard</h1>"
+                "<h1>Acme Analytics Dashboard</h1>"
                 "<div class='stale-banner'>Balance: 0 USD</div>"
                 "</body></html>",
                 encoding="utf-8",
@@ -229,9 +229,9 @@ class TestAswTestGui(unittest.TestCase):
 
             port1 = _find_free_port()
             start_cmd1 = f'"{sys.executable}" -m http.server {port1} --bind 127.0.0.1 --directory "{web_dir.as_posix()}"'
-            report_ha = tmp_path / "ha-error-report.md"
+            report_err = tmp_path / "error-card-report.md"
 
-            proc_ha = subprocess.run(
+            proc_err = subprocess.run(
                 [
                     sys.executable,
                     str(self.script_path),
@@ -240,26 +240,24 @@ class TestAswTestGui(unittest.TestCase):
                     "--start-cmd",
                     start_cmd1,
                     "--url",
-                    f"http://127.0.0.1:{port1}/lovelace.html",
+                    f"http://127.0.0.1:{port1}/overview.html",
                     "--assert-text",
-                    "Chytrý dům Klabava",
+                    "Smart Ops Dashboard",
                     "--output",
-                    str(report_ha),
+                    str(report_err),
                 ],
                 capture_output=True,
                 text=True,
                 cwd=str(tmp_path),
             )
             self.assertNotEqual(
-                proc_ha.returncode,
+                proc_err.returncode,
                 0,
-                "Page containing <hui-error-card> / 'Configuration error' must fail GUI verification automatically!",
+                "Page containing <widget-error-card> must fail GUI verification automatically!",
             )
-            ha_report_text = report_ha.read_text(encoding="utf-8")
-            self.assertIn("Verdict: GUI_FAILED", ha_report_text)
-            self.assertTrue(
-                "hui-error-card" in ha_report_text.lower() or "configuration error" in ha_report_text.lower()
-            )
+            err_report_text = report_err.read_text(encoding="utf-8")
+            self.assertIn("Verdict: GUI_FAILED", err_report_text)
+            self.assertIn("widget-error-card", err_report_text.lower())
 
             port2 = _find_free_port()
             start_cmd2 = f'"{sys.executable}" -m http.server {port2} --bind 127.0.0.1 --directory "{web_dir.as_posix()}"'
@@ -275,7 +273,7 @@ class TestAswTestGui(unittest.TestCase):
                     "--url",
                     f"http://127.0.0.1:{port2}/dashboard.html",
                     "--assert-text",
-                    "StrataRelay Dashboard",
+                    "Acme Analytics Dashboard",
                     "--forbid-text",
                     "Balance: 0 USD",
                     "--forbid-selector",
@@ -292,10 +290,10 @@ class TestAswTestGui(unittest.TestCase):
             self.assertIn("Verdict: GUI_FAILED", forbid_text)
 
     def test_run_gui_test_assert_asset_version_detects_stale_cached_module_url(self):
-        """Reproduces Home Assistant Step 896 (Oct 28): container served stale extra_module_url '?v=20261026_fixed' instead of '?v=20261028_hist_v2'."""
+        """Reproduces stale asset cache bug: server served stale module URL '?v=20261026_fixed' instead of '?v=20261028_hist_v2'."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
-            web_dir = tmp_path / "ha_cache_web"
+            web_dir = tmp_path / "cache_web"
             (web_dir / "local").mkdir(parents=True)
             (web_dir / "local" / "energy-cockpit-card.js").write_text(
                 "window.__cockpit_loaded = true;\n",
@@ -304,7 +302,7 @@ class TestAswTestGui(unittest.TestCase):
             (web_dir / "index.html").write_text(
                 "<!DOCTYPE html><html><head><meta charset='utf-8'>"
                 "<script type='module' src='/local/energy-cockpit-card.js?v=20261026_fixed'></script>"
-                "</head><body><h1>Chytrý dům</h1></body></html>",
+                "</head><body><h1>Smart Dashboard</h1></body></html>",
                 encoding="utf-8",
             )
 

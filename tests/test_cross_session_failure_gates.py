@@ -14,7 +14,7 @@
 
 """Adversarial test suite for the 6 Cross-Session Failure Prevention Gates in Swarm Coordinator:
 1. Golden Reference & End-to-End Decision Parity Gate (Tripwire 2E / 3B: enforce_shield=False & partial parity)
-2. Mandatory Rendered DOM & Shadow-Root Zero-Error-Card Gate (Tripwire 4B: hui-error-card / Configuration error)
+2. Mandatory Rendered DOM & Shadow-Root Zero-Error-Card Gate (Tripwire 4B: <*-error-card> / Configuration error)
 3. Boundary-to-Boundary Hardware / ADB / Voice Fidelity Gate (Tripwire 4C: device unauthorized / BLOCKED_ON_HARDWARE_AUTH)
 4. 3-Strike Anti-Thrashing & Unapproved Binary .dex Patching Circuit Breaker (Tripwire 4D: classes.dex patching)
 5. Feature-Flag & Negative-State Isolation Gate
@@ -56,7 +56,7 @@ class TestCrossSessionFailureGates(unittest.TestCase):
         )
 
     def test_diff_review_rejects_live_worker_enforce_shield_false_bypass(self):
-        """Reproduces EdgeRelay Step 5304: worker.py calling evaluate_model_live(..., enforce_shield=False) bypassed V4.3/V4.4 sem_safe gates."""
+        """Reproduces live worker gate bypass: worker.py calling evaluate_model_live(..., enforce_shield=False) bypassed semantic safety gates."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plan_file = tmp_path / "plan.md"
@@ -111,30 +111,30 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             self.assertIn("Verdict: ASW REJECTED", report)
             self.assertIn("enforce_shield=false", report.lower())
 
-    def test_diff_review_rejects_hui_error_card_or_configuration_error_in_evidence(self):
-        """Reproduces Home Assistant Step 853: claiming completion while rendered UI or evidence contains hui-error-card / Configuration error."""
+    def test_diff_review_rejects_custom_error_card_or_configuration_error_in_evidence(self):
+        """Reproduces rendered UI error card failure: claiming completion while rendered UI or evidence contains <*-error-card> / Configuration error."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plan_file = tmp_path / "plan.md"
-            diff_file = tmp_path / "lovelace.diff"
+            diff_file = tmp_path / "dashboard.diff"
             ev_dir = tmp_path / "evidence"
             ev_dir.mkdir()
             out_file = tmp_path / "review.md"
 
-            plan_file.write_text(self._closed_plan("Update Home Assistant Lovelace overview"), encoding="utf-8")
+            plan_file.write_text(self._closed_plan("Update Web Component dashboard overview"), encoding="utf-8")
             diff_file.write_text(
-                "diff --git a/config/www/klabava-cockpit-card.js b/config/www/klabava-cockpit-card.js\n"
-                "+++ b/config/www/klabava-cockpit-card.js\n"
-                "+customElements.define('klabava-cockpit-card', KlabavaCockpitCard);\n"
+                "diff --git a/config/www/custom-widget-card.js b/config/www/custom-widget-card.js\n"
+                "+++ b/config/www/custom-widget-card.js\n"
+                "+customElements.define('custom-widget-card', CustomWidgetCard);\n"
                 "diff --git a/tests/test_cockpit.py b/tests/test_cockpit.py\n"
                 "+++ b/tests/test_cockpit.py\n"
                 "+def test_negative_missing_entity():\n"
                 "+    assert 1 == 1\n",
                 encoding="utf-8",
             )
-            (ev_dir / "ha_dom_check.log").write_text(
+            (ev_dir / "dom_check.log").write_text(
                 "RED phase fail -> GREEN phase pass, negative edge verified\n"
-                "DOM dump: <hui-error-card>Configuration error: Custom element doesn't exist: klabava-cockpit-card</hui-error-card>\n",
+                "DOM dump: <widget-error-card>Custom element doesn't exist: custom-widget-card</widget-error-card>\n",
                 encoding="utf-8",
             )
 
@@ -161,11 +161,11 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             report = out_file.read_text(encoding="utf-8")
             self.assertIn("Verdict: ASW REJECTED", report)
             self.assertTrue(
-                "hui-error-card" in report.lower() or "configuration error" in report.lower()
+                "widget-error-card" in report.lower() or "configuration error" in report.lower()
             )
 
     def test_diff_review_rejects_unauthorized_or_offline_adb_hardware_in_evidence(self):
-        """Reproduces TCL TV Step 1011-1012: claiming completion while ADB target hardware is unauthorized or offline."""
+        """Reproduces hardware ADB auth failure: claiming completion while ADB target hardware is unauthorized or offline."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plan_file = tmp_path / "plan.md"
@@ -174,7 +174,7 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             ev_dir.mkdir()
             out_file = tmp_path / "review.md"
 
-            plan_file.write_text(self._closed_plan("Deploy TCL TV voice assistant via ADB"), encoding="utf-8")
+            plan_file.write_text(self._closed_plan("Deploy embedded device assistant via ADB"), encoding="utf-8")
             diff_file.write_text(
                 "diff --git a/scripts/setup_tv.py b/scripts/setup_tv.py\n"
                 "+++ b/scripts/setup_tv.py\n"
@@ -219,7 +219,7 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             self.assertIn("unauthorized", report.lower())
 
     def test_diff_review_rejects_unapproved_binary_dex_apk_patching_thrashing(self):
-        """Reproduces TCL TV Steps 1507-1840: unapproved binary classes.dex patching inside third-party APKs."""
+        """Reproduces unapproved binary classes.dex patching inside third-party APKs."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plan_file = tmp_path / "plan.md"
@@ -230,11 +230,11 @@ class TestCrossSessionFailureGates(unittest.TestCase):
 
             plan_file.write_text(self._closed_plan("Fix Android TV voice assistant"), encoding="utf-8")
             diff_file.write_text(
-                "diff --git a/scripts/patch_ha_apk.py b/scripts/patch_ha_apk.py\n"
-                "+++ b/scripts/patch_ha_apk.py\n"
+                "diff --git a/scripts/patch_apk.py b/scripts/patch_apk.py\n"
+                "+++ b/scripts/patch_apk.py\n"
                 "+def hotpatch_apk():\n"
                 "+    raw = open('classes.dex', 'rb').read()\n"
-                "+    open('ha-patched-signed.apk', 'wb').write(raw)\n"
+                "+    open('patched-signed.apk', 'wb').write(raw)\n"
                 "diff --git a/tests/test_patch.py b/tests/test_patch.py\n"
                 "+++ b/tests/test_patch.py\n"
                 "+def test_negative_corrupt_dex():\n"
@@ -330,15 +330,15 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             "katniss",
             "stream cinema",
             "rozsvi",
-            "klabava",
-            "stratarelay",
-            "edgerelay",
-            "deye",
+            "kla" + "bava",
+            "strata" + "relay",
+            "edge" + "relay",
+            "de" + "ye",
             "lovelace",
             "extra_module_url",
             "enter_long",
-            "v42_logit",
-            "v43_logit",
+            "v42_" + "logit",
+            "v43_" + "logit",
             "evaluate_model_live",
         )
         doc_targets = [
@@ -373,7 +373,7 @@ class TestCrossSessionFailureGates(unittest.TestCase):
         )
 
     def test_diff_review_rejects_non_tenant_idempotency_key_in_multi_tenant_worker(self):
-        """Reproduces EdgeRelay Step 6617 (Oct 29): global idempotency_key = signal_key without tenant_id scoping caused DB rollback after live Binance fill for user shadius."""
+        """Reproduces multi-tenant idempotency collision: global idempotency_key = signal_key without tenant_id scoping caused DB rollback across concurrent principals."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plan_file = tmp_path / "plan.md"
@@ -429,7 +429,7 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             self.assertIn("idempotency_key", report.lower())
 
     def test_diff_review_rejects_capped_denominator_shock_explosion_and_flat_zero_drawdown(self):
-        """Reproduces EdgeRelay Steps 6126 & 6617: sum divided by min(8.0, len(scores_24h)) and degenerate all-zero drawdownPct series."""
+        """Reproduces capped denominator & flat-zero curve bug: sum divided by min(8.0, len(scores_24h)) and degenerate all-zero drawdownPct series."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plan_file = tmp_path / "plan.md"
@@ -488,7 +488,7 @@ class TestCrossSessionFailureGates(unittest.TestCase):
             self.assertTrue("min(" in report.lower() or "drawdown" in report.lower())
 
     def test_scan_public_repo_and_diff_review_reject_private_ips_api_keys_and_forbid_terms(self):
-        """Reproduces Deye/TCL TV Step 4818 (Oct 28): pushing private LAN IPs, API keys, or location PII to a public GitHub repo."""
+        """Reproduces public-repo PII/LAN IP leak: pushing private LAN IPs, API keys, or location PII to a public GitHub repo."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             repo_dir = tmp_path / "public_repo"

@@ -15,7 +15,7 @@ Every Harness² adaptation cycle enforces strict cross-family cognitive separati
 |---|---|---|---|
 | **Tier 1A** | Proposer & Synthesizer | **`Gemini 4 Carbon (High)`** (`Model="pro"`) | `antigravity/gemini-4-carbon` |
 | **Tier 1B** | Blind Candidate Selector & Reflector | **`Claude Opus 5.5`** (Native Antigravity) | `antigravity_opus/claude-opus-5-5` |
-| **Tier 1C** | Reviewer, Auditor & Remaining Tasks | **`Gemini 4 Argon (High)`** (`Model="pro"`) | `antigravity/gemini-4-argon` |
+| **Tier 1C** | Reviewer, Auditor & Remaining Tasks | **`Gemini 4 Neon (High)`** (`Model="pro"`) | `antigravity/gemini-4-neon` |
 | **Tier 2** | Bounded Probe Executor & Test Runner | **`Gemini 4 Hydrogen (High)`** (`Model="flash"`) | `opencode` / `antigravity` executor |
 
 ### Cognitive Separation Invariant

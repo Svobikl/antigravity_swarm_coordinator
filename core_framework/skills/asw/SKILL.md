@@ -11,7 +11,7 @@ Use this skill when the user invokes `/asw`, `asw`, `asw-loop`, or `swarmwork` t
 
 **Never execute a multi-step or code-changing `/asw` task entirely inline in a single `Gemini 4 Hydrogen` (`flash`) thread!**
 
-In Antigravity, the UI model selector only sets the model of the **main conversation thread**. Reading a skill does **NOT** automatically switch the main thread's model. Therefore, to enforce the **Quad-Model Cross-Family Architecture (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 4 Argon High` + `Gemini 4 Hydrogen High`)**, the main agent MUST act as the **Swarm Coordinator** and actively dispatch subagents via `invoke_subagent` with explicit `Model` overrides:
+In Antigravity, the UI model selector only sets the model of the **main conversation thread**. Reading a skill does **NOT** automatically switch the main thread's model. Therefore, to enforce the **Quad-Model Cross-Family Architecture (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 4 Neon High` + `Gemini 4 Hydrogen High`)**, the main agent MUST act as the **Swarm Coordinator** and actively dispatch subagents via `invoke_subagent` with explicit `Model` overrides:
 
 1. **Step 1 — Recall & Mode Classification (`step-01-clarify-and-route`):**
    - Run `python .antigravity/scripts/memory_manager.py --recall --project-path . --task-type code` to load project memory and lessons.
@@ -25,10 +25,10 @@ In Antigravity, the UI model selector only sets the model of the **main conversa
    - Dispatch bounded leaf implementation subagent(s) on **`Model="flash"` (`Gemini 4 Hydrogen High`)**:
      `invoke_subagent(TypeName="asw-implementer", Role="ASW Leaf Implementer (Hydrogen High)", Model="flash", Prompt="Execute Wave <N> from .asw/plans/<slug>.md using its ## Code Map. Run RED -> GREEN -> Layer 3 Real-Surface QA, verify every row M1..Mn in I/O & Edge-Case Matrix, never modify <frozen-after-approval>, and record results in ## Implementation Notes.")`
    - Retain the subagent `conversationId` for targeted `[patch]` fixes in Step 4. When multiple tasks have zero file overlap, dispatch up to 4 parallel `asw-implementer` subagents (`Model="flash"`).
-4. **Step 4 — 5-Lens BMAD + Opus Opposition Review (`step-04-review` -> `Gemini 4 Argon High` + `Claude Opus 5.5`):**
+4. **Step 4 — 5-Lens BMAD + Opus Opposition Review (`step-04-review` -> `Gemini 4 Neon High` + `Claude Opus 5.5`):**
    - **Never let `Gemini 4 Hydrogen` grade or approve its own implementation diff!**
-   - Dispatch the review subagent on **`Model="pro"` (`Gemini 4 Argon High`)** paired with `invoke_opus_reviewer.py`:
-     `invoke_subagent(TypeName="asw-reviewer", Role="ASW 5-Lens & Opus Reviewer (Argon High)", Model="pro", Prompt="Execute the 5 orthogonal review lenses (blind-hunter, edge-case-hunter with deletion-check & claims-check, verification-gap with caller hop trace, intent-alignment, and opus-cross-family via invoke_opus_reviewer.py --mode diff-review) on .asw/plans/<slug>.md and record findings in ## Review Triage Log.")`
+   - Dispatch the review subagent on **`Model="pro"` (`Gemini 4 Neon High`)** paired with `invoke_opus_reviewer.py`:
+     `invoke_subagent(TypeName="asw-reviewer", Role="ASW 5-Lens & Opus Reviewer (Neon High)", Model="pro", Prompt="Execute the 5 orthogonal review lenses (blind-hunter, edge-case-hunter with deletion-check & claims-check, verification-gap with caller hop trace, intent-alignment, and opus-cross-family via invoke_opus_reviewer.py --mode diff-review) on .asw/plans/<slug>.md and record findings in ## Review Triage Log.")`
    - Route any verified findings in `## Review Triage Log` (`[intent_gap]`, `[bad_plan]`, `[patch]` via `send_message` to the `asw-implementer` `conversationId`, or `[defer]`) until `Verdict: ASW APPROVED` and 100% of `- [x]` checkboxes are closed.
 5. **Step 5 — Clean Handoff & Memory Sync (`step-05-present`):**
    - Present the `ASW REPORT` and `Prompt-to-Code Traceability Matrix` after all 3 verification layers and cleanup receipts are complete.

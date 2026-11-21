@@ -17,8 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
-import pandas as pd
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from .schema import (
     DeploymentStatus,
@@ -73,7 +72,7 @@ class SemanticCompletionAuditor:
             semantic_integrity=FourAxisStatus.IN_PROGRESS,
             scientific_validity=FourAxisStatus.NOT_STARTED,
             forward_validation=FourAxisStatus.NOT_STARTED,
-            deployment_status=DeploymentStatus.PAPER_TRADING_ONLY
+            deployment_status=DeploymentStatus.RESEARCH
         )
 
         # -------------------------------------------------------------
@@ -126,12 +125,13 @@ class SemanticCompletionAuditor:
         else:
             active_claims = self.claim_manager.get_active_claims()
             for c in active_claims:
-                if c.duration_years > 0 and c.trade_count > 0:
-                    exp_freq = c.trade_count / c.duration_years
-                    if abs(c.trades_per_year - exp_freq) > 1.5:
+                if c.duration_units > 0 and c.event_count > 0:
+                    exp_freq = c.event_count / c.duration_units
+                    tolerance = max(1.0, exp_freq * 0.05)
+                    if abs(c.events_per_unit - exp_freq) > tolerance:
                         blocking_errors.append(
-                            f"Arithmetic contradiction in claim {c.claim_id}: {c.trade_count} trades / "
-                            f"{c.duration_years:.2f} yrs != {c.trades_per_year} tr/yr"
+                            f"Arithmetic contradiction in claim {c.claim_id}: {c.event_count} events / "
+                            f"{c.duration_units:.2f} units != {c.events_per_unit} events/unit"
                         )
             findings.append(f"Claim Registry: PASS ({len(self.claim_manager.claims)} claims registered, {len(active_claims)} active)")
 

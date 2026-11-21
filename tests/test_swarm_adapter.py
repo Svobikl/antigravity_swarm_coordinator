@@ -111,25 +111,39 @@ class TestSwarmAdapterAndChannels(unittest.TestCase):
                     self.assertEqual(res.get("kind"), "agy")
                     self.assertEqual(Path(res.get("path")), fake_agy)
 
-            # Priority 3: LocalAppData language_server.exe
+            # Priority 3: LocalAppData language_server.exe (isolated from host /Applications/Antigravity.app)
             with mock.patch.dict(
                 os.environ,
-                {"HARNESS2_ANTIGRAVITY_CMD": "", "LOCALAPPDATA": str(temp_root)},
+                {
+                    "HARNESS2_ANTIGRAVITY_CMD": "",
+                    "HARNESS2_MACOS_APP_ROOT": "",
+                    "LOCALAPPDATA": str(temp_root),
+                },
                 clear=False,
             ):
-                with mock.patch("shutil.which", return_value=None):
-                    res = proposer.discover_antigravity_runtime()
+                with (
+                    mock.patch("shutil.which", return_value=None),
+                    mock.patch("pathlib.Path.home", return_value=temp_root),
+                ):
+                    res = proposer.discover_antigravity_runtime(app_roots=())
                     self.assertEqual(res.get("kind"), "language_server")
                     self.assertEqual(Path(res.get("path")), fake_ls)
 
             # Priority 4: Fallback to shutil.which("claude")
             with mock.patch.dict(
                 os.environ,
-                {"HARNESS2_ANTIGRAVITY_CMD": "", "LOCALAPPDATA": str(temp_root / "nonexistent")},
+                {
+                    "HARNESS2_ANTIGRAVITY_CMD": "",
+                    "HARNESS2_MACOS_APP_ROOT": "",
+                    "LOCALAPPDATA": str(temp_root / "nonexistent"),
+                },
                 clear=False,
             ):
-                with mock.patch("shutil.which", side_effect=lambda x: str(fake_claude) if "claude" in x else None):
-                    res = proposer.discover_antigravity_runtime()
+                with (
+                    mock.patch("shutil.which", side_effect=lambda x: str(fake_claude) if "claude" in x else None),
+                    mock.patch("pathlib.Path.home", return_value=temp_root),
+                ):
+                    res = proposer.discover_antigravity_runtime(app_roots=())
                     self.assertEqual(res.get("kind"), "claude")
                     self.assertEqual(Path(res.get("path")), fake_claude)
 

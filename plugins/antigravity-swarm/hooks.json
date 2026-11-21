@@ -18,11 +18,11 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "^(write_to_file|multi_replace_file_content|write_file|edit_file|replace_file_content|run_command|apply_patch|Write|Edit|MultiEdit)$",
+        "matcher": "^(write_to_file|multi_replace_file_content|write_file|edit_file|replace_file_content|apply_patch|Write|Edit|MultiEdit)$",
         "hooks": [
           {
             "type": "command",
-            "command": "node ./scripts/asw-lsp-check.mjs",
+            "command": "node ./scripts/asw-lsp-check.mjs --event PostToolUse",
             "timeout": 60,
             "statusMessage": "ASW: diagnostics guidance hook"
           }

@@ -23,7 +23,7 @@
           "raw_tokens": 3871113,
           "effective_tokens": 2175656.9
         },
-        "gemini-4-argon": {
+        "gemini-4-neon": {
           "input_tokens": 0,
           "cache_read_tokens": 0,
           "cache_creation_input_tokens": 0,
@@ -71,7 +71,7 @@
               "raw_tokens": 828878,
               "effective_tokens": 497080.55
             },
-            "gemini-4-argon": {
+            "gemini-4-neon": {
               "input_tokens": 0,
               "cache_read_tokens": 0,
               "cache_creation_input_tokens": 0,
@@ -134,7 +134,7 @@
               "raw_tokens": 871023,
               "effective_tokens": 495589.9
             },
-            "gemini-4-argon": {
+            "gemini-4-neon": {
               "input_tokens": 0,
               "cache_read_tokens": 0,
               "cache_creation_input_tokens": 0,
@@ -197,7 +197,7 @@
               "raw_tokens": 781672,
               "effective_tokens": 378814.15
             },
-            "gemini-4-argon": {
+            "gemini-4-neon": {
               "input_tokens": 0,
               "cache_read_tokens": 0,
               "cache_creation_input_tokens": 0,
@@ -260,7 +260,7 @@
               "raw_tokens": 713738,
               "effective_tokens": 366451.6
             },
-            "gemini-4-argon": {
+            "gemini-4-neon": {
               "input_tokens": 0,
               "cache_read_tokens": 0,
               "cache_creation_input_tokens": 0,
@@ -323,7 +323,7 @@
               "raw_tokens": 675802,
               "effective_tokens": 437720.7
             },
-            "gemini-4-argon": {
+            "gemini-4-neon": {
               "input_tokens": 0,
               "cache_read_tokens": 0,
               "cache_creation_input_tokens": 0,
@@ -392,7 +392,7 @@
           "raw_tokens": 938994,
           "effective_tokens": 482421.3
         },
-        "gemini-4-argon": {
+        "gemini-4-neon": {
           "input_tokens": 151625,
           "cache_read_tokens": 1032624,
           "cache_creation_input_tokens": 0,
@@ -440,7 +440,7 @@
               "raw_tokens": 0,
               "effective_tokens": 0.0
             },
-            "gemini-4-argon": {
+            "gemini-4-neon": {
               "input_tokens": 0,
               "cache_read_tokens": 0,
               "cache_creation_input_tokens": 0,
@@ -503,7 +503,7 @@
               "raw_tokens": 0,
               "effective_tokens": 0.0
             },
-            "gemini-4-argon": {
+            "gemini-4-neon": {
               "input_tokens": 0,
               "cache_read_tokens": 0,
               "cache_creation_input_tokens": 0,
@@ -566,7 +566,7 @@
               "raw_tokens": 0,
               "effective_tokens": 0.0
             },
-            "gemini-4-argon": {
+            "gemini-4-neon": {
               "input_tokens": 0,
               "cache_read_tokens": 0,
               "cache_creation_input_tokens": 0,
@@ -629,7 +629,7 @@
               "raw_tokens": 0,
               "effective_tokens": 0.0
             },
-            "gemini-4-argon": {
+            "gemini-4-neon": {
               "input_tokens": 0,
               "cache_read_tokens": 0,
               "cache_creation_input_tokens": 0,
@@ -692,7 +692,7 @@
               "raw_tokens": 0,
               "effective_tokens": 0.0
             },
-            "gemini-4-argon": {
+            "gemini-4-neon": {
               "input_tokens": 0,
               "cache_read_tokens": 0,
               "cache_creation_input_tokens": 0,
@@ -754,7 +754,7 @@
         {
           "conversation_id": "a04819c4-e184-4c99-9a6e-b7855157b340",
           "role": "asw-adversarial-reviewer",
-          "model": "gemini-4-argon",
+          "model": "gemini-4-neon",
           "sha256": "419335b7ecd00b3f63a2538b8d99ce55541523c2bac4f443d50f0e2d5a347b99",
           "input_tokens": 151625,
           "cache_read_tokens": 1032624,
@@ -778,7 +778,7 @@
   },
   "supplementary_arms": {
     "mode2_fast_swarm": {
-      "label": "Swarm Mode 2 (Fast \u2014 Hydrogen + rtk + Argon Batch Review)",
+      "label": "Swarm Mode 2 (Fast \u2014 Hydrogen + rtk + Neon Batch Review)",
       "tasks_passed": 2,
       "tasks_total": 5,
       "holdout_passed": 46,
@@ -830,7 +830,7 @@
         {
           "conversation_id": "75e199f4-f3fd-4800-a38c-21b9dd6b2647",
           "role": "swarm-batch-reviewer",
-          "model": "gemini-4-argon",
+          "model": "gemini-4-neon",
           "sha256": "50af32ad585a37df4569f4c819e88fa39730912cc2cff9e35420feab7b7bc60c",
           "raw_tokens": 1851538,
           "effective_tokens": 487283.8

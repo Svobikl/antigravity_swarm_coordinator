@@ -133,9 +133,14 @@ function findUncheckedActivePlan(cwd) {
 const payload = readPayload();
 const cwd = resolveWorkspaceCwd(payload);
 
-if (safeMode(payload) || payload.fullyIdle === false) {
-  // When fullyIdle === false, an async subagent or background task is running and Antigravity's
-  // reactive wakeup system will automatically resume this conversation when it finishes.
+if (
+  safeMode(payload) ||
+  payload.fullyIdle === false ||
+  payload.continuationActive === true ||
+  (payload.terminationReason && payload.terminationReason !== "NO_TOOL_CALL")
+) {
+  // When fullyIdle === false, continuationActive === true, or terminationReason is USER_CANCELED/ERROR/MAX_INVOCATIONS,
+  // never override termination or inject continuation.
   process.stdout.write(JSON.stringify({ decision: "" }));
 } else {
   const unfinishedPlan = findUncheckedActivePlan(cwd);

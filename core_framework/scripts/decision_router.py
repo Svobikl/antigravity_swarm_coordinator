@@ -47,19 +47,27 @@ def get_decision_config_path(target_dir: Path | None = None) -> Path:
 def load_decision_config() -> dict[str, object]:
     """Load decision configuration from disk and environment variables."""
     cfg = dict(DEFAULT_DECISION_CONFIG)
+    # Layered merge: global defaults first, then workspace overrides.
     candidates = [
-        Path.cwd() / ".antigravity" / "decision_config.json",
-        Path(__file__).resolve().parent.parent / "decision_config.json",
-        Path.home() / ".gemini" / "decision_config.json",
         Path.home() / ".gemini" / ".antigravity" / "decision_config.json",
+        Path.home() / ".gemini" / "decision_config.json",
+        Path(__file__).resolve().parent.parent / "decision_config.json",
+        Path.cwd() / ".antigravity" / "decision_config.json",
     ]
+    seen: set[Path] = set()
     for c in candidates:
+        try:
+            resolved = c.resolve()
+        except Exception:
+            resolved = c
+        if resolved in seen:
+            continue
+        seen.add(resolved)
         if c.is_file():
             try:
                 data = json.loads(c.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
                     cfg.update(data)
-                    break
             except Exception:
                 pass
 
@@ -109,6 +117,16 @@ def select_optimal_device(
     """
     raw_csv = nvidia_smi_output
     if raw_csv is None:
+        if platform.system() == "Darwin":
+            return {
+                "device": "cpu",
+                "max_loaded": 1,
+                "gpu_name": None,
+                "total_vram_mib": None,
+                "free_vram_mib": None,
+                "compute_cap": None,
+                "reason": "darwin_no_nvidia_cuda",
+            }
         try:
             res = subprocess.run(
                 [
@@ -250,7 +268,11 @@ class DecisionRouter:
             or os.environ.get("LAYA_SERVER_URL")
             or self.config.get("use_daemon", False)
         )
-        self.server_url = server_url or os.environ.get("LAYA_SERVER_URL", "http://127.0.0.1:8765")
+        self.server_url = (
+            server_url
+            or os.environ.get("LAYA_SERVER_URL")
+            or str(self.config.get("server_url") or "http://127.0.0.1:8765")
+        )
         if enable_inproc is None:
             self.enable_inproc = os.environ.get("LAYA_ENABLE_INPROC", "0").lower() in ("1", "true")
         else:
@@ -336,8 +358,9 @@ class DecisionRouter:
 
         server_reachable = False
         try:
-            req = urllib.request.Request(f"{self.server_url}/health", method="GET")
-            with urllib.request.urlopen(req, timeout=0.4) as resp:
+            timeout = float(self.config.get("daemon_timeout_sec", 0.65))
+            req = urllib.request.Request(f"{self.server_url.rstrip('/')}/health", method="GET")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 if resp.status == 200:
                     server_reachable = True
         except Exception:
@@ -432,7 +455,7 @@ class DecisionRouter:
                 return self._build_decision(
                     choice="mode_2",
                     execution_mode="mode_2",
-                    recommended_tier="argon_qa_review",
+                    recommended_tier="neon_qa_review",
                     requires_gui_verification=False,
                     requires_subagent_plan_wave=False,
                     answer_confidence=1.0,
@@ -506,6 +529,58 @@ class DecisionRouter:
                 answer_confidence=0.90,
                 noul=0.15,
             )
+
+        # Mode 4: Emergency rollback / restore / revert prompts (unless paired with engineering/feature creation verbs)
+        engineering_feature_verbs = [
+            "implement", "build", "add", "create", "design", "refactor", "integrate", "develop", "test", "write",
+            "vytvoř", "přidej", "implementuj", "navrhni", "postav", "integruj", "uprav", "otestuj",
+        ]
+        has_engineering_verb = any(re.search(rf"\b{v}\b", lower) for v in engineering_feature_verbs)
+        mode4_patterns = [
+            r"\brollback\b",
+            r"\bemergency\s+restore\b",
+            r"\brevert\s+production\b",
+            r"\bnouzová\s+obnova\b",
+        ]
+        if any(re.search(pat, lower) for pat in mode4_patterns) and not has_engineering_verb:
+            base_decision = self._build_decision(
+                choice="mode_4",
+                execution_mode="mode_4",
+                recommended_tier="hydrogen_implement_tdd",
+                requires_gui_verification=False,
+                requires_subagent_plan_wave=False,
+                answer_confidence=0.95,
+                noul=0.15,
+            )
+            return self._enrich_with_laya(trimmed, base_decision)
+
+        # Mode 0: Fast operational build / test / run / lint commands (without code-change/fix/creation verbs or GUI design)
+        code_change_verbs = [
+            "fix", "repair", "patch", "modify", "update", "refactor",
+            "add", "implement", "create", "integrate", "develop", "design",
+            "oprav", "uprav", "změň", "přidej", "vytvoř", "implementuj", "postav", "integruj", "navrhni",
+        ]
+        has_code_change_verb = any(re.search(rf"\b{v}\b", lower) for v in code_change_verbs)
+        mode0_patterns = [
+            r"\brun\s+(?:pytest|unit\s+tests|tests?|lint(?:er)?|build)\b",
+            r"\bbuild\s+(?:debug|release|project|app)\b",
+            r"\bcmake\s+--build\b",
+            r"\bnpm\s+(?:test|run\s+(?:build|lint|test))\b",
+            r"\bpytest\b",
+            r"\bspusť\s+testy\b",
+            r"\bzkompiluj\b",
+        ]
+        if any(re.search(pat, lower) for pat in mode0_patterns) and not has_code_change_verb and not has_gui:
+            base_decision = self._build_decision(
+                choice="mode_0",
+                execution_mode="mode_0",
+                recommended_tier="hydrogen_implement_tdd",
+                requires_gui_verification=False,
+                requires_subagent_plan_wave=False,
+                answer_confidence=0.92,
+                noul=0.1,
+            )
+            return self._enrich_with_laya(trimmed, base_decision)
 
         # Feature verbs (CZ & EN)
         feature_verbs = [
@@ -596,28 +671,66 @@ class DecisionRouter:
 
     def _enrich_with_laya(self, prompt: str, base_decision: dict[str, object]) -> dict[str, object]:
         """Enrich or score via live Laya daemon or in-proc Laya Router when active."""
-        if self._laya_router is None:
+        raw: dict[str, object] | None = None
+        backend_name = ""
+        schema = self._laya_questions_schema()
+
+        if self._laya_router is not None:
+            try:
+                res = self._laya_router.predict(prompt, schema)
+                if isinstance(res, dict):
+                    raw = res
+                    backend_name = "laya_inproc"
+            except Exception:
+                raw = None
+        elif self._daemon_configured:
+            try:
+                timeout = float(self.config.get("daemon_timeout_sec", 0.65))
+                payload = json.dumps({"text": prompt, "state": prompt, "questions": schema}).encode("utf-8")
+                req = urllib.request.Request(
+                    f"{self.server_url.rstrip('/')}/predict",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    if resp.status == 200:
+                        parsed = json.loads(resp.read().decode("utf-8"))
+                        if isinstance(parsed, dict):
+                            raw = parsed
+                            backend_name = "laya_daemon"
+            except Exception:
+                raw = None
+
+        if not raw:
             return base_decision
+
         try:
-            raw = self._laya_router.predict(prompt, self._laya_questions_schema())
-            answers = raw.get("answers", {}) if isinstance(raw, dict) else {}
-            mode_ans = answers.get("execution_mode", {})
-            gui_ans = answers.get("requires_gui_verification", {})
+            answers = raw.get("answers", {})
+            mode_ans = answers.get("execution_mode", {}) if isinstance(answers, dict) else {}
+            gui_ans = answers.get("requires_gui_verification", {}) if isinstance(answers, dict) else {}
             if isinstance(mode_ans, dict) and "choice" in mode_ans:
                 choice = str(mode_ans["choice"])
                 conf = float(mode_ans.get("answer_confidence", base_decision["answer_confidence"]))
                 probs = mode_ans.get("probabilities", base_decision["probabilities"])
                 gui_noul = float(gui_ans.get("noul", base_decision["noul"])) if isinstance(gui_ans, dict) else float(base_decision["noul"])
-                base_decision["choice"] = choice
-                base_decision["execution_mode"] = choice
-                base_decision["score"] = round(conf, 4)
-                base_decision["answer_confidence"] = round(conf, 4)
-                base_decision["probabilities"] = probs
-                base_decision["noul"] = round(gui_noul, 4)
-                base_decision["requires_gui_verification"] = bool(base_decision["requires_gui_verification"]) or (gui_noul >= 0.5)
-                base_decision["requires_subagent_plan_wave"] = bool(base_decision["requires_subagent_plan_wave"]) or (choice in ("mode_3", "mode_5"))
-                base_decision["backend"] = "laya_inproc"
+                base_decision["backend"] = backend_name
                 base_decision["laya_routing"] = raw.get("routing")
+                override_threshold = 0.96 if base_decision["choice"] in ("mode_0", "mode_4") else 0.70
+                if conf >= override_threshold:
+                    base_decision["choice"] = choice
+                    base_decision["execution_mode"] = choice
+                    base_decision["recommended_tier"] = (
+                        "carbon_plan_research"
+                        if choice in ("mode_1", "mode_3", "mode_5")
+                        else "hydrogen_implement_tdd"
+                    )
+                    base_decision["score"] = round(conf, 4)
+                    base_decision["answer_confidence"] = round(conf, 4)
+                    base_decision["probabilities"] = probs
+                    base_decision["noul"] = round(gui_noul, 4)
+                    base_decision["requires_gui_verification"] = bool(base_decision["requires_gui_verification"]) or (gui_noul >= 0.5)
+                    base_decision["requires_subagent_plan_wave"] = choice in ("mode_3", "mode_5")
         except Exception:
             pass
         return base_decision
@@ -794,6 +907,7 @@ class DecisionRouter:
                 pass
         if self._daemon_configured:
             try:
+                timeout = float(self.config.get("daemon_timeout_sec", 0.65))
                 payload = json.dumps({"text": digest, "questions": schema}).encode("utf-8")
                 req = urllib.request.Request(
                     f"{self.server_url.rstrip('/')}/predict",
@@ -801,7 +915,7 @@ class DecisionRouter:
                     headers={"Content-Type": "application/json"},
                     method="POST",
                 )
-                with urllib.request.urlopen(req, timeout=0.025) as resp:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
                     if resp.status == 200:
                         raw = json.loads(resp.read().decode("utf-8"))
                         ans = raw.get("answers", {}).get("is_trajectory_stuck_in_unproductive_loop", {})

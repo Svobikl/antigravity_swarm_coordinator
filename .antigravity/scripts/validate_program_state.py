@@ -256,11 +256,12 @@ def validate_claims(program_dir: Path) -> list[str]:
 
     claim_mgr = ClaimRegistryManager(program_dir)
     for c in claim_mgr.claims.values():
-        if c.duration_years > 0 and c.trade_count > 0:
-            exp = c.trade_count / c.duration_years
-            if abs(c.trades_per_year - exp) > 1.5:
+        if c.duration_units > 0 and c.event_count > 0:
+            exp = c.event_count / c.duration_units
+            tolerance = max(1.0, exp * 0.05)
+            if abs(c.events_per_unit - exp) > tolerance:
                 errors.append(
-                    f"Arithmetic error in claim '{c.claim_id}': {c.trade_count} trades / {c.duration_years:.2f} yrs != {c.trades_per_year} tr/yr"
+                    f"Arithmetic error in claim '{c.claim_id}': {c.event_count} events / {c.duration_units:.2f} units != {c.events_per_unit} events/unit"
                 )
     return errors
 

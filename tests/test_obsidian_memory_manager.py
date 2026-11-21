@@ -147,7 +147,7 @@ class TestObsidianMemoryManager(unittest.TestCase):
                     "--topic",
                     "Company Identity",
                     "--preference",
-                    "EdgeRelay Labs - B2B AI & Edge Infrastructure, concise executive Czech communication.",
+                    "Acme Systems Labs - B2B AI & Edge Infrastructure, concise executive Czech communication.",
                     "--vault-dir",
                     str(vault_dir),
                 ],
@@ -238,7 +238,7 @@ class TestObsidianMemoryManager(unittest.TestCase):
             )
             self.assertEqual(p_recall.returncode, 0, p_recall.stderr)
             out = p_recall.stdout
-            self.assertIn("EdgeRelay Labs", out)
+            self.assertIn("Acme Systems Labs", out)
             self.assertIn("Dark navy theme", out)
             self.assertIn("Always include valid --- name/description --- YAML frontmatter", out)
             self.assertIn("ADR-001 Tri-Model Routing", out)
@@ -292,10 +292,10 @@ class TestObsidianMemoryManager(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
             vault_dir = tmp_path / "AgentMemory"
-            sub_proj = tmp_path / "edgerelay_subproject"
+            sub_proj = tmp_path / "acme_subproject"
             sub_proj.mkdir(parents=True)
             (sub_proj / "README.md").write_text(
-                "# EdgeRelay²\n\nPříliš žluťoučký kůň s podporou Harness² a ℝ³.\n",
+                "# AcmeAnalytics²\n\nPříliš žluťoučký kůň s podporou Harness² a ℝ³.\n",
                 encoding="utf-8",
             )
 
@@ -519,19 +519,19 @@ class TestObsidianMemoryManager(unittest.TestCase):
             # Project-specific lesson
             subprocess.run([
                 sys.executable, str(self.script_path), "--record-lesson",
-                "--cue", "When updating edgerelay internal api routes in services/control_plane",
-                "--mistake", "Modified internal edgerelay database schema directly",
-                "--rule", "Always apply edgerelay alembic migrations before starting server",
-                "--project", "edgerelay",
+                "--cue", "When updating acme_analytics internal api routes in services/control_plane",
+                "--mistake", "Modified internal acme_analytics database schema directly",
+                "--rule", "Always apply acme_analytics alembic migrations before starting server",
+                "--project", "acme_analytics",
                 "--vault-dir", str(vault_dir),
             ], check=True)
 
             global_file = vault_dir / "lessons" / "Engineering Lessons and Anti-Patterns.md"
-            proj_file = vault_dir / "projects" / "edgerelay" / "Project Lessons.md"
+            proj_file = vault_dir / "projects" / "acme_analytics" / "Project Lessons.md"
 
             self.assertTrue(proj_file.is_file())
-            self.assertIn("edgerelay alembic migrations", proj_file.read_text(encoding="utf-8"))
-            self.assertNotIn("edgerelay alembic migrations", global_file.read_text(encoding="utf-8"))
+            self.assertIn("acme_analytics alembic migrations", proj_file.read_text(encoding="utf-8"))
+            self.assertNotIn("acme_analytics alembic migrations", global_file.read_text(encoding="utf-8"))
 
             # Global lesson
             subprocess.run([
@@ -539,7 +539,7 @@ class TestObsidianMemoryManager(unittest.TestCase):
                 "--cue", "When writing unit tests for asynchronous python code",
                 "--mistake", "Forgot async keyword causing unawaited coroutine warning",
                 "--rule", "Always await async functions in pytest-asyncio tests",
-                "--project", "edgerelay",
+                "--project", "acme_analytics",
                 "--global",
                 "--vault-dir", str(vault_dir),
             ], check=True)

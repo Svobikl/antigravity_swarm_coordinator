@@ -316,6 +316,9 @@ class TestQualityBenchmark(unittest.TestCase):
             ("view_code_item_file_key", {"name": "view_code_item", "arguments": {"File": str(base_t2 / "cfgdag" / "engine.py"), "NodePaths": ["ConfigEngine"]}}),
             ("run_command_capital_cwd_external", {"name": "run_command", "arguments": {"CommandLine": "pytest", "Cwd": str(tmp_dir)}}),
             ("run_command_dash_c_backslash_t_drive", {"name": "run_command", "arguments": {"CommandLine": "python -c \"open(r'C:\\temp\\secret.txt')\""}}),
+            ("run_command_dash_c_forward_drive", {"name": "run_command", "arguments": {"CommandLine": "python -c \"open('D:/temp/secret.txt')\""}}),
+            ("read_file_win_drive_traversal", {"name": "read_file", "arguments": {"AbsolutePath": r"C:\..\..\etc\passwd"}}),
+            ("read_file_win_unc_path", {"name": "read_file", "arguments": {"AbsolutePath": r"\\fileserver\share\secret.txt"}}),
         ]
         for label, tc in leakage_cases:
             bad_tr = tmp_dir / f"bad_{label}.jsonl"
@@ -411,7 +414,7 @@ class TestQualityBenchmark(unittest.TestCase):
             tier_specs = [
                 ("planner", "gemini-4-carbon", {"input_tokens": 400, "cache_read_input_tokens": 1000, "output_tokens": 120}),
                 ("implementer", "gemini-4-hydrogen", {"input_tokens": 600, "cache_read_input_tokens": 2000, "output_tokens": 200}),
-                ("reviewer", "gemini-4-argon", {"input_tokens": 300, "cache_read_input_tokens": 1000, "output_tokens": 80}),
+                ("reviewer", "gemini-4-neon", {"input_tokens": 300, "cache_read_input_tokens": 1000, "output_tokens": 80}),
                 ("opus_reviewer", "claude-opus-5-5", {"input_tokens": 200, "cache_read_input_tokens": 800, "cache_creation_input_tokens": 400, "output_tokens": 60}),
             ]
             for role, model, usage in tier_specs:
@@ -458,7 +461,7 @@ class TestQualityBenchmark(unittest.TestCase):
             {
                 "path": str(shared_rev_tr),
                 "role": "swarm-batch-reviewer",
-                "model": "gemini-4-argon",
+                "model": "gemini-4-neon",
                 "conversation_id": "conv-swarm-shared-batch-rev",
             }
         ]
@@ -487,22 +490,22 @@ class TestQualityBenchmark(unittest.TestCase):
             places=4,
         )
 
-        # Verify exact MODEL_WEIGHTS summation across all 4 tiers for Swarm (including shared argon reviewer)
+        # Verify exact MODEL_WEIGHTS summation across all 4 tiers for Swarm (including shared neon reviewer)
         expected_opus_eff = te.effective_tokens(
             {"input_tokens": 200 * 5, "cache_read_input_tokens": 800 * 5, "cache_creation_input_tokens": 400 * 5, "output_tokens": 60 * 5},
             model="claude-opus-5-5",
         )
-        expected_argon_eff = te.effective_tokens(
+        expected_neon_eff = te.effective_tokens(
             {"input_tokens": 300 * 5 + 500, "cache_read_input_tokens": 1000 * 5 + 1000, "output_tokens": 80 * 5 + 100},
-            model="gemini-4-argon",
+            model="gemini-4-neon",
         )
         swarm_by_model = report["arms"]["swarm"]["tokens_by_model"]
         self.assertEqual(
             set(swarm_by_model.keys()),
-            {"gemini-4-carbon", "gemini-4-argon", "gemini-4-hydrogen", "claude-opus-5-5"},
+            {"gemini-4-carbon", "gemini-4-neon", "gemini-4-hydrogen", "claude-opus-5-5"},
         )
         self.assertAlmostEqual(swarm_by_model["claude-opus-5-5"]["effective_tokens"], expected_opus_eff, places=4)
-        self.assertAlmostEqual(swarm_by_model["gemini-4-argon"]["effective_tokens"], expected_argon_eff, places=4)
+        self.assertAlmostEqual(swarm_by_model["gemini-4-neon"]["effective_tokens"], expected_neon_eff, places=4)
 
         # Verify host paths redacted in saved JSON
         saved_text = report_path.read_text(encoding="utf-8")
@@ -535,7 +538,7 @@ class TestQualityBenchmark(unittest.TestCase):
                     "effective_tokens": 110000.0,
                     "tokens_by_model": {
                         "gemini-4-carbon": {"raw_tokens": 180000, "effective_tokens": 110000.0},
-                        "gemini-4-argon": {"raw_tokens": 0, "effective_tokens": 0.0},
+                        "gemini-4-neon": {"raw_tokens": 0, "effective_tokens": 0.0},
                         "gemini-4-hydrogen": {"raw_tokens": 0, "effective_tokens": 0.0},
                         "claude-opus-5-5": {"raw_tokens": 0, "effective_tokens": 0.0},
                     },
@@ -558,7 +561,7 @@ class TestQualityBenchmark(unittest.TestCase):
                     "effective_tokens": 52000.0,
                     "tokens_by_model": {
                         "gemini-4-carbon": {"raw_tokens": 20000, "effective_tokens": 12000.0},
-                        "gemini-4-argon": {"raw_tokens": 15000, "effective_tokens": 8000.0},
+                        "gemini-4-neon": {"raw_tokens": 15000, "effective_tokens": 8000.0},
                         "gemini-4-hydrogen": {"raw_tokens": 50000, "effective_tokens": 25000.0},
                         "claude-opus-5-5": {"raw_tokens": 10000, "effective_tokens": 7000.0},
                     },

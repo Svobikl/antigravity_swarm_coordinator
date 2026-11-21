@@ -17,6 +17,7 @@ import base64
 import hashlib
 import json
 import os
+import posixpath
 import re
 import shlex
 import shutil
@@ -39,7 +40,7 @@ import token_economizer as te  # noqa: E402
 MODEL_WEIGHTS = te.MODEL_WEIGHTS
 FOUR_TIER_MODELS: tuple[str, ...] = (
     "gemini-4-carbon",
-    "gemini-4-argon",
+    "gemini-4-neon",
     "gemini-4-hydrogen",
     "claude-opus-5-5",
 )
@@ -47,8 +48,8 @@ FOUR_TIER_MODELS: tuple[str, ...] = (
 _MODEL_ALIAS_MAP: dict[str, str] = {
     "gemini-4-carbon": "gemini-4-carbon",
     "gemini-4-carbon-high": "gemini-4-carbon",
-    "gemini-4-argon": "gemini-4-argon",
-    "gemini-4-argon-high": "gemini-4-argon",
+    "gemini-4-neon": "gemini-4-neon",
+    "gemini-4-neon-high": "gemini-4-neon",
     "gemini-4-hydrogen": "gemini-4-hydrogen",
     "gemini-4-hydrogen-high": "gemini-4-hydrogen",
     "claude-opus-5-5": "claude-opus-5-5",
@@ -480,7 +481,22 @@ def verify_oracle(output_path: str | Path | None = None) -> dict[str, Any]:
         safe_rmtree(tmp_root)
 
 
+_WIN_DRIVE_PATH_RE = re.compile(r"^([A-Za-z]):[\\/](.*)$")
+
+
 def _norm_abs(raw_path: str | Path, base_dir: Path | None = None) -> str:
+    raw_str = str(raw_path)
+    if os.name != "nt":
+        m_win = _WIN_DRIVE_PATH_RE.match(raw_str)
+        if m_win:
+            drive = m_win.group(1).lower()
+            rest = m_win.group(2).replace("\\", "/")
+            norm_rest = posixpath.normpath("/" + rest).lstrip("/")
+            return os.path.normcase(f"/__win_drive__/{drive}/{norm_rest}".rstrip("/"))
+        if raw_str.startswith("\\\\"):
+            rest = raw_str.lstrip("\\").replace("\\", "/")
+            norm_rest = posixpath.normpath("/" + rest).lstrip("/")
+            return os.path.normcase(f"/__win_unc__/{norm_rest}".rstrip("/"))
     p = Path(raw_path)
     if not p.is_absolute() and base_dir is not None:
         p = base_dir / p
@@ -871,7 +887,7 @@ def evaluate_benchmark(
                     repo_root=repo_root,
                     allow_arm_root=True,
                 )
-                raw_model = str(tr.get("model") or "gemini-4-argon").strip().lower()
+                raw_model = str(tr.get("model") or "gemini-4-neon").strip().lower()
                 norm_model = _MODEL_ALIAS_MAP.get(raw_model, raw_model)
                 if norm_model not in MODEL_WEIGHTS:
                     raise ValueError(f"Unsupported model {raw_model} for {arm_name}/shared")
@@ -1033,13 +1049,13 @@ def render_svg(report_dict: dict[str, Any], svg_out_path: str | Path) -> Path:
     tier_rows_svg: list[str] = []
     tier_colors = {
         "gemini-4-carbon": "#f85149",
-        "gemini-4-argon": "#a371f7",
+        "gemini-4-neon": "#a371f7",
         "gemini-4-hydrogen": "#3fb950",
         "claude-opus-5-5": "#58a6ff",
     }
     tier_labels = {
         "gemini-4-carbon": "Carbon (Plan)",
-        "gemini-4-argon": "Argon (Review)",
+        "gemini-4-neon": "Neon (Review)",
         "gemini-4-hydrogen": "Hydrogen (Impl)",
         "claude-opus-5-5": "Opus 5.5 (Opp)",
     }
@@ -1165,7 +1181,7 @@ def render_svg(report_dict: dict[str, Any], svg_out_path: str | Path) -> Path:
 
   <rect x="610" y="182" width="342" height="320" rx="10" class="card" />
   <text x="628" y="209" class="font-ui txt-main" font-size="13" font-weight="700">Swarm Multi-Tier Token Split</text>
-  <text x="628" y="226" class="font-ui txt-muted" font-size="11">MODEL_WEIGHTS across Carbon / Argon / Hydrogen / Opus 5.5</text>
+  <text x="628" y="226" class="font-ui txt-muted" font-size="11">MODEL_WEIGHTS across Carbon / Neon / Hydrogen / Opus 5.5</text>
 
 {chr(10).join(tier_rows_svg)}
 

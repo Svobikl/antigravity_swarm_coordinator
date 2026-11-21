@@ -47,8 +47,8 @@ class TestDecisionRouter(unittest.TestCase):
         if live_dev.get("gpu_name") and "1060" in str(live_dev.get("gpu_name")):
             self.assertEqual(live_dev["device"], "cpu", "GTX 1060 3GB must be routed to CPU")
 
-        # 4. Error/missing nvidia-smi fallback
-        with mock.patch("subprocess.run", side_effect=FileNotFoundError):
+        # 4. Error/missing nvidia-smi fallback (non-Darwin host)
+        with mock.patch("platform.system", return_value="Linux"), mock.patch("subprocess.run", side_effect=FileNotFoundError):
             fallback_dev = decision_router.select_optimal_device()
             self.assertEqual(fallback_dev["device"], "cpu")
             self.assertEqual(fallback_dev["max_loaded"], 1)
@@ -76,7 +76,7 @@ class TestDecisionRouter(unittest.TestCase):
         # /asw-review
         res_rev = self.router.route_prompt("/asw-review audit diff")
         self.assertEqual(res_rev["answer_confidence"], 1.0)
-        self.assertEqual(res_rev["recommended_tier"], "argon_qa_review")
+        self.assertEqual(res_rev["recommended_tier"], "neon_qa_review")
 
         # Negative case: file path containing /asw/ must NOT trigger slash command override
         res_path = self.router.route_prompt("inspect file plugins/asw/test.py and tell me what it does")
@@ -86,7 +86,7 @@ class TestDecisionRouter(unittest.TestCase):
     # --- M2: Implicit Multi-Step / UI Feature Prompts (CZ/EN) ---
     def test_m2_implicit_multi_step_and_ui_cz_en(self):
         # Czech complex UI prompt
-        cz_prompt = "Uprav výpočet marže v edgerelay, přidej graf na dashboard a otestuj UI"
+        cz_prompt = "Uprav výpočet marže v acme_analytics, přidej graf na dashboard a otestuj UI"
         cz_res = self.router.route_prompt(cz_prompt)
         self.assertEqual(cz_res["execution_mode"], "mode_3")
         self.assertEqual(cz_res["recommended_tier"], "carbon_plan_research")
@@ -237,7 +237,7 @@ class TestDecisionRouter(unittest.TestCase):
         """M5: --compact outputs single-line deterministic JSON omitting volatile free_vram_mib for KV-cache stability."""
         import hashlib
         script_path = CORE_SCRIPTS / "decision_router.py"
-        prompt = "Uprav výpočet marže v edgerelay a otestuj dashboard v prohlížeči"
+        prompt = "Uprav výpočet marže v acme_analytics a otestuj dashboard v prohlížeči"
 
         # Run 1
         p1 = subprocess.run(
@@ -273,9 +273,9 @@ class TestDecisionRouter(unittest.TestCase):
     def test_classify_lesson_scope_router_and_cli(self):
         """classify_lesson_scope accurately distinguishes project-scoped vs universal lessons."""
         # 1. Method test
-        project_cue = "When updating services/control_plane/api_admin_v1.py in edgerelay"
-        project_rule = "Never blindly replace .timestamp in edgerelay admin events"
-        res_proj = self.router.classify_lesson_scope(project_cue, project_rule, project="edgerelay")
+        project_cue = "When updating services/control_plane/api_admin_v1.py in acme_analytics"
+        project_rule = "Never blindly replace .timestamp in acme_analytics admin events"
+        res_proj = self.router.classify_lesson_scope(project_cue, project_rule, project="acme_analytics")
         self.assertEqual(res_proj["scope"], "project")
 
         universal_cue = "When reading text files across platforms in Python"
@@ -288,7 +288,7 @@ class TestDecisionRouter(unittest.TestCase):
         p_cli = subprocess.run(
             [
                 sys.executable, str(script_path), "--mode", "classify-scope",
-                "--cue", project_cue, "--rule", project_rule, "--project", "edgerelay",
+                "--cue", project_cue, "--rule", project_rule, "--project", "acme_analytics",
                 "--compact",
             ],
             capture_output=True,
@@ -542,6 +542,210 @@ class TestDecisionRouter(unittest.TestCase):
                 self.assertFalse(sync_off["enabled"])
                 self.assertEqual(sync_off["status"], "disabled")
                 self.assertFalse(micro_md.exists())
+
+    # --- M6 Hardening: mode_0 / mode_4 routing, Darwin nvidia-smi skip, HTTP daemon _enrich_with_laya ---
+    def test_m6_mode0_mode4_routing_and_negative_guards(self):
+        """M6: Operational commands route to mode_0 (unless paired with creation/GUI); emergency rollback routes to mode_4."""
+        for op_prompt in (
+            "run pytest",
+            "run unit tests",
+            "build debug",
+            "cmake --build build_dir",
+            "npm test",
+            "spusť testy",
+            "zkompiluj projekt",
+        ):
+            res = self.router.route_prompt(op_prompt)
+            self.assertEqual(res["execution_mode"], "mode_0", f"Expected mode_0 for {op_prompt!r}, got {res}")
+            self.assertEqual(res["choice"], "mode_0")
+            self.assertEqual(res["recommended_tier"], "hydrogen_implement_tdd")
+            self.assertFalse(res["requires_subagent_plan_wave"])
+
+        # Negative cases: creation verb or GUI keyword suppresses mode_0
+        res_feat = self.router.route_prompt("implement new auth module and run pytest")
+        self.assertEqual(res_feat["execution_mode"], "mode_3")
+        res_gui = self.router.route_prompt("run pytest and verify dashboard UI")
+        self.assertNotEqual(res_gui["execution_mode"], "mode_0")
+
+        # Emergency rollback / restore -> mode_4
+        for rb_prompt in (
+            "rollback latest deployment",
+            "emergency restore database",
+            "revert production release",
+            "nouzová obnova služby",
+        ):
+            res_rb = self.router.route_prompt(rb_prompt)
+            self.assertEqual(res_rb["execution_mode"], "mode_4", f"Expected mode_4 for {rb_prompt!r}, got {res_rb}")
+            self.assertEqual(res_rb["choice"], "mode_4")
+            self.assertEqual(res_rb["recommended_tier"], "hydrogen_implement_tdd")
+
+        # Negative case: question about rollback stays mode_1
+        res_q = self.router.route_prompt("What is a rollback strategy?")
+        self.assertEqual(res_q["execution_mode"], "mode_1")
+
+        # Negative cases: engineering/code-change verbs suppress mode_4 and mode_0
+        res_impl_rb = self.router.route_prompt("Implement a rollback mechanism for database migrations")
+        self.assertIn(res_impl_rb["execution_mode"], ("mode_2", "mode_3"))
+
+        res_rb_now = self.router.route_prompt("Rollback latest production deployment immediately")
+        self.assertEqual(res_rb_now["execution_mode"], "mode_4")
+
+        res_fix_py = self.router.route_prompt("Fix pytest teardown failure in auth")
+        self.assertIn(res_fix_py["execution_mode"], ("mode_2", "mode_3"))
+
+        for op_ok in ("Run pytest tests/ -q", "Build Debug preset and run unit tests"):
+            res_op = self.router.route_prompt(op_ok)
+            self.assertEqual(res_op["execution_mode"], "mode_0", f"Expected mode_0 for {op_ok!r}, got {res_op}")
+
+    def test_m6_darwin_skips_nvidia_smi_and_http_daemon_enrich(self):
+        """M6: Darwin skips spawning nvidia-smi; _enrich_with_laya queries HTTP /predict and falls back cleanly when offline."""
+        with mock.patch("platform.system", return_value="Darwin"), mock.patch(
+            "subprocess.run", side_effect=AssertionError("nvidia-smi must not be spawned on Darwin")
+        ):
+            dev = decision_router.select_optimal_device()
+            self.assertEqual(dev["device"], "cpu")
+            self.assertEqual(dev["reason"], "darwin_no_nvidia_cuda")
+
+        # HTTP daemon enrichment
+        daemon_router = decision_router.DecisionRouter(
+            server_url="http://127.0.0.1:18765",
+            enable_inproc=False,
+            config={"enabled": True, "use_daemon": True, "compact_question_schema": True},
+        )
+        fake_resp_body = json.dumps({
+            "answers": {
+                "execution_mode": {
+                    "choice": "mode_3",
+                    "answer_confidence": 0.97,
+                    "probabilities": {"mode_3": 0.97, "mode_2": 0.03},
+                },
+                "requires_gui_verification": {"noul": 0.88},
+            },
+            "routing": {"source": "daemon"},
+        }).encode("utf-8")
+
+        class _FakeHTTPResp:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return fake_resp_body
+
+        captured_reqs = []
+        def _fake_urlopen(req, timeout=None):
+            captured_reqs.append((req.full_url, json.loads(req.data.decode("utf-8")), timeout))
+            return _FakeHTTPResp()
+
+        with mock.patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+            res_daemon = daemon_router.route_prompt("implement new caching layer")
+            self.assertEqual(res_daemon["backend"], "laya_daemon")
+            self.assertEqual(res_daemon["choice"], "mode_3")
+            self.assertEqual(res_daemon["execution_mode"], "mode_3")
+            self.assertTrue(res_daemon["requires_gui_verification"])
+            self.assertTrue(res_daemon["requires_subagent_plan_wave"])
+            self.assertEqual(len(captured_reqs), 1)
+            self.assertTrue(captured_reqs[0][0].endswith("/predict"))
+            self.assertIn("state", captured_reqs[0][1])
+            self.assertIn("questions", captured_reqs[0][1])
+            self.assertAlmostEqual(captured_reqs[0][2], 0.65, places=2)
+
+        # Unreachable daemon fallback -> calibrated fallback
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("Connection refused")):
+            res_offline = daemon_router.route_prompt("implement new caching layer")
+            self.assertEqual(res_offline["backend"], "system1_calibrated_fallback")
+            self.assertEqual(res_offline["execution_mode"], "mode_2")
+
+    def test_m6_loopback_http_daemon_timeout_tier_sync_and_layered_config(self):
+        """M6 Patch #3 & #4: layered config merge, config['server_url'], 200ms loopback HTTP /predict, and tier/plan-wave sync."""
+        import http.server
+        import tempfile
+        import threading
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            fake_home = tmp_path / "home"
+            fake_cwd = tmp_path / "repo"
+            (fake_home / ".gemini").mkdir(parents=True)
+            (fake_cwd / ".antigravity").mkdir(parents=True)
+
+            (fake_home / ".gemini" / "decision_config.json").write_text(
+                json.dumps({"enabled": True, "use_daemon": True, "server_url": "http://127.0.0.1:19999"}),
+                encoding="utf-8",
+            )
+            # Workspace config does NOT set use_daemon or server_url
+            (fake_cwd / ".antigravity" / "decision_config.json").write_text(
+                json.dumps({"enabled": True, "prefer_gpu": False}),
+                encoding="utf-8",
+            )
+            fake_script_dir = fake_cwd / ".antigravity" / "scripts" / "decision_router.py"
+            with mock.patch("pathlib.Path.home", return_value=fake_home), mock.patch(
+                "pathlib.Path.cwd", return_value=fake_cwd
+            ), mock.patch.object(decision_router, "__file__", str(fake_script_dir)):
+                merged = decision_router.load_decision_config()
+                self.assertTrue(merged.get("use_daemon"))
+                self.assertEqual(merged.get("server_url"), "http://127.0.0.1:19999")
+                self.assertFalse(merged.get("prefer_gpu"))
+
+                r_cfg = decision_router.DecisionRouter(enable_inproc=False, config=merged)
+                self.assertEqual(r_cfg.server_url, "http://127.0.0.1:19999")
+                self.assertTrue(r_cfg._daemon_configured)
+
+        # Real loopback HTTP server with simulated 200ms CPU inference latency
+        next_choice = {"choice": "mode_3", "conf": 0.94}
+
+        class _SlowLayaHandler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", "0"))
+                _ = self.rfile.read(length)
+                time.sleep(0.20)
+                body = json.dumps({
+                    "answers": {
+                        "execution_mode": {
+                            "choice": next_choice["choice"],
+                            "answer_confidence": next_choice["conf"],
+                            "probabilities": {next_choice["choice"]: next_choice["conf"]},
+                        }
+                    },
+                    "routing": {"engine": "loopback_test"},
+                }).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format, *args):
+                return
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _SlowLayaHandler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            loop_router = decision_router.DecisionRouter(
+                enable_inproc=False,
+                config={"enabled": True, "use_daemon": True, "server_url": f"http://127.0.0.1:{port}", "compact_question_schema": True},
+            )
+            self.assertEqual(loop_router.server_url, f"http://127.0.0.1:{port}")
+
+            # 1. Base heuristic is mode_2, daemon promotes to mode_3 -> recommended_tier & plan_wave must sync!
+            res_up = loop_router.route_prompt("Fix bug in auth")
+            self.assertEqual(res_up["backend"], "laya_daemon")
+            self.assertEqual(res_up["choice"], "mode_3")
+            self.assertEqual(res_up["recommended_tier"], "carbon_plan_research")
+            self.assertTrue(res_up["requires_subagent_plan_wave"])
+
+            # 2. Base heuristic is mode_3, daemon demotes to mode_0 -> tier & plan_wave must sync down!
+            next_choice["choice"] = "mode_0"
+            next_choice["conf"] = 0.91
+            res_down = loop_router.route_prompt("Implement auth, add tests, and update docs")
+            self.assertEqual(res_down["backend"], "laya_daemon")
+            self.assertEqual(res_down["choice"], "mode_0")
+            self.assertEqual(res_down["recommended_tier"], "hydrogen_implement_tdd")
+            self.assertFalse(res_down["requires_subagent_plan_wave"])
+        finally:
+            server.shutdown()
+            server.server_close()
 
 
 if __name__ == "__main__":

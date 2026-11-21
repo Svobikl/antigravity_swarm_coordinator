@@ -23,7 +23,7 @@ Convert a user request into one decision-complete, single-goal executable ASW pl
 5. Define `## Execution Tasks` using `- [ ]` checkboxes with explicit serialized waves (zero overlapping files across parallel tasks) and `RED / GREEN / QA / CLEANUP` commands per task:
    - Planning & Research lanes -> `Gemini 4 Carbon (High)` (`Model="pro"`)
    - Plan & Diff Opposition Review lanes -> `Claude Opus 5.5`
-   - Standard Review / QA Audit / Debugging lanes -> `Gemini 4 Argon (High)` (`Model="pro"`)
+   - Standard Review / QA Audit / Debugging lanes -> `Gemini 4 Neon (High)` (`Model="pro"`)
    - Leaf Implementation / TDD RED-to-GREEN / Test Runner lanes -> `Gemini 4 Hydrogen (High)` (`Model="flash"`, `asw-implementer`)
 6. Include `## Verification & Stop Criteria`, `## Implementation Notes`, `## Plan Change Log`, and `## Review Triage Log`.
 7. Run `python .antigravity/scripts/bmad_lint_spine.py --file .asw/plans/<slug>.md --mode plan-contract` and `python .antigravity/scripts/invoke_opus_reviewer.py --mode plan-review --plan .asw/plans/<slug>.md` to verify `Verdict: PLAN_APPROVED` before returning.

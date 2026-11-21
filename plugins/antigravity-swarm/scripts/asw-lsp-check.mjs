@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { extname } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { extname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { safeMode } from "./asw-redact.mjs";
 
 let payload = {};
@@ -16,6 +17,34 @@ try {
 if (safeMode(payload)) {
   process.stdout.write("{}");
   process.exit(0);
+}
+
+function resolveWorkspaceDir(p) {
+  const candidates = [
+    p?.cwd,
+    Array.isArray(p?.workspacePaths) ? p.workspacePaths[0] : undefined,
+    Array.isArray(p?.workspaceUris) ? p.workspaceUris[0] : undefined,
+  ];
+  for (const raw of candidates) {
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        if (raw.startsWith("file://")) {
+          return fileURLToPath(raw);
+        }
+        return raw.trim();
+      } catch {
+        // continue
+      }
+    }
+  }
+  return process.cwd();
+}
+
+function isPostToolUseEvent(p) {
+  const idx = process.argv.indexOf("--event");
+  const argEvent = idx >= 0 ? String(process.argv[idx + 1] ?? "") : "";
+  const ev = argEvent || String(p?.hookEventName ?? p?.event ?? "");
+  return ev.trim().toLowerCase() === "posttooluse";
 }
 
 function extractTargetFile(p) {
@@ -44,6 +73,12 @@ function checkFileIntegrity(filePath) {
         stdio: "pipe",
         timeout: 4000,
       });
+    } else if (ext === ".py") {
+      const pyBin = process.platform === "win32" ? "python" : "python3";
+      execFileSync(pyBin, ["-m", "py_compile", filePath], {
+        stdio: "pipe",
+        timeout: 4000,
+      });
     }
   } catch (err) {
     const msg = String(err?.stderr || err?.message || "Syntax error").slice(0, 300);
@@ -52,10 +87,32 @@ function checkFileIntegrity(filePath) {
   return null;
 }
 
-const targetFile = extractTargetFile(payload);
+const repoDir = resolveWorkspaceDir(payload);
+const rawTarget = extractTargetFile(payload);
+const targetFile =
+  rawTarget && typeof rawTarget === "string"
+    ? isAbsolute(rawTarget)
+      ? rawTarget
+      : resolve(repoDir, rawTarget)
+    : "";
 const diagnostic = checkFileIntegrity(targetFile);
 
-if (diagnostic) {
+if (isPostToolUseEvent(payload)) {
+  if (diagnostic) {
+    try {
+      const aswDir = join(repoDir, ".asw");
+      mkdirSync(aswDir, { recursive: true });
+      writeFileSync(
+        join(aswDir, ".pending-lsp-diagnostic.json"),
+        JSON.stringify({ diagnostic, ts: Date.now() }),
+        "utf8"
+      );
+    } catch {
+      // fail-open
+    }
+  }
+  process.stdout.write("{}");
+} else if (diagnostic) {
   process.stdout.write(
     JSON.stringify({
       injectSteps: [

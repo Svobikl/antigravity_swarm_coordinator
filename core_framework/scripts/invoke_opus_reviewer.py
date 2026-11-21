@@ -20,7 +20,7 @@ grounded in native Claude Opus 5.5 subagent configurations (.antigravity/agents/
 deterministic adversarial verification tripwires (Zero Heuristic Substitution, Anti-Shortcut
 Enforcement, and Prompt-to-Code Traceability), UTF-16LE PowerShell redirection resilience,
 self-contained `--files` git diff collection, and automatic fallback to the Deterministic
-Adversarial Engine + Gemini 4 Argon (High) whenever Claude Opus 5.5 credits/quota are exhausted.
+Adversarial Engine + Gemini 4 Neon (High) whenever Claude Opus 5.5 credits/quota are exhausted.
 """
 
 import argparse
@@ -311,8 +311,8 @@ def discover_antigravity_runtime(repo_root: Path) -> dict:
         "agy_found": bool(agy_path),
         "subagent_tomls": subagent_status,
         "active_model": "claude-opus-5-5",
-        "fallback_model": "gemini-4-argon-high",
-        "credit_exhaustion_policy": "auto_fallback_deterministic_and_argon_high",
+        "fallback_model": "gemini-4-neon-high",
+        "credit_exhaustion_policy": "auto_fallback_deterministic_and_neon_high",
         "subagent_timeout_seconds": 60,
         "thinking_level": "high",
     }
@@ -367,7 +367,7 @@ def scan_public_repo_privacy(repo_dir: Path, forbid_terms_csv: str | None = None
         if not fpath.is_file():
             continue
         rel_parts = fpath.relative_to(repo_dir if repo_dir.is_dir() else repo_dir.parent).parts
-        if any(p in (".git", "__pycache__", "node_modules", ".venv", "venv") for p in rel_parts):
+        if any(p in (".git", "__pycache__", ".pytest_cache", ".asw", ".agent-workspace", "node_modules", ".venv", "venv") for p in rel_parts):
             continue
         if fpath.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".whl", ".pyc"):
             continue
@@ -564,7 +564,7 @@ def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str
 
     active_fallback = resolve_fallback_reason(fallback_reason)
     reviewer_line = (
-        "`Claude Opus 5.5` -> `Deterministic Adversarial Engine + gemini-4-argon-high` (Opus Quota Fallback)"
+        "`Claude Opus 5.5` -> `Deterministic Adversarial Engine + gemini-4-neon-high` (Opus Quota Fallback)"
         if active_fallback
         else "`Claude Opus 5.5` (Native Antigravity Subagent `asw-plan-audit`)"
     )
@@ -577,7 +577,7 @@ def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str
     ]
     if active_fallback:
         review_text.append(
-            f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-argon-high)`"
+            f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-neon-high)`"
         )
     review_text.extend([
         "**Thinking Level**: `high`",
@@ -665,19 +665,39 @@ def audit_diff(
         human_reapproved = bool(re.search(r"^human_reapproved:\s*true\b", plan_content, re.MULTILINE | re.IGNORECASE))
         if not human_reapproved:
             frozen_tampered = False
-            # Check if diff directly modifies lines inside a <frozen-after-approval> block
+            # Check if diff directly modifies lines inside a plan's <!-- <frozen-after-approval> --> block
             in_frozen_diff = False
+            current_diff_file = ""
+            plan_name_low = plan_path.name.lower() if plan_path else ""
             for dline in diff_content.splitlines():
-                if dline.startswith("diff --git"):
+                if dline.startswith("diff --git "):
                     in_frozen_diff = False
-                elif "<frozen-after-approval>" in dline and "</frozen-after-approval>" not in dline:
-                    if not dline.startswith("+"):
-                        in_frozen_diff = True
-                elif "</frozen-after-approval>" in dline:
-                    in_frozen_diff = False
-                elif in_frozen_diff and (dline.startswith("+") or dline.startswith("-")) and not dline.startswith(("+++", "---")):
-                    frozen_tampered = True
-                    break
+                    parts = dline.strip().split()
+                    current_diff_file = parts[-1].replace("\\", "/").lower() if parts else ""
+                elif dline.startswith("+++ "):
+                    cand = dline[4:].strip().replace("\\", "/").lower()
+                    if cand != "/dev/null":
+                        current_diff_file = cand
+                else:
+                    is_plan_diff_file = ".asw/plans/" in current_diff_file or (
+                        bool(plan_name_low) and current_diff_file.endswith(plan_name_low)
+                    )
+                    if not is_plan_diff_file:
+                        continue
+                    if re.search(r"<!--\s*<frozen-after-approval>", dline, re.IGNORECASE) and not re.search(
+                        r"</frozen-after-approval>", dline, re.IGNORECASE
+                    ):
+                        if not dline.startswith("+"):
+                            in_frozen_diff = True
+                    elif re.search(r"<!--\s*</frozen-after-approval>", dline, re.IGNORECASE):
+                        in_frozen_diff = False
+                    elif (
+                        in_frozen_diff
+                        and (dline.startswith("+") or dline.startswith("-"))
+                        and not dline.startswith(("+++", "---"))
+                    ):
+                        frozen_tampered = True
+                        break
 
             # Also check git baseline_revision comparison if plan_path is tracked in git at baseline_revision
             if not frozen_tampered and plan_path and plan_path.exists():
@@ -753,10 +773,21 @@ def audit_diff(
                 "/tests/" in low_line
                 or "b/tests/" in low_line
                 or "tests/" in low_line
+                or "/test/" in low_line
                 or "/test_" in low_line
-                or low_line.endswith("_test.py")
-                or low_line.endswith(".test.ts")
-                or low_line.endswith(".spec.ts")
+                or low_line.endswith((
+                    "_test.py",
+                    "_test.cpp",
+                    "_test.cc",
+                    "_test.go",
+                    "_test.rs",
+                    ".test.ts",
+                    ".spec.ts",
+                    ".test.tsx",
+                    ".spec.tsx",
+                    ".test.js",
+                    ".spec.js",
+                ))
             )
             in_reviewer_self = (
                 "invoke_opus_reviewer.py" in low_line
@@ -785,9 +816,9 @@ def audit_diff(
 
     # Tripwire 2A: Heuristic Substitution in Production Model Evaluation
     heuristic_logit_markers = (
-        "v42_logit",
-        "v43_logit",
-        "orderflow_logit",
+        "manual_logit",
+        "heuristic_logit",
+        "handcoded_logit",
         "raw_logit =",
         "heuristic_score =",
     )
@@ -814,26 +845,26 @@ def audit_diff(
             "message": "Heuristic substitution detected in production code: hand-coded logit/_sigmoid equations used instead of real trained model artifact inference (Zero Heuristic Substitution Law violation)."
         })
 
-    # Tripwire 2B: Dangerous Catch-All SCANNING -> ENTER_LONG Fallback
+    # Tripwire 2B: Dangerous Catch-All Idle/Scanning -> Action Fallback
     if re.search(
-        r"pathway\s*=\s*['\"]scanning[^'\"]*['\"][\s\S]{0,160}?action\s*=\s*['\"]enter_long['\"]",
+        r"pathway\s*=\s*['\"](?:scanning|idle)[^'\"]*['\"][\s\S]{0,160}?action\s*=\s*['\"](?:enter_|execute_)[^'\"]*['\"]",
         added_prod_text,
     ):
         findings.append({
             "vector": "2. Research & ML Falsification",
             "level": "CRITICAL",
-            "message": "Dangerous catch-all fallback detected: SCANNING pathway branch emits ENTER_LONG instead of remaining flat/SCANNING."
+            "message": "Dangerous catch-all fallback detected: idle/scanning pathway branch emits active execution action instead of remaining passive/flat."
         })
 
-    # Tripwire 2C: Naive Binary Stop-Loss Ternary ('take_profit' if pnl >= 0 else 'stop_loss')
+    # Tripwire 2C: Naive Binary Outcome/Exit Ternary ('take_profit' if pnl >= 0 else 'stop_loss')
     if re.search(
-        r"['\"]take_profit['\"]\s+if\s+[^\n]+?>=\s*0(?:\.0)?\s+else\s+['\"]stop_loss['\"]",
+        r"['\"](?:take_profit|win|success)['\"]\s+if\s+[^\n]+?>=\s*0(?:\.0)?\s+else\s+['\"](?:stop_loss|loss|failure)['\"]",
         added_prod_text,
     ):
         findings.append({
             "vector": "2. Research & ML Falsification",
             "level": "CRITICAL",
-            "message": "Naive binary exit_reason ternary ('take_profit' if pnl >= 0 else 'stop_loss') detected without comparing against actual stoploss_pct threshold."
+            "message": "Naive binary outcome/exit ternary ('take_profit' if pnl >= 0 else 'stop_loss') detected without comparing against actual threshold."
         })
 
     # Tripwire 2D: Leftover Stubs / Synthetic Fallback Pools in Production
@@ -882,6 +913,12 @@ def audit_diff(
     has_negative_tests = bool(
         re.search(r"def test_.*(negative|edge|bad|fail|error|invalid|reject|collision|crash|tautolog|heuristic|fallback|resilience|boundary)", diff_content, re.IGNORECASE)
         or re.search(r"(assertNotEqual|assertRaises|assertFalse|assertIn\([\"']Verdict: PLAN_REVISION_REQUIRED[\"'])", diff_content)
+        or re.search(r"\bTEST(?:_F|_P)?\s*\([^)]*(?:Negative|Edge|Bad|Fail|Error|Invalid|Reject|Boundary|Crash)", diff_content, re.IGNORECASE)
+        or re.search(r"\b(?:EXPECT_THROW|ASSERT_THROW|EXPECT_ANY_THROW|ASSERT_ANY_THROW|QVERIFY_EXCEPTION_THROWN)\b", diff_content)
+        or re.search(r"#\[should_panic", diff_content)
+        or re.search(r"expect\([^)]*\)\.(?:rejects\.)?toThrow", diff_content)
+        or re.search(r"\b(?:it|test|describe)\s*\(\s*['\"`][^'\"`]*(?:invalid|error|reject|fail|edge|boundary|negative|crash|panic)[^'\"`]*['\"`]", diff_content, re.IGNORECASE)
+        or re.search(r"\bfunc\s+Test[A-Za-z0-9_]*(?:Negative|Edge|Invalid|Reject|Fail|Error|Boundary|Crash)", diff_content)
     )
     ev_lower = evidence_text.lower()
     has_evidence_negative = bool(
@@ -906,7 +943,7 @@ def audit_diff(
         stripped_test_text = re.sub(r"assert\s+[^\n]+?\s+is\s+not\s+None", "", added_test_text)
         has_substantive_assertion = bool(
             re.search(
-                r"(assertEqual|assertNotEqual|assertAlmostEqual|assertRaises|assertTrue|assertFalse|assertIn|assertNotIn|==|!=|<=|>=|<|>)",
+                r"(assertEqual|assertNotEqual|assertAlmostEqual|assertRaises|assertTrue|assertFalse|assertIn|assertNotIn|==|!=|<=|>=|<|>|\bEXPECT_|\bASSERT_|\bQVERIFY|\bQCOMPARE|\bexpect\s*\(|\.toThrow\b|\.toEqual\b|\.toBe\b|\bassert_eq!|\bassert_ne!|\bassert!|#\[should_panic)",
                 stripped_test_text,
             )
         )
@@ -953,7 +990,7 @@ def audit_diff(
                     runtime_ev_chunks.append(read_text_resilient(ef))
     runtime_ev_lower = "\n".join(runtime_ev_chunks).lower()
 
-    # Filter out meta-lines describing passing negative tests (e.g. "rejecting <hui-error-card>", "GREEN Phase: 4 passed")
+    # Filter out meta-lines describing passing negative tests (e.g. "rejecting <custom-error-card>", "GREEN Phase: 4 passed")
     # and hook directive instructions quoting gate names (e.g. "ASW LOOP MODE ENABLED!", "Enforce Mandatory Rendered DOM")
     non_test_ev_lines = [
         line
@@ -964,6 +1001,9 @@ def audit_diff(
                 "green phase:",
                 "red phase:",
                 "rejecting ",
+                "negative test",
+                "against <",
+                "fixture)",
                 "test_run_gui_test_rejects",
                 "test_diff_review_rejects",
                 "asw loop mode enabled",
@@ -981,14 +1021,19 @@ def audit_diff(
         "application error: a client-side exception has occurred",
         "chunkloaderror",
         "hydration failed",
-        "<hui-error-card",
-        "<hui-error-badge",
+        "<error-card",
+        "<error-boundary",
         "configuration error:",
         "custom element doesn't exist",
         "custom element not found",
         "verdict: gui_failed",
     )
-    matched_ui_err = next((m for m in ui_error_markers if m in filtered_runtime_ev), None)
+    custom_err_match = re.search(r"<[a-z0-9][a-z0-9-]*-error-(?:card|badge)\b", filtered_runtime_ev)
+    matched_ui_err = (
+        custom_err_match.group(0)
+        if custom_err_match
+        else next((m for m in ui_error_markers if m in filtered_runtime_ev), None)
+    )
     if matched_ui_err:
         findings.append({
             "vector": "4. Downstream & Blast-Radius Safety",
@@ -1015,7 +1060,7 @@ def audit_diff(
     # Tripwire 4D: 3-Strike Anti-Thrashing & Unapproved Binary .dex APK Patching Circuit Breaker
     if any(
         dex_marker in added_prod_text
-        for dex_marker in ("classes.dex", "classes2.dex", "ha-patched-signed.apk", "baksmali")
+        for dex_marker in ("classes.dex", "classes2.dex", ".patched.apk", "patched-signed.apk", "baksmali")
     ):
         findings.append({
             "vector": "4. Downstream & Blast-Radius Safety",
@@ -1044,7 +1089,9 @@ def audit_diff(
     # BMAD Gate 4F: Deletion Check & Missing-Adoption Caller Scan (edge-case-hunter & verification-gap lenses)
     removed_symbols: set[str] = set()
     added_symbols: set[str] = set()
-    sym_def_re = re.compile(r"^\s*(?:async\s+def|def|export\s+(?:async\s+)?function)\s+([A-Za-z_][A-Za-z0-9_]{2,})\s*\(")
+    sym_def_re = re.compile(
+        r"^\s*(?:async\s+def|def|export\s+(?:async\s+)?function|(?:async\s+)?function|pub(?:\([^)]*\))?\s+(?:async\s+)?fn|fn|func(?:\s+\([^)]*\))?)\s+([A-Za-z_][A-Za-z0-9_]{2,})\s*[<(]"
+    )
     for dline in diff_content.splitlines():
         if dline.startswith("-") and not dline.startswith("---"):
             m = sym_def_re.match(dline[1:])
@@ -1064,7 +1111,7 @@ def audit_diff(
         ]
         surviving_text = "\n".join(surviving_lines)
         for sym in sorted(deleted_only_symbols):
-            call_rx = re.compile(rf"(?<!def\s)(?<!function\s)\b{re.escape(sym)}\s*\(")
+            call_rx = re.compile(rf"(?<!def\s)(?<!function\s)(?<!fn\s)(?<!func\s)\b{re.escape(sym)}\s*\(")
             if call_rx.search(surviving_text):
                 findings.append({
                     "vector": "4. Downstream & Blast-Radius Safety",
@@ -1080,7 +1127,7 @@ def audit_diff(
 
     active_fallback = resolve_fallback_reason(fallback_reason)
     reviewer_line = (
-        "`Claude Opus 5.5` -> `Deterministic Adversarial Engine + gemini-4-argon-high` (Opus Quota Fallback)"
+        "`Claude Opus 5.5` -> `Deterministic Adversarial Engine + gemini-4-neon-high` (Opus Quota Fallback)"
         if active_fallback
         else "`Claude Opus 5.5` (Native Antigravity Subagent `asw-opposition-reviewer`)"
     )
@@ -1095,7 +1142,7 @@ def audit_diff(
     ]
     if active_fallback:
         review_text.append(
-            f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-argon-high)`"
+            f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-neon-high)`"
         )
     review_text.extend([
         "**Thinking Level**: `high`",
@@ -1138,11 +1185,12 @@ def main():
     parser.add_argument("--files", type=str, help="Comma-separated list of modified/untracked files to diff directly in UTF-8")
     parser.add_argument("--evidence", type=Path, help="Path to evidence directory or file (auto-discovered if omitted)")
     parser.add_argument("--fallback-reason", type=str, help="Explicit fallback reason when Claude Opus 5.5 credits/quota are exhausted")
+    parser.add_argument("--workdir", type=Path, default=None, help="Explicit working directory root (defaults to current working directory)")
     parser.add_argument("--output", type=Path, help="Output markdown review artifact path (optional)")
 
     args = parser.parse_args()
     repo_root = Path(__file__).resolve().parent.parent.parent
-    workdir = Path.cwd()
+    workdir = args.workdir.resolve() if args.workdir else Path.cwd()
 
     if args.clean_scratch:
         return clean_scratch_directory(args.clean_scratch)

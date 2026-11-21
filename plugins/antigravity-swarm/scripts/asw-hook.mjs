@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, unlinkSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
@@ -135,22 +135,24 @@ function queryTurnGuardNudge(transcriptPath, repoDir) {
   return "";
 }
 
-function resolveDecisionRouter() {
+function resolveDecisionRouter(repoDir) {
   const candidates = [
+    repoDir ? join(repoDir, ".antigravity", "scripts", "decision_router.py") : "",
+    repoDir ? join(repoDir, "core_framework", "scripts", "decision_router.py") : "",
     join(__dirname, "..", "..", "..", "core_framework", "scripts", "decision_router.py"),
     join(__dirname, "..", "..", "..", ".antigravity", "scripts", "decision_router.py"),
     join(process.cwd(), ".antigravity", "scripts", "decision_router.py"),
     join(process.cwd(), "core_framework", "scripts", "decision_router.py"),
     join(homedir(), ".gemini", "scripts", "decision_router.py"),
     join(homedir(), ".gemini", ".antigravity", "scripts", "decision_router.py"),
-  ];
+  ].filter(Boolean);
   for (const c of candidates) {
     if (existsSync(c)) return c;
   }
   return null;
 }
 
-function isDecisionModelEnabled() {
+function isDecisionModelEnabled(repoDir) {
   const envVal = process.env.ASW_DECISION_MODEL_ENABLED;
   if (envVal !== undefined) {
     const s = String(envVal).trim().toLowerCase();
@@ -158,11 +160,12 @@ function isDecisionModelEnabled() {
     if (s === "1" || s === "true" || s === "yes" || s === "on") return true;
   }
   const configPaths = [
+    repoDir ? join(repoDir, ".antigravity", "decision_config.json") : "",
     join(process.cwd(), ".antigravity", "decision_config.json"),
     join(__dirname, "..", "..", "..", ".antigravity", "decision_config.json"),
     join(homedir(), ".gemini", "decision_config.json"),
     join(homedir(), ".gemini", ".antigravity", "decision_config.json"),
-  ];
+  ].filter(Boolean);
   for (const cp of configPaths) {
     if (existsSync(cp)) {
       try {
@@ -176,15 +179,15 @@ function isDecisionModelEnabled() {
   return true;
 }
 
-function queryAutoDecisionRouter(prompt) {
-  if (!isDecisionModelEnabled()) return null;
-  const routerPath = resolveDecisionRouter();
+function queryAutoDecisionRouter(prompt, repoDir) {
+  if (!isDecisionModelEnabled(repoDir)) return null;
+  const routerPath = resolveDecisionRouter(repoDir);
   if (!routerPath) return null;
   try {
     const res = spawnSync(
       process.platform === "win32" ? "python" : "python3",
       [routerPath, "--mode", "route-prompt", "--compact", "--text", String(prompt)],
-      { timeout: 1500, encoding: "utf8" }
+      { timeout: 1500, encoding: "utf8", cwd: repoDir || undefined }
     );
     if (res.status === 0 && res.stdout) {
       const parsed = JSON.parse(res.stdout);
@@ -288,30 +291,30 @@ Required behavior:
 - Enforce Quad-Model Cognitive Routing in every plan wave:
   * Research, architecture, and planning lanes MUST use Gemini 4 Carbon (High) (Model="pro").
   * Plan & diff opposition audit lanes MUST use Claude Opus 5.5.
-  * Standard review, QA audit, root-cause debugging, and remaining coordinator lanes MUST use Gemini 4 Argon (High) (Model="pro").
+  * Standard review, QA audit, root-cause debugging, and remaining coordinator lanes MUST use Gemini 4 Neon (High) (Model="pro").
   * Implementation coding, TDD RED-to-GREEN, test runner, and routine lanes MUST use Gemini 4 Hydrogen (High) (Model="flash").
 - Write the plan to .asw/plans/<slug>.md with ## TL;DR, <!-- <frozen-after-approval> --> enclosing ## User Intent & Anti-Shortcut Contract (Intent, Boundaries & Constraints, and ## I/O & Edge-Case Matrix), <!-- </frozen-after-approval> -->, ## Code Map (for context-free subagent handoff), ## Execution Tasks / ## TODOs (using - [ ] top-level checkboxes), ## Plan Change Log, and ## Review Triage Log. Keep plans to a single goal (900-1600 tokens), splitting secondary goals into .asw/plans/deferred-work.md.
-- Make every TODO atomic: assigned model tier (Hydrogen High vs Argon High vs Carbon High), lane, files, Layer 1 (Static/Build check), Layer 2 (RED-to-GREEN happy + negative domain + artifact parity test covering I/O & Edge-Case Matrix rows), Layer 3 (real-surface runtime QA command), artifact path, and cleanup receipt.
+- Make every TODO atomic: assigned model tier (Hydrogen High vs Neon High vs Carbon High), lane, files, Layer 1 (Static/Build check), Layer 2 (RED-to-GREEN happy + negative domain + artifact parity test covering I/O & Edge-Case Matrix rows), Layer 3 (real-surface runtime QA command), artifact path, and cleanup receipt.
 - Mandate RTK (Token Killer) pre-filtering: default high-volume developer commands (git status/log/diff, pytest, find, read -l aggressive, json) to rtk CLI proxy (rtk-token-killer) for 50-98% token savings, bypassing rtk tree on Windows.
 - Include happy-path, edge-case/negative, and adjacent-surface regression QA scenarios; mocked unit tests never substitute for Layer 3 real-surface runtime proof.
 - Include privacy/package safeguards and cleanup receipts for any spawned QA state.
 - End with Next: start-work <plan-name>; do not end with a passive "let me know" handoff.
 - Do not implement code while in plan mode unless the user explicitly asks to execute.`;
 
-const GOAL_DIRECTIVE = `ASW GOAL MODE ENABLED! (Plan/Research: Gemini 4 Carbon High | Review/Orchestrator: Gemini 4 Argon High | Execution: Gemini 4 Hydrogen High)
+const GOAL_DIRECTIVE = `ASW GOAL MODE ENABLED! (Plan/Research: Gemini 4 Carbon High | Review/Orchestrator: Gemini 4 Neon High | Execution: Gemini 4 Hydrogen High)
 
 You are Antigravity Swarm's durable goal orchestrator. Convert the request into explicit goals, success criteria, User Intent & Anti-Shortcut Contract, and 3-layer evidence requirements.
 
 Required behavior:
 - Preserve the user's full objective across turns and sessions with Zero Heuristic Substitution.
-- Use Gemini 4 Carbon (High) (Model="pro") ONLY for initial research and planning; use Claude Opus 5.5 for opposing reviews; use Gemini 4 Argon (High) (Model="pro") for standard reviews, debugging, and remaining orchestration tasks.
+- Use Gemini 4 Carbon (High) (Model="pro") ONLY for initial research and planning; use Claude Opus 5.5 for opposing reviews; use Gemini 4 Neon (High) (Model="pro") for standard reviews, debugging, and remaining orchestration tasks.
 - Dispatch Gemini 4 Hydrogen (High) (Model="flash") subagents for bounded leaf implementation, TDD execution, and routine tasks.
 - Define concrete success criteria and Forbidden Shortcuts before implementation begins.
 - Assign each criterion to 3-Layer Verification: (1) Static/Build, (2) Automated happy + negative domain + parity tests, and (3) Real-surface runtime execution (CLI, HTTP/API, browser/UI, or data pipeline).
 - Track blockers, retries, cleanup receipts, Prompt-to-Code Traceability Matrix, and completion audits.
 - Do not mark completion until 100% of plan checkboxes are checked (- [x]) and proven by current runtime evidence.`;
 
-const START_WORK_DIRECTIVE = `ASW START-WORK MODE ENABLED! (Orchestrator/QA: Gemini 4 Argon High -> Leaf Workers: Gemini 4 Hydrogen High)
+const START_WORK_DIRECTIVE = `ASW START-WORK MODE ENABLED! (Orchestrator/QA: Gemini 4 Neon High -> Leaf Workers: Gemini 4 Hydrogen High)
 
 You are Antigravity Swarm's plan executor. Execute an existing ASW plan until 100% of top-level checkboxes (- [x]) are complete.
 
@@ -321,7 +324,7 @@ Required behavior:
 - Strictly obey the User Intent & Anti-Shortcut Contract and Zero Heuristic Substitution Law: never substitute trained models, formulas, or external APIs with hand-coded heuristics, catch-all side-effect fallbacks, or synthetic data.
 - Default developer command executions (git status/log/diff, pytest, inspection) to rtk CLI proxy (rtk-token-killer) to preserve context budget (87.8% benchmark token reduction), bypassing rtk tree on Windows.
 - Subagent Output Receipt Contract: Bounded leaf subagents (asw-implementer, asw-explorer, asw-reviewer) must emit concise structured receipts <= 250 tokens in external messages, while internal <thought> reasoning tokens remain 100% unconstrained.
-- Dispatch Gemini 4 Hydrogen (High) (Model="flash") subagents for independent implementation, TDD subtasks, and routine work; use Gemini 4 Argon (High) (Model="pro") for root-cause debugging and QA verification, and Claude Opus 5.5 for opposing reviews.
+- Dispatch Gemini 4 Hydrogen (High) (Model="flash") subagents for independent implementation, TDD subtasks, and routine work; use Gemini 4 Neon (High) (Model="pro") for root-cause debugging and QA verification, and Claude Opus 5.5 for opposing reviews.
 - For every checkbox, capture 3-Layer Verification (Layer 1 Static/Build, Layer 2 RED-to-GREEN happy + negative domain + parity tests, Layer 3 real-surface runtime proof) and cleanup receipts before marking it - [x].
 - Keep local continuation state in .asw/start-work/ and update the plan only after verification passes.
 - Never stop or summarize partial progress while unchecked - [ ] items remain unless blocked by an unresolvable external dependency.
@@ -338,7 +341,7 @@ Required behavior:
 - Keep validation at real boundaries and preserve comments that explain why.
 - Run relevant 3-layer verification and real-surface QA when cleanup affects user-visible behavior.`;
 
-const LOOP_DIRECTIVE = `ASW LOOP MODE ENABLED! (Plan/Research: Gemini 4 Carbon High | Review/Debug: Gemini 4 Argon High | Implementation/TDD: Gemini 4 Hydrogen High)
+const LOOP_DIRECTIVE = `ASW LOOP MODE ENABLED! (Plan/Research: Gemini 4 Carbon High | Review/Debug: Gemini 4 Neon High | Implementation/TDD: Gemini 4 Hydrogen High)
 
 You are Antigravity Swarm's evidence-driven execution loop. Ship the requested outcome end-to-end through Antigravity CLI surfaces.
 
@@ -353,15 +356,15 @@ Required behavior:
 - Run the smallest genuine implementation on Gemini 4 Hydrogen (High) (Model="flash") that flips RED to GREEN.
 - Drive the real surface (Layer 3) through CLI, tmux, HTTP, browser, or computer-use QA — never rely on mocks alone.
 - Capture artifacts, cleanup receipts, and a Prompt-to-Code Traceability Matrix verifying every user requirement.
-- For final diff review, run \`python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --plan ".asw/plans/<slug>.md"\` directly (never use PowerShell \`>\`/\`>>\` diff redirection or \`Remove-Item -Force scratch\\*\` without \`-Recurse -Confirm:$false\`). When Claude Opus 5.5 credits are exhausted, \`invoke_opus_reviewer.py\` + Gemini 4 Argon (High) automatically serve as the non-blocking fallback gate.
+- For final diff review, run \`python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --plan ".asw/plans/<slug>.md"\` directly (never use PowerShell \`>\`/\`>>\` diff redirection or \`Remove-Item -Force scratch\\*\` without \`-Recurse -Confirm:$false\`). When Claude Opus 5.5 credits are exhausted, \`invoke_opus_reviewer.py\` + Gemini 4 Neon (High) automatically serve as the non-blocking fallback gate.
 - MANDATORY SUBAGENT & MODEL-TIER ESCALATION GATE: Never execute planning, coding, and review all inline in a single Gemini 4 Hydrogen thread! Because the UI model dropdown only controls the main conversation thread, you MUST actively call \`invoke_subagent\` with explicit \`Model\` parameters across phases:
   1. Call \`invoke_subagent(TypeName="asw-planner", Role="ASW Architect & Planner", Model="pro", ...)\` to author \`.asw/plans/<slug>.md\` on Pro (Carbon High) when the main thread is on Hydrogen (or author the plan directly if the main thread is already on Pro).
   2. Call \`invoke_subagent(TypeName="asw-implementer", Role="ASW Leaf Implementer", Model="flash", ...)\` to execute context-free RED-to-GREEN leaf implementation on Hydrogen High from \`{plan_file}\` and its \`## Code Map\`.
-  3. Call \`invoke_subagent(TypeName="asw-reviewer", Role="ASW 5-Lens Reviewer", Model="pro", ...)\` paired with \`invoke_opus_reviewer.py --mode diff-review\` for the 5-lens review on Pro (Argon High + Opus 5.5).`;
+  3. Call \`invoke_subagent(TypeName="asw-reviewer", Role="ASW 5-Lens Reviewer", Model="pro", ...)\` paired with \`invoke_opus_reviewer.py --mode diff-review\` for the 5-lens review on Pro (Neon High + Opus 5.5).`;
 
-const REVIEW_DIRECTIVE = `ASW REVIEW MODE ENABLED! (Model Tier: Gemini 4 Argon High + Claude Opus 5.5 + BMAD 5-Lens Review)
+const REVIEW_DIRECTIVE = `ASW REVIEW MODE ENABLED! (Model Tier: Gemini 4 Neon High + Claude Opus 5.5 + BMAD 5-Lens Review)
 
-You are Antigravity Swarm's adversarial reviewer running on Gemini 4 Argon (High) (Model="pro") paired with Claude Opus 5.5 / invoke_opus_reviewer.py. Execute the 5 orthogonal BMAD + Opus review lenses across all changes since baseline_revision:
+You are Antigravity Swarm's adversarial reviewer running on Gemini 4 Neon (High) (Model="pro") paired with Claude Opus 5.5 / invoke_opus_reviewer.py. Execute the 5 orthogonal BMAD + Opus review lenses across all changes since baseline_revision:
 1. blind-hunter (diff-only, zero plan bias, mandatory finding floor N = min(floor(sqrt(kB) + 1), 10))
 2. edge-case-hunter (branch/resource walkthrough before reading claims + deletion-check + claims-check falsification)
 3. verification-gap (1-3 hop caller/consumer trace + broken-verification mock-only rejection + missing-adoption sibling call-site check)
@@ -370,7 +373,7 @@ You are Antigravity Swarm's adversarial reviewer running on Gemini 4 Argon (High
 
 Log every verified finding in ## Review Triage Log and route to [intent_gap], [bad_plan] (extract KEEP notes, revert to baseline_revision, log dead-end in ## Plan Change Log), [patch] (re-engage step-03 subagent), or [defer]. Never modify <frozen-after-approval> or rewrite I/O & Edge-Case Matrix expectations to fit broken code.`;
 
-const TEST_GUI_DIRECTIVE = `ASW TEST-GUI MODE ENABLED! (Physical GUI & Localhost Verification: Gemini 4 Hydrogen High -> Audit: Claude Opus 5.5 / Argon High)
+const TEST_GUI_DIRECTIVE = `ASW TEST-GUI MODE ENABLED! (Physical GUI & Localhost Verification: Gemini 4 Hydrogen High -> Audit: Claude Opus 5.5 / Neon High)
 
 You MUST perform physical GUI and runtime verification of the implemented application surface (never rely on unit tests or mocks alone):
 - For Web / Full-Stack apps: Start the localhost dev/preview server (if not already running), run Playwright and/or \`python .antigravity/scripts/run_gui_test.py --mode web --start-cmd "<cmd>" --url "http://127.0.0.1:<port>" --assert-text "<expected>" --assert-selector "<selector>" --screenshot ".asw/evidence/gui-screenshot.png" --output ".asw/evidence/gui-test-report.md"\`, verify HTTP 200, inspect live DOM elements, confirm zero browser console.error / uncaught pageerror exceptions, and capture screenshot + report.
@@ -378,7 +381,7 @@ You MUST perform physical GUI and runtime verification of the implemented applic
 - If Verdict: GUI_FAILED occurs, fix the underlying UI/runtime defect and re-run physical GUI verification until Verdict: GUI_VERIFIED passes.
 - Always terminate spawned dev servers, browsers, and GUI processes in cleanup before finishing.`;
 
-function directiveFor(prompt, payload = {}) {
+function directiveFor(prompt, payload = {}, repoDir = "") {
   prompt = redactSecrets(stripIgnoredPromptRegions(prompt));
   let base = "";
   if (PLAN_RE.test(prompt)) base = PLAN_DIRECTIVE;
@@ -394,8 +397,8 @@ function directiveFor(prompt, payload = {}) {
 
   // System 1 Auto Decision Router evaluation when enabled
   if (!base && (process.env.ASW_AUTO_DECISION_ROUTER === "1" || payload.autoDecisionRouter === true)) {
-    if (isDecisionModelEnabled()) {
-      const decision = queryAutoDecisionRouter(prompt);
+    if (isDecisionModelEnabled(repoDir)) {
+      const decision = queryAutoDecisionRouter(prompt, repoDir);
       if (decision) {
         if (decision.requires_subagent_plan_wave) {
           base = LOOP_DIRECTIVE;
@@ -408,6 +411,33 @@ function directiveFor(prompt, payload = {}) {
   }
 
   return base;
+}
+
+function consumePendingLspDiagnostic(repoDir) {
+  if (!repoDir) return "";
+  const diagPath = join(repoDir, ".asw", ".pending-lsp-diagnostic.json");
+  if (!existsSync(diagPath)) return "";
+  try {
+    const parsed = JSON.parse(readFileSync(diagPath, "utf8"));
+    unlinkSync(diagPath);
+    const ts = Number(parsed?.ts ?? 0);
+    const maxAgeMs = 5 * 60 * 1000;
+    if (ts > 0 && Date.now() - ts > maxAgeMs) {
+      return "";
+    }
+    const diag = String(parsed?.diagnostic ?? "").trim();
+    if (!diag) return "";
+    return diag.startsWith("ASW POST-EDIT DIAGNOSTIC:")
+      ? diag
+      : `ASW POST-EDIT DIAGNOSTIC: ${diag}. Fix the syntax/structural error before proceeding to Layer-2 and Layer-3 verification.`;
+  } catch {
+    try {
+      unlinkSync(diagPath);
+    } catch {
+      // ignore
+    }
+    return "";
+  }
 }
 
 function stripIgnoredPromptRegions(prompt) {
@@ -431,18 +461,21 @@ if (isSessionStartEvent(payload)) {
   const isSyntheticCascade = SYNTHETIC_MODE_RE.test(rawPrompt);
   const isSubsequentStep = Number(payload.invocationNum) > 1;
   const directive =
-    safeMode(payload) || isSubsequentStep || isSyntheticCascade ? "" : directiveFor(rawPrompt, payload);
+    safeMode(payload) || isSubsequentStep || isSyntheticCascade ? "" : directiveFor(rawPrompt, payload, repoDir);
+  const pendingLspMsg = safeMode(payload) ? "" : consumePendingLspDiagnostic(repoDir);
 
+  const injectSteps = [];
   if (directive) {
-    process.stdout.write(JSON.stringify({ injectSteps: [{ userMessage: directive }] }));
-  } else if (!safeMode(payload) && Number(payload.invocationNum) >= 1 && payload.transcriptPath) {
-    const nudge = queryTurnGuardNudge(payload.transcriptPath, repoDir);
-    if (nudge) {
-      process.stdout.write(JSON.stringify({ injectSteps: [{ ephemeralMessage: nudge }] }));
-    } else {
-      process.stdout.write("{}");
-    }
-  } else {
-    process.stdout.write("{}");
+    injectSteps.push({ userMessage: directive });
   }
+  const ephParts = [];
+  if (pendingLspMsg) ephParts.push(pendingLspMsg);
+  if (!directive && !safeMode(payload) && Number(payload.invocationNum) >= 1 && payload.transcriptPath) {
+    const nudge = queryTurnGuardNudge(payload.transcriptPath, repoDir);
+    if (nudge) ephParts.push(nudge);
+  }
+  if (ephParts.length > 0) {
+    injectSteps.push({ ephemeralMessage: ephParts.join("\n\n") });
+  }
+  process.stdout.write(injectSteps.length > 0 ? JSON.stringify({ injectSteps }) : "{}");
 }

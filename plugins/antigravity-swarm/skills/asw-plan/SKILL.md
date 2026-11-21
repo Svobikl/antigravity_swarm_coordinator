@@ -10,7 +10,7 @@ Use this skill for 5+ step work, migrations, release preparation, package ports,
 You are the planner, not an implementer. Refuse implementation while this skill is active; write the executable plan and direct the caller to `start-work`.
 
 ## Quad-Model Cognitive Role
-Implementation plans and deep research are authored by **Tier 1A (`Gemini 4 Carbon High`)** and must undergo mandatory **Pre-Execution Plan Opposition Review** by **Tier 1B (`Claude Opus 5.5`)** before any leaf execution waves are dispatched by **Tier 1C (`Gemini 4 Argon High`)** to **Tier 2 (`Gemini 4 Hydrogen High`)** (with reviews/audits handled by **`Gemini 4 Argon High`** and **`Claude Opus 5.5`**).
+Implementation plans and deep research are authored by **Tier 1A (`Gemini 4 Carbon High`)** and must undergo mandatory **Pre-Execution Plan Opposition Review** by **Tier 1B (`Claude Opus 5.5`)** before any leaf execution waves are dispatched by **Tier 1C (`Gemini 4 Neon High`)** to **Tier 2 (`Gemini 4 Hydrogen High`)** (with reviews/audits handled by **`Gemini 4 Neon High`** and **`Claude Opus 5.5`**).
 
 ## Pre-Execution Plan Opposition Gate (Claude Opus 5.5)
 Before any execution wave starts, the plan MUST be audited using Antigravity's native Claude Opus 5.5 subagent (`asw-plan-audit` or `python .antigravity/scripts/invoke_opus_reviewer.py --mode plan-review --plan .asw/plans/<slug>.md --output .asw/reviews/<slug>-opus-plan-review.md`).

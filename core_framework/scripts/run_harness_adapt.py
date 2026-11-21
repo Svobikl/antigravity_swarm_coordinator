@@ -18,7 +18,7 @@ Executes the full adaptation cycle (Propose -> Probe -> Compose -> Select -> Ref
 with Quad-Model routing:
   - Tier 1A: Gemini 4 Carbon High (proposer="antigravity"/gemini-4-carbon — planning & research)
   - Tier 1B: Claude Opus 5.5 (selector="antigravity_opus"/claude-opus-5-5 — opposing reviews & blind selection)
-  - Tier 1C: Gemini 4 Argon High (review, audits & remaining coordinator tasks)
+  - Tier 1C: Gemini 4 Neon High (review, audits & remaining coordinator tasks)
   - Tier 2:  Gemini 4 Hydrogen High (executor/probes/implementation/routine tasks)
 """
 

@@ -80,7 +80,7 @@ _LINT_RE = re.compile(
 
 MODEL_WEIGHTS: dict[str, dict[str, float]] = {
     "gemini-4-carbon": {"input": 1.0, "cache_read": 0.05, "cache_write": 0.0, "output": 5.0},
-    "gemini-4-argon": {"input": 1.0, "cache_read": 0.05, "cache_write": 0.0, "output": 5.0},
+    "gemini-4-neon": {"input": 1.0, "cache_read": 0.05, "cache_write": 0.0, "output": 5.0},
     "gemini-4-hydrogen": {"input": 1.0, "cache_read": 0.05, "cache_write": 0.0, "output": 5.0},
     "claude-opus-5-5": {"input": 1.0, "cache_read": 0.05, "cache_write": 1.25, "output": 5.0},
     "gemini-3.8-flash": {"input": 1.0, "cache_read": 0.10, "cache_write": 0.0, "output": 5.0},
@@ -90,7 +90,7 @@ _MODEL_ALIASES: dict[str, str] = {
     "claude-opus-5.5": "claude-opus-5-5",
     "opus-5-5": "claude-opus-5-5",
     "gemini-4-carbon-high": "gemini-4-carbon",
-    "gemini-4-argon-high": "gemini-4-argon",
+    "gemini-4-neon-high": "gemini-4-neon",
     "gemini-4-hydrogen-high": "gemini-4-hydrogen",
 }
 

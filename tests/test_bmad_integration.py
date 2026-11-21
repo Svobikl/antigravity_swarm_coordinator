@@ -264,6 +264,82 @@ class TestBMADMethodIntegration(unittest.TestCase):
         for cmd_name in ("/asw-plan", "/asw-start-work", "/asw-test-gui", "/asw-debug", "/asw-review", "/asw-goal", "/asw-cleanup"):
             self.assertIn(cmd_name, readme_txt)
 
+    def test_m8_v41_semantic_auditor_and_validate_claims_happy_and_negative(self):
+        """M8: SemanticCompletionAuditor defaults to RESEARCH, drops pandas, and validates ClaimDefinition (duration_units/event_count/events_per_unit) alongside validate_program_state.validate_claims()."""
+        auditor_src = (REPO_ROOT / ".antigravity" / "semantic" / "auditor.py").read_text(encoding="utf-8")
+        self.assertNotIn("import pandas", auditor_src)
+
+        if str(REPO_ROOT) not in sys.path:
+            sys.path.insert(0, str(REPO_ROOT))
+        vps = _load_module("validate_program_state", REPO_ROOT / ".antigravity" / "scripts" / "validate_program_state.py")
+        from core_framework.semantic.auditor import SemanticCompletionAuditor
+        from core_framework.semantic.claims import ClaimRegistryManager
+        from core_framework.semantic.invariants import InvariantManager
+        from core_framework.semantic.schema import ClaimDefinition, DeploymentStatus, ProgramInvariants, ScientificVerdict
+        from core_framework.semantic.snapshot import SourceSnapshotManager
+
+        with tempfile.TemporaryDirectory() as tmp:
+            prog_dir = Path(tmp) / "prog_ok"
+            prog_dir.mkdir(parents=True)
+            snap_mgr = SourceSnapshotManager(prog_dir)
+            snap_mgr.create_snapshot("# Source Plan\n")
+            inv_mgr = InvariantManager(prog_dir)
+            inv_mgr.invariants = ProgramInvariants(program_id="PROG-M8")
+            inv_mgr.save_invariants()
+
+            claim_mgr = ClaimRegistryManager(prog_dir)
+            ok_claim = ClaimDefinition(
+                claim_id="CLAIM-001",
+                claim_text="100 events over 2.0 units",
+                metric_name="throughput",
+                metric_version="1.0",
+                value=50.0,
+                units="events/unit",
+                execution_contract_id="EXEC-1",
+                evaluation_period_start="2026-01-01",
+                evaluation_period_end="2026-01-03",
+                duration_units=2.0,
+                event_count=100,
+                events_per_unit=50.0,
+                validation_status=ScientificVerdict.OUTER_VALIDATED,
+            )
+            reg_ok, reg_msg = claim_mgr.register_claim(ok_claim)
+            self.assertTrue(reg_ok, reg_msg)
+            claim_mgr.save("PROG-M8")
+
+            auditor = SemanticCompletionAuditor(prog_dir, root_dir=Path(tmp))
+            res_ok = auditor.run_semantic_audit()
+            self.assertTrue(res_ok.is_fully_clean, f"Unexpected blocking errors: {res_ok.blocking_errors}")
+            self.assertEqual(res_ok.four_axis_header.deployment_status, DeploymentStatus.RESEARCH)
+            self.assertEqual(vps.validate_claims(prog_dir), [])
+
+            # Negative case: inject arithmetic mismatch directly into CLAIM_REGISTRY.json
+            bad_claim = ClaimDefinition(
+                claim_id="CLAIM-002",
+                claim_text="Broken arithmetic claim",
+                metric_name="throughput",
+                metric_version="1.0",
+                value=5.0,
+                units="events/unit",
+                execution_contract_id="EXEC-1",
+                evaluation_period_start="2026-01-01",
+                evaluation_period_end="2026-01-03",
+                duration_units=2.0,
+                event_count=100,
+                events_per_unit=5.0,
+                validation_status=ScientificVerdict.EXPLORATORY,
+            )
+            claim_mgr.claims["CLAIM-002"] = bad_claim
+            claim_mgr.save("PROG-M8")
+
+            res_bad = SemanticCompletionAuditor(prog_dir, root_dir=Path(tmp)).run_semantic_audit()
+            self.assertFalse(res_bad.is_fully_clean)
+            self.assertTrue(any("Arithmetic contradiction in claim CLAIM-002" in e for e in res_bad.blocking_errors))
+
+            vps_errs = vps.validate_claims(prog_dir)
+            self.assertEqual(len(vps_errs), 1)
+            self.assertIn("Arithmetic error in claim 'CLAIM-002'", vps_errs[0])
+
 
 if __name__ == "__main__":
     unittest.main()

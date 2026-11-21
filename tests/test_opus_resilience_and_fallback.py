@@ -31,7 +31,7 @@ Negative test failure and edge cases verified.
 """
 
     def test_utf16le_and_mixed_powershell_diff_decoding_passes_audit_diff(self):
-        """Reproduces StrataRelay Steps 5014-5023: PowerShell `>` / `>>` writes UTF-16LE null bytes into diff files."""
+        """PowerShell `>` / `>>` writes UTF-16LE null bytes into diff files; reviewer must decode resiliently."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plan_file = tmp_path / "plan.md"
@@ -85,7 +85,7 @@ Negative test failure and edge cases verified.
             self.assertIn("Verdict: ASW APPROVED", report)
 
     def test_evidence_file_path_does_not_raise_not_a_directory_error(self):
-        """Reproduces StrataRelay Step 5010: passing a file path to --evidence crashed with NotADirectoryError."""
+        """Passing a file path to --evidence must not crash with NotADirectoryError."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plan_file = tmp_path / "plan.md"
@@ -130,7 +130,7 @@ Negative test failure and edge cases verified.
             self.assertIn("Verdict: ASW APPROVED", out_file.read_text(encoding="utf-8"))
 
     def test_self_contained_files_argument_collects_tracked_and_untracked_files(self):
-        """Reproduces StrataRelay Step 5006 & 5014: --files collects tracked git diff + untracked test files directly."""
+        """--files collects tracked git diff + untracked test files directly."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
@@ -190,7 +190,7 @@ Negative test failure and edge cases verified.
             self.assertIn("Verdict: ASW APPROVED", report)
 
     def test_opus_credit_exhaustion_automatic_fallback_never_blocks(self):
-        """Verifies that exhausted Opus credits trigger automatic deterministic + Gemini 4 Argon High fallback without hanging."""
+        """Verifies that exhausted Opus credits trigger automatic deterministic + Gemini 4 Neon High fallback without hanging."""
         # 1. Check --preflight metadata includes fallback_model and credit_exhaustion_policy
         pre = subprocess.run(
             [sys.executable, str(self.reviewer_script), "--preflight"],
@@ -201,8 +201,8 @@ Negative test failure and edge cases verified.
         self.assertEqual(pre.returncode, 0)
         pre_data = json.loads(pre.stdout)
         rt = pre_data.get("antigravity_runtime", {})
-        self.assertEqual(rt.get("fallback_model"), "gemini-4-argon-high")
-        self.assertEqual(rt.get("credit_exhaustion_policy"), "auto_fallback_deterministic_and_argon_high")
+        self.assertEqual(rt.get("fallback_model"), "gemini-4-neon-high")
+        self.assertEqual(rt.get("credit_exhaustion_policy"), "auto_fallback_deterministic_and_neon_high")
 
         # 2. Run diff-review with ANTIGRAVITY_OPUS_CREDITS_EXHAUSTED=1 and --fallback-reason
         with tempfile.TemporaryDirectory() as tmp:
@@ -252,10 +252,10 @@ Negative test failure and edge cases verified.
             report = out_file.read_text(encoding="utf-8")
             self.assertIn("Verdict: ASW APPROVED", report)
             self.assertIn("Fallback Mode", report)
-            self.assertIn("gemini-4-argon-high", report.lower())
+            self.assertIn("gemini-4-neon-high", report.lower())
 
     def test_clean_scratch_removes_nested_pycache_without_interactive_hang(self):
-        """Reproduces StrataRelay 16-minute hang: scratch/__pycache__ caused PowerShell Remove-Item without -Recurse to hang."""
+        """--clean-scratch removes nested scratch/__pycache__ without PowerShell Remove-Item interactive hang."""
         with tempfile.TemporaryDirectory() as tmp:
             scratch_dir = Path(tmp) / "scratch"
             pycache_dir = scratch_dir / "__pycache__"
@@ -283,13 +283,66 @@ Negative test failure and edge cases verified.
         for toml_name in ("asw-plan-audit.toml", "asw-opposition-reviewer.toml", "asw-reviewer.toml"):
             toml_path = self.repo_root / ".antigravity" / "agents" / toml_name
             content = toml_path.read_text(encoding="utf-8")
-            self.assertIn('fallback_model = "gemini-4-argon-high"', content, f"{toml_name} missing fallback_model")
+            self.assertIn('fallback_model = "gemini-4-neon-high"', content, f"{toml_name} missing fallback_model")
             self.assertIn("timeout_seconds =", content, f"{toml_name} missing timeout_seconds")
 
         rules_text = (self.repo_root / ".antigravity" / "rules" / "GLOBAL_DEVELOPMENT_RULES.md").read_text(encoding="utf-8")
         self.assertIn("Opus Credit", rules_text)
         self.assertIn("--files", rules_text)
         self.assertIn("-Recurse -Confirm:$false", rules_text)
+
+    def test_workdir_cli_flag_resolves_plan_files_and_evidence_from_external_cwd(self):
+        """--workdir allows invoking invoke_opus_reviewer.py from an external working directory."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            target_repo = tmp_path / "target_repo"
+            other_cwd = tmp_path / "other_cwd"
+            target_repo.mkdir()
+            other_cwd.mkdir()
+
+            subprocess.run(["git", "init"], cwd=target_repo, capture_output=True, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=target_repo, capture_output=True, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=target_repo, capture_output=True, check=True)
+
+            (target_repo / "src").mkdir()
+            (target_repo / "src" / "app.py").write_text("def val():\n    return 1\n", encoding="utf-8")
+            subprocess.run(["git", "add", "src/app.py"], cwd=target_repo, capture_output=True, check=True)
+            subprocess.run(["git", "commit", "-m", "init"], cwd=target_repo, capture_output=True, check=True)
+
+            (target_repo / "src" / "app.py").write_text("def val(x):\n    return x + 1\n", encoding="utf-8")
+            (target_repo / "tests").mkdir()
+            (target_repo / "tests" / "test_app.py").write_text(
+                "def test_negative_input():\n    assert val(-1) == 0\n",
+                encoding="utf-8",
+            )
+            plans_dir = target_repo / ".asw" / "plans"
+            plans_dir.mkdir(parents=True)
+            (plans_dir / "ext-plan.md").write_text(self._valid_closed_plan_text(), encoding="utf-8")
+            ev_dir = target_repo / ".asw" / "evidence"
+            ev_dir.mkdir(parents=True)
+            (ev_dir / "run.txt").write_text("RED phase fail -> GREEN phase pass, negative verified\n", encoding="utf-8")
+
+            out_file = tmp_path / "external_review.md"
+            res = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.reviewer_script),
+                    "--mode",
+                    "diff-review",
+                    "--workdir",
+                    str(target_repo),
+                    "--files",
+                    "src/app.py,tests/test_app.py",
+                    "--output",
+                    str(out_file),
+                ],
+                cwd=other_cwd,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            self.assertEqual(res.returncode, 0, f"--workdir failed from external cwd:\n{res.stdout}\n{res.stderr}")
+            self.assertIn("Verdict: ASW APPROVED", out_file.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -58,7 +58,9 @@ def _obj(d: dict, key: str) -> dict:
     return v if isinstance(v, dict) else {}
 
 
-def discover_antigravity_runtime() -> dict[str, str | Path | None]:
+def discover_antigravity_runtime(
+    app_roots: tuple[Path, ...] | None = None,
+) -> dict[str, str | Path | None]:
     """Resolve Antigravity's native execution runtime path-independently in priority order.
 
     Priority order:
@@ -77,13 +79,37 @@ def discover_antigravity_runtime() -> dict[str, str | Path | None]:
         return {"kind": "agy", "path": Path(agy), "cmd": agy}
 
     home = Path.home()
-    for agy_cand in (
-        home / ".antigravity" / "bin" / "agy",
-        Path("/Applications/Antigravity.app/Contents/Resources/app/bin/agy"),
-        home / "Applications" / "Antigravity.app" / "Contents" / "Resources" / "app" / "bin" / "agy",
-        Path("/opt/homebrew/bin/agy"),
-        Path("/usr/local/bin/agy"),
-    ):
+    env_app_root = os.environ.get("HARNESS2_MACOS_APP_ROOT")
+    if app_roots is not None:
+        mac_app_roots = tuple(app_roots)
+        agy_cands: list[Path] = [home / ".antigravity" / "bin" / "agy"] + [
+            r / "app" / "bin" / "agy" for r in mac_app_roots
+        ]
+    elif env_app_root is not None:
+        stripped = env_app_root.strip()
+        if stripped:
+            p = Path(stripped)
+            res_dir = p if p.name == "Resources" else p / "Contents" / "Resources"
+            mac_app_roots = (res_dir,)
+        else:
+            mac_app_roots = ()
+        agy_cands = [home / ".antigravity" / "bin" / "agy"] + [
+            r / "app" / "bin" / "agy" for r in mac_app_roots
+        ]
+    else:
+        mac_app_roots = (
+            home / "Applications" / "Antigravity.app" / "Contents" / "Resources",
+            Path("/Applications/Antigravity.app/Contents/Resources"),
+        )
+        agy_cands = [
+            home / ".antigravity" / "bin" / "agy",
+            Path("/Applications/Antigravity.app/Contents/Resources/app/bin/agy"),
+            home / "Applications" / "Antigravity.app" / "Contents" / "Resources" / "app" / "bin" / "agy",
+            Path("/opt/homebrew/bin/agy"),
+            Path("/usr/local/bin/agy"),
+        ]
+
+    for agy_cand in agy_cands:
         if agy_cand.is_file():
             return {"kind": "agy", "path": agy_cand, "cmd": str(agy_cand)}
 
@@ -91,10 +117,6 @@ def discover_antigravity_runtime() -> dict[str, str | Path | None]:
     base = Path(local_app_data) if local_app_data else home / "AppData" / "Local"
     win_ls = base / "Programs" / "antigravity" / "resources" / "bin" / "language_server.exe"
 
-    mac_app_roots = (
-        home / "Applications" / "Antigravity.app" / "Contents" / "Resources",
-        Path("/Applications/Antigravity.app/Contents/Resources"),
-    )
     ls_candidates: list[Path] = [win_ls]
     for app_res in mac_app_roots:
         ls_candidates.extend([

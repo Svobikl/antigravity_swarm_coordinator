@@ -251,7 +251,7 @@ class TestSkillCatalogCuration(unittest.TestCase):
             input=json.dumps({
                 "invocationNum": 1,
                 "modelName": "gemini-4-hydrogen",
-                "lastUserInput": "/asw implement new feature in edgerelay",
+                "lastUserInput": "/asw implement new feature in acme_analytics",
             }),
             capture_output=True,
             text=True,
@@ -270,7 +270,7 @@ class TestSkillCatalogCuration(unittest.TestCase):
             input=json.dumps({
                 "invocationNum": 2,
                 "modelName": "gemini-4-hydrogen",
-                "lastUserInput": "/asw implement new feature in edgerelay",
+                "lastUserInput": "/asw implement new feature in acme_analytics",
             }),
             capture_output=True,
             text=True,
@@ -708,6 +708,194 @@ class TestSkillCatalogCuration(unittest.TestCase):
                 self.assertIn("chub get", w_txt, f"Missing chub get in {wt}")
                 self.assertIn("chub annotate", w_txt, f"Missing chub annotate in {wt}")
                 self.assertIn("--sync-chub-annotations", w_txt, f"Missing --sync-chub-annotations in {wt}")
+
+    def test_m5_hooks_stop_guard_posttooluse_lsp_rtk_and_neon_statusline(self):
+        """Verifies M5 & M4: hooks.json matcher/event, Stop cancel guard, PostToolUse .py staging->{} + PreInvocation consume, repoDir config, RTK 2>&1/PreToolUse/fail-open, and Neon G-N statusline."""
+        import json
+        import os
+        import shutil
+        import subprocess
+        import tempfile
+
+        repo_root = Path(__file__).resolve().parent.parent
+        plugin_src = repo_root / "plugins" / "antigravity-swarm"
+        hook_script = plugin_src / "scripts" / "asw-hook.mjs"
+        lsp_script = plugin_src / "scripts" / "asw-lsp-check.mjs"
+        stop_script = plugin_src / "scripts" / "asw-stop-check.mjs"
+        rtk_script = plugin_src / "scripts" / "asw-rtk-rewrite.mjs"
+        status_script = plugin_src / "scripts" / "asw-statusline.mjs"
+
+        # 1. hooks.json & hooks/hooks.json: no run_command in PostToolUse matcher, --event PostToolUse present, no PreToolUse
+        for hooks_path in (plugin_src / "hooks.json", plugin_src / "hooks" / "hooks.json"):
+            data = json.loads(hooks_path.read_text(encoding="utf-8"))
+            swarm = data["antigravity-swarm"]
+            self.assertNotIn("PreToolUse", swarm)
+            post_entry = swarm["PostToolUse"][0]
+            self.assertNotIn("run_command", post_entry["matcher"])
+            self.assertIn("edit_file", post_entry["matcher"])
+            self.assertIn("--event PostToolUse", post_entry["hooks"][0]["command"])
+
+        # 2. asw-stop-check.mjs honors USER_CANCELED, ERROR, MAX_INVOCATIONS, and continuationActive=true
+        with tempfile.TemporaryDirectory() as tmp:
+            ws_dir = Path(tmp)
+            plans_dir = ws_dir / ".asw" / "plans"
+            plans_dir.mkdir(parents=True)
+            (plans_dir / "active.md").write_text("# Plan\n- [x] Step 1\n- [ ] Step 2\n", encoding="utf-8")
+
+            for stop_payload in (
+                {"cwd": str(ws_dir), "fullyIdle": True, "terminationReason": "USER_CANCELED"},
+                {"cwd": str(ws_dir), "fullyIdle": True, "terminationReason": "ERROR"},
+                {"cwd": str(ws_dir), "fullyIdle": True, "terminationReason": "MAX_INVOCATIONS"},
+                {"cwd": str(ws_dir), "fullyIdle": True, "continuationActive": True},
+            ):
+                res = subprocess.run(
+                    ["node", str(stop_script)],
+                    input=json.dumps(stop_payload),
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=True,
+                )
+                self.assertEqual(json.loads(res.stdout), {"decision": ""}, f"Failed guard for {stop_payload}")
+
+            # 3. PostToolUse relative .py check stages .pending-lsp-diagnostic.json & outputs {}, then PreInvocation consumes & unlinks it
+            bad_py = ws_dir / "broken_mod.py"
+            bad_py.write_text("def broken(:\n    pass\n", encoding="utf-8")
+            lsp_post = subprocess.run(
+                ["node", str(lsp_script), "--event", "PostToolUse"],
+                cwd=str(plugin_src),
+                input=json.dumps({
+                    "workspacePaths": [ws_dir.as_uri()],
+                    "toolCall": {"args": {"TargetFile": "broken_mod.py"}},
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+            self.assertEqual(json.loads(lsp_post.stdout), {})
+            pending_file = ws_dir / ".asw" / ".pending-lsp-diagnostic.json"
+            self.assertTrue(pending_file.is_file(), "PostToolUse must stage .pending-lsp-diagnostic.json")
+
+            pre_res = subprocess.run(
+                ["node", str(hook_script)],
+                cwd=str(plugin_src),
+                input=json.dumps({
+                    "invocationNum": 2,
+                    "workspacePaths": [ws_dir.as_uri()],
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+            pre_out = json.loads(pre_res.stdout)
+            eph = pre_out.get("injectSteps", [{}])[0].get("ephemeralMessage", "")
+            self.assertIn("ASW POST-EDIT DIAGNOSTIC", eph)
+            self.assertIn("broken_mod.py", eph)
+            self.assertFalse(pending_file.exists(), "PreInvocation must unlink consumed diagnostic")
+
+            # 4. asw-hook.mjs checks <repoDir>/.antigravity/decision_config.json before process.cwd() and uses Neon branding
+            ag_dir = ws_dir / ".antigravity"
+            ag_dir.mkdir(parents=True)
+            (ag_dir / "decision_config.json").write_text(json.dumps({"enabled": False}), encoding="utf-8")
+            hook_cfg_res = subprocess.run(
+                ["node", str(hook_script)],
+                cwd=str(repo_root),
+                input=json.dumps({
+                    "invocationNum": 1,
+                    "autoDecisionRouter": True,
+                    "workspacePaths": [ws_dir.as_uri()],
+                    "lastUserInput": "Create a new dashboard widget and verify it",
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+            # Because repoDir has decision_config.json enabled=false, autoDecisionRouter must NOT inject LOOP_DIRECTIVE
+            self.assertEqual(json.loads(hook_cfg_res.stdout), {})
+
+            hook_neon = subprocess.run(
+                ["node", str(hook_script)],
+                input=json.dumps({"invocationNum": 1, "lastUserInput": "/asw-review audit"}),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+            review_msg = hook_neon.stdout
+            self.assertIn("Gemini 4 Neon", review_msg)
+            self.assertNotIn("Argon", review_msg)
+
+        # 5. asw-rtk-rewrite.mjs preserves 2>&1 / &>, handles PreToolUse overwrite, and fails open without rtk
+        cli_redir = subprocess.run(
+            ["node", str(rtk_script), "pytest tests/ 2>&1 && git status"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        self.assertEqual(cli_redir.stdout.strip(), "rtk pytest tests/ 2>&1 && rtk git status")
+
+        env_force = dict(os.environ, FORCE_RTK_REWRITE="1")
+        pre_tool_ok = subprocess.run(
+            ["node", str(rtk_script)],
+            env=env_force,
+            input=json.dumps({"toolCall": {"args": {"CommandLine": "git diff 2>&1"}}}),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        self.assertEqual(
+            json.loads(pre_tool_ok.stdout),
+            {"decision": "allow", "overwrite": {"CommandLine": "rtk git diff 2>&1"}},
+        )
+
+        node_bin = shutil.which("node") or "node"
+        env_no_rtk = {k: v for k, v in os.environ.items() if k != "FORCE_RTK_REWRITE"}
+        env_no_rtk["PATH"] = ""
+        pre_tool_missing = subprocess.run(
+            [node_bin, str(rtk_script)],
+            env=env_no_rtk,
+            input=json.dumps({"toolCall": {"args": {"CommandLine": "git status"}}}),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        self.assertEqual(json.loads(pre_tool_missing.stdout), {"decision": "allow"})
+
+        fail_open_cmd = subprocess.run(
+            [node_bin, str(rtk_script)],
+            env=env_no_rtk,
+            input=json.dumps({"command": "git status"}),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        self.assertEqual(json.loads(fail_open_cmd.stdout), {"command": "git status"})
+
+        # 6. asw-statusline.mjs renders Neon -> G-N and compactQuotaModelName G-N(H)
+        sl_res = subprocess.run(
+            ["node", str(status_script)],
+            env=dict(os.environ, FORCE_COLOR="0", NO_COLOR="1"),
+            input=json.dumps({
+                "model": {"display_name": "Gemini 4 Neon (High)"},
+                "context_window": {"used_percentage": 25, "context_window_size": 1000000},
+                "model_quota": [{"display_name": "Gemini 4 Neon (High)", "remaining_percentage": 80}],
+            }),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        self.assertIn("G-N (High) 4", sl_res.stdout)
+        self.assertIn("G-N(H)", sl_res.stdout)
+        self.assertNotIn("G-A", sl_res.stdout)
 
 
 if __name__ == "__main__":

@@ -34,19 +34,19 @@ To prevent context rot and mid-execution instruction amnesia, `asw-loop`, `asw-s
 ---
 
 ## Step 4: `step-04-review` (5 Orthogonal Review Lenses & 4-Route Cascading Triage)
-- **Model Tier:** `Claude Opus 5.5` + `Gemini 4 Argon (High)`
+- **Model Tier:** `Claude Opus 5.5` + `Gemini 4 Neon (High)`
 - **Action:**
   1. Evaluate the diff since `baseline_revision` across all 5 orthogonal lenses (`blind-hunter`, `edge-case-hunter` with `deletion-check` & `claims-check`, `verification-gap` with caller hop trace & `missing-adoption` check, `intent-alignment`, and `opus-cross-family` via `invoke_opus_reviewer.py --mode diff-review`).
   2. Verify every finding against the actual source code, log it in `## Review Triage Log`, and route by highest blast radius:
-     - **`[intent_gap]`:** Revert code to `baseline_revision`, clarify with the user, and return to `step-02-plan`.
-     - **`[bad_plan]`:** Extract `KEEP` notes (what worked), revert code to `baseline_revision`, append the dead-end to `## Plan Change Log` (so it is never repeated), update the non-frozen plan, and re-run `step-03-implement`.
+     - **`[intent_gap]`:** Restore ONLY the plan's explicitly listed `Target Files` to `baseline_revision` (`git checkout <baseline_revision> -- <target_files>` — NEVER execute repo-wide `git reset --hard` or touch unrelated uncommitted workspace files), clarify with the user, and return to `step-02-plan`.
+     - **`[bad_plan]`:** Extract `KEEP` notes (what worked), restore ONLY the plan's explicitly listed `Target Files` to `baseline_revision` (`git checkout <baseline_revision> -- <target_files>` — NEVER execute repo-wide `git reset --hard` or touch unrelated uncommitted workspace files), append the dead-end to `## Plan Change Log` (so it is never repeated), update the non-frozen plan, and re-run `step-03-implement`.
      - **`[patch]`:** Send minimal localized fix back to the existing `step-03` subagent `conversationId`, re-run full verification, and mark `RESOLVED` in `## Review Triage Log`.
      - **`[defer]`:** Append out-of-scope follow-ups to `.asw/plans/deferred-work.md`.
 
 ---
 
 ## Step 5: `step-05-present` (Clean Handoff, Pitfall Capture & Memory Sync)
-- **Model Tier:** `Gemini 4 Argon (High)` / `Gemini 4 Hydrogen (High)`
+- **Model Tier:** `Gemini 4 Neon (High)` / `Gemini 4 Hydrogen (High)`
 - **Action:**
   1. Verify all `- [x]` checkboxes are closed, `## Review Triage Log` has zero unresolved `[intent_gap]`/`[bad_plan]`/`[patch]` items, and `Verdict: ASW APPROVED` is on disk.
   2. If review uncovered a recurring repo pitfall, either automate it into a check or record it in `<!-- bmad:context -->` in `AGENTS.md` and via `memory_manager.py --record-lesson`.

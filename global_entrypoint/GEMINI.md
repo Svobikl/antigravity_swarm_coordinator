@@ -13,7 +13,7 @@ Read and obey `.antigravity/rules/GLOBAL_DEVELOPMENT_RULES.md` before code-chang
 - **Mode 4:** emergency restore — smallest restoration only.
 - **Mode 5:** long-horizon program / research — immutable source-plan freeze, requirement coverage map (`REQUIREMENT_COVERAGE.csv`), hierarchical task graph (`TASK_GRAPH.json`), authoritative control plane (`PROGRAM_STATE.md`), research governance, and independent completion audit.
 
-## Quad-Model Cross-Family Cognitive Routing Protocol (Carbon High + Claude Opus 5.5 + Argon High + Hydrogen High)
+## Quad-Model Cross-Family Cognitive Routing Protocol (Carbon High + Claude Opus 5.5 + Neon High + Hydrogen High)
 
 To maximize reasoning depth, functional reliability, cross-family adversarial robustness, and token efficiency across product development, `swarm-coordinator` enforces a strict four-tier cross-family model routing policy:
 
@@ -27,38 +27,38 @@ To maximize reasoning depth, functional reliability, cross-family adversarial ro
      - **Pre-Execution Plan Audit Gate (`Plan Opposition Gate`):** Every implementation plan drafted by `Gemini 4 Carbon (High)` must be independently audited across the 6 adversarial vectors (`asw-plan-audit`, `invoke_opus_reviewer.py --mode plan-review`) before execution waves are dispatched.
      - **Diff & Execution Opposition Review (`Execution Opposition Gate`):** Adversarial code diff and evidence verification (`asw-opposition-reviewer`, `asw-reviewer`, `invoke_opus_reviewer.py --mode diff-review`) to falsify empirical claims, block heuristic shortcut substitutions, inspect boundary cases, and verify negative test proofs.
      - **Blind Candidate Selection & Reflection:** Acting as `channels["selector"]` in Harness² adaptation sweeps, ensuring primary proposers never grade or select their own proposals.
-3. **Tier 1C — Reviewer, Auditor & Remaining Non-Routine Coordinator Tasks (`Gemini 4 Argon (High)` / `Model="pro"`):**
+3. **Tier 1C — Reviewer, Auditor & Remaining Non-Routine Coordinator Tasks (`Gemini 4 Neon (High)` / `Model="pro"`):**
    - **Mandatory for reviews, QA audits, and remaining non-planning/non-implementation tasks:**
      - **Orchestration & Routing:** `swarm-coordinator` (wave orchestration after plan approval), `skill-router`, and `ui-ux-designer`.
      - **Problem Analysis & Root-Cause Debugging:** Bug reproduction analysis, failure-mode modeling, and complex debugging (`systematic-debugging`, `asw-debug`).
-     - **Non-Opus Reviews, Audits & Opus Quota Fallback:** `compliance-maintainability-reviewer`, `acceptance-reviewer-product-qa`, `security-reliability-reviewer`, `research-experiment-auditor`, `completion-auditor`, and fallback reviewer (`gemini-4-argon-high`) when Claude Opus 5.5 credits/quota are exhausted.
+     - **Non-Opus Reviews, Audits & Opus Quota Fallback:** `compliance-maintainability-reviewer`, `acceptance-reviewer-product-qa`, `security-reliability-reviewer`, `research-experiment-auditor`, `completion-auditor`, and fallback reviewer (`gemini-4-neon-high`) when Claude Opus 5.5 credits/quota are exhausted.
 4. **Tier 2 — High-Velocity Implementation & Routine Execution (`Gemini 4 Hydrogen (High)` / `Model="flash"`):**
    - **Mandatory for actual implementation and routine tasks:**
      - **Bounded Leaf Implementation:** Writing production code diffs under a decision-complete task contract (`implementation-developer`, `asw-loop`, `asw-start-work`).
      - **Automated Test Authoring & Execution:** RED-to-GREEN TDD cycles, unit/integration test implementation, and routine build/test runner validation (`validator-build-test-agent`, `interaction-e2e-tester`).
      - **Fast Local Scouting, Memory Sync & Mechanical Cleanup:** Rapid file/symbol lookup (`asw-explorer`), routine memory/doc sync (`memory-state-curator`, `documentation-handoff-agent`), and behavior-preserving code cleanup (`asw-cleanup`).
-5. **Orchestration Efficiency & Mandatory `invoke_subagent` Escalation Rule:** `Gemini 4 Carbon (High)` is the most expensive frontier model and is reserved strictly for initial planning and deep research. `Claude Opus 5.5` handles opposing reviews; `Gemini 4 Argon (High)` handles standard reviews, audits, debugging, and remaining orchestration tasks; `Gemini 4 Hydrogen (High)` executes the actual implementation waves and routine work. **Because the Antigravity UI model dropdown only controls the main conversation thread, reading a skill never changes the main thread's model automatically.** Therefore, whenever `/asw`, `/asw-loop`, `/asw-plan`, `/asw-start-work`, or `/asw-goal` is invoked (especially when the UI dropdown is set to `Gemini 4 Hydrogen`), the main agent is **strictly forbidden** from running planning, coding, and review all inline in a single Hydrogen thread — it **MUST** call `invoke_subagent` with explicit `Model` overrides (`TypeName="asw-planner", Model="pro"` for planning, `TypeName="asw-implementer", Model="flash"` for context-free leaf implementation, and `TypeName="asw-reviewer", Model="pro"` for 5-lens review).
+5. **Orchestration Efficiency & Mandatory `invoke_subagent` Escalation Rule:** `Gemini 4 Carbon (High)` is the most expensive frontier model and is reserved strictly for initial planning and deep research. `Claude Opus 5.5` handles opposing reviews; `Gemini 4 Neon (High)` handles standard reviews, audits, debugging, and remaining orchestration tasks; `Gemini 4 Hydrogen (High)` executes the actual implementation waves and routine work. **Because the Antigravity UI model dropdown only controls the main conversation thread, reading a skill never changes the main thread's model automatically.** Therefore, whenever `/asw`, `/asw-loop`, `/asw-plan`, `/asw-start-work`, or `/asw-goal` is invoked (especially when the UI dropdown is set to `Gemini 4 Hydrogen`), the main agent is **strictly forbidden** from running planning, coding, and review all inline in a single Hydrogen thread — it **MUST** call `invoke_subagent` with explicit `Model` overrides (`TypeName="asw-planner", Model="pro"` for planning, `TypeName="asw-implementer", Model="flash"` for context-free leaf implementation, and `TypeName="asw-reviewer", Model="pro"` for 5-lens review). Antigravity's `invoke_subagent` `Model` parameter enum is strictly `"inherit" | "flash_lite" | "flash" | "pro"` (mapping `Carbon High` & `Neon High` to `Model="pro"`, and `Hydrogen High` to `Model="flash"`), while exact model IDs (`claude-opus-5-5`, `gemini-4-neon-high`, `gemini-4-carbon`, `gemini-4-hydrogen`) apply to `.toml` subagent configs and native swarm pools.
 
 ## Skill Loading & Active Budget
 
 Enforce a strict budget of **maximum 8 active skills** loaded in context per leaf task:
 
-- `swarm-coordinator` (Sole global orchestration lead — **Gemini 4 Argon High**)
-- `skill-router` (Catalog routing & active budget enforcement — **Gemini 4 Argon High**)
+- `swarm-coordinator` (Sole global orchestration lead — **Gemini 4 Neon High**)
+- `skill-router` (Catalog routing & active budget enforcement — **Gemini 4 Neon High**)
 - `program-state-controller` (State machine, ledgers & task graph manager — **Gemini 4 Carbon High**)
 - `spec-product-analyst` (Requirements, criteria & non-goals — **Gemini 4 Carbon High**)
 - `software-architect` (Technical design & component boundaries — **Gemini 4 Carbon High**)
-- `ui-ux-designer` (Interface workflows & state-space specification — **Gemini 4 Argon High**)
+- `ui-ux-designer` (Interface workflows & state-space specification — **Gemini 4 Neon High**)
 - `implementation-developer` (Bounded diff implementation under task contract — **Gemini 4 Hydrogen High**)
 - `interaction-e2e-tester` (Interaction & end-to-end flow validation — **Gemini 4 Hydrogen High**)
 - `validator-build-test-agent` (Canonical command discovery & state validation — **Gemini 4 Hydrogen High**)
-- `compliance-maintainability-reviewer` (Conventions, code quality & blast radius — **Gemini 4 Argon High**)
-- `opposition-reviewer` (Adversarial falsification & leakage detection — **Claude Opus 5.5 / Gemini 4 Argon High**)
-- `acceptance-reviewer-product-qa` (Requirements verification with direct evidence — **Gemini 4 Argon High**)
-- `security-reliability-reviewer` (Trust boundaries & security reviews — **Gemini 4 Argon High**)
-- `research-experiment-auditor` (Quant/ML governance, OOS & fold safety — **Gemini 4 Argon High**)
+- `compliance-maintainability-reviewer` (Conventions, code quality & blast radius — **Gemini 4 Neon High**)
+- `opposition-reviewer` (Adversarial falsification & leakage detection — **Claude Opus 5.5 / Gemini 4 Neon High**)
+- `acceptance-reviewer-product-qa` (Requirements verification with direct evidence — **Gemini 4 Neon High**)
+- `security-reliability-reviewer` (Trust boundaries & security reviews — **Gemini 4 Neon High**)
+- `research-experiment-auditor` (Quant/ML governance, OOS & fold safety — **Gemini 4 Neon High**)
 - `memory-state-curator` (Advisory memory sync & secondary truth policy — **Gemini 4 Hydrogen High**)
-- `completion-auditor` (Independent mechanical closure & 100% completion audit — **Gemini 4 Argon High**)
+- `completion-auditor` (Independent mechanical closure & 100% completion audit — **Gemini 4 Neon High**)
 - `documentation-handoff-agent` (Documentation impact & final handoff audit — **Gemini 4 Hydrogen High**)
 
 Do not preload every skill. The installed catalog is a searchable on-disk reference library.
@@ -80,9 +80,9 @@ Do not preload every skill. The installed catalog is a searchable on-disk refere
 - **Quantitative / ML Research Rules:** Outer/OOS evaluation only (no leakage), fold-safe feature pipelines, runtime/checkpoint proofs, explicit missing/constant data handling, and complete trial accounting.
 - **Mandatory RTK (Token Killer) CLI Pre-Filtering:** All autonomous agents (`asw-implementer`, `asw-explorer`, `asw-reviewer`), coordinator directives, and developer workflows MUST default to `rtk` (`rtk-token-killer`) for high-volume execution (`rtk git status/diff/log`, `rtk pytest`, `rtk read -l aggressive`, `rtk find`, `rtk json`), delivering an 87.8% benchmarked token reduction. On Windows (`win32`), bypass `rtk tree` to avoid `tree.com` parameter conflicts, and preserve compound shell operators (`;`, `&&`, pipes).
 - **Authentication & Credential Protection:** Never attempt to read, print, log, or export the contents of authentication scripts, tokens, or credential variables. For authentication, invoke exclusively the prepared script/command without displaying sensitive parameters to standard output (stdout/stderr).
-- **Hard Completion Rule:** No task or program may be declared "100% complete" without mechanical plan/task-graph closure, 3-layer functional verification evidence on disk, independent audit sign-off by `completion-auditor` (running on **Gemini 4 Argon High**), and cross-family opposition review sign-off by **Claude Opus 5.5** (or automatic fallback to the **Deterministic Local Adversarial Engine (`invoke_opus_reviewer.py`) + `Gemini 4 Argon High`** when Opus credits/quota are exhausted).
+- **Hard Completion Rule:** No task or program may be declared "100% complete" without mechanical plan/task-graph closure, 3-layer functional verification evidence on disk, independent audit sign-off by `completion-auditor` (running on **Gemini 4 Neon High**), and cross-family opposition review sign-off by **Claude Opus 5.5** (or automatic fallback to the **Deterministic Local Adversarial Engine (`invoke_opus_reviewer.py`) + `Gemini 4 Neon High`** when Opus credits/quota are exhausted).
 - **Opus Credit Exhaustion Fallback & PowerShell Anti-Hang Law:**
-  - When `Claude Opus 5.5` credits/quota are exhausted or a subagent times out (`> 60s`), never stall or hang; immediately run `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --plan ".asw/plans/<slug>.md" --fallback-reason "opus_credits_exhausted"` (which executes all 6 plan vectors and 4 diff attack vectors deterministically offline in `< 2s`) paired with `Gemini 4 Argon (High)` review.
+  - When `Claude Opus 5.5` credits/quota are exhausted or a subagent times out (`> 60s`), never stall or hang; immediately run `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --plan ".asw/plans/<slug>.md" --fallback-reason "opus_credits_exhausted"` (which executes all 6 plan vectors and 4 diff attack vectors deterministically offline in `< 2s`) paired with `Gemini 4 Neon (High)` review.
   - Always pass `--files` to `invoke_opus_reviewer.py` instead of PowerShell `>` / `>>` redirection (which corrupts diffs with UTF-16LE `\x00` bytes).
   - Never run `Remove-Item -Force "<dir>\*"` without `-Recurse -Confirm:$false` in PowerShell (because subdirectories like `__pycache__` cause an infinite interactive `[Y/N]` stdin hang); use `python .antigravity/scripts/invoke_opus_reviewer.py --clean-scratch "<dir>"` instead.
 - **Cross-Session Failure Prevention Gates (Mandatory):**

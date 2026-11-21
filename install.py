@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import io
 import json
 import os
 import platform
@@ -23,7 +24,10 @@ import shutil
 import stat
 import subprocess
 import sys
+import tarfile
+import urllib.request
 from pathlib import Path
+from xml.sax.saxutils import escape as _xml_escape
 
 
 def _remove_readonly(func, path, _excinfo):
@@ -54,6 +58,34 @@ def _load_memory_manager(repo_root: Path):
     return mod
 
 
+def _download_rtk_macos_tarball(active_home: Path) -> Path | None:
+    """Download official prebuilt macOS rtk release tarball into ~/.local/bin/rtk."""
+    arch = platform.machine().lower()
+    asset = (
+        "rtk-aarch64-apple-darwin.tar.gz"
+        if arch in ("arm64", "aarch64")
+        else "rtk-x86_64-apple-darwin.tar.gz"
+    )
+    url = f"https://github.com/rtk-ai/rtk/releases/latest/download/{asset}"
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp:
+            raw = resp.read()
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tf:
+            for member in tf.getmembers():
+                if member.isfile() and Path(member.name).name == "rtk":
+                    extracted = tf.extractfile(member)
+                    if extracted is None:
+                        continue
+                    dest_bin = active_home / ".local" / "bin" / "rtk"
+                    dest_bin.parent.mkdir(parents=True, exist_ok=True)
+                    dest_bin.write_bytes(extracted.read())
+                    os.chmod(dest_bin, 0o755)
+                    return dest_bin
+    except Exception:
+        pass
+    return None
+
+
 def ensure_rtk_installed(
     *,
     home_dir: Path | None = None,
@@ -63,11 +95,12 @@ def ensure_rtk_installed(
 
     Searches:
       1. System PATH via shutil.which("rtk")
-      2. Windows WinGet package directories under %LOCALAPPDATA%/Microsoft/WinGet/Packages/rtk-ai.rtk*
-      3. Cargo binary directories (~/.cargo/bin/rtk)
-      4. macOS / Linux Homebrew paths (/opt/homebrew/bin/rtk, /usr/local/bin/rtk)
+      2. Active-home Cargo and local binary directories (~/.cargo/bin/rtk, ~/.local/bin/rtk)
+      3. When not isolated (home_dir is None or home_dir == Path.home()), host Cargo,
+         Windows WinGet packages, and macOS/Linux Homebrew paths
     """
     active_home = home_dir if home_dir is not None else Path.home()
+    isolated = home_dir is not None and home_dir.resolve() != Path.home().resolve()
     is_win = platform.system() == "Windows"
     bin_name = "rtk.exe" if is_win else "rtk"
 
@@ -77,28 +110,30 @@ def ensure_rtk_installed(
     if which_path:
         candidate_paths.append(Path(which_path))
 
-    # Cargo bin
+    # Active-home Cargo and local bin
     candidate_paths.append(active_home / ".cargo" / "bin" / bin_name)
-    candidate_paths.append(Path.home() / ".cargo" / "bin" / bin_name)
+    candidate_paths.append(active_home / ".local" / "bin" / bin_name)
 
-    # Windows WinGet packages
-    local_appdata = os.environ.get("LOCALAPPDATA")
-    if local_appdata:
-        winget_root = Path(local_appdata) / "Microsoft" / "WinGet" / "Packages"
-        if winget_root.is_dir():
-            try:
-                for pkg_dir in winget_root.glob("rtk-ai.rtk*"):
-                    if pkg_dir.is_dir():
-                        for exe in pkg_dir.rglob("rtk.exe"):
-                            if exe.is_file():
-                                candidate_paths.append(exe)
-            except Exception:
-                pass
+    if not isolated:
+        candidate_paths.append(Path.home() / ".cargo" / "bin" / bin_name)
 
-    # macOS / Linux Homebrew and standard bins
-    candidate_paths.append(Path("/opt/homebrew/bin/rtk"))
-    candidate_paths.append(Path("/usr/local/bin/rtk"))
-    candidate_paths.append(active_home / ".local" / "bin" / "rtk")
+        # Windows WinGet packages
+        local_appdata = os.environ.get("LOCALAPPDATA")
+        if local_appdata:
+            winget_root = Path(local_appdata) / "Microsoft" / "WinGet" / "Packages"
+            if winget_root.is_dir():
+                try:
+                    for pkg_dir in winget_root.glob("rtk-ai.rtk*"):
+                        if pkg_dir.is_dir():
+                            for exe in pkg_dir.rglob("rtk.exe"):
+                                if exe.is_file():
+                                    candidate_paths.append(exe)
+                except Exception:
+                    pass
+
+        # macOS / Linux Homebrew standard bins
+        candidate_paths.append(Path("/opt/homebrew/bin/rtk"))
+        candidate_paths.append(Path("/usr/local/bin/rtk"))
 
     def _verify_bin(p: Path) -> str | None:
         if not p.is_file():
@@ -121,7 +156,7 @@ def ensure_rtk_installed(
         if v:
             return {"installed": True, "version": v, "path": str(cand)}
 
-    # If missing and attempt_install=True, try platform package manager with 15s timeout
+    # If missing and attempt_install=True, try platform package manager (plus Darwin tarball fallback)
     if attempt_install:
         try:
             if is_win:
@@ -132,7 +167,7 @@ def ensure_rtk_installed(
                     timeout=15,
                 )
             elif platform.system() == "Darwin":
-                subprocess.run(["brew", "install", "rtk"], capture_output=True, text=True, timeout=15)
+                subprocess.run(["brew", "install", "rtk"], capture_output=True, text=True, timeout=120)
             else:
                 subprocess.run(["cargo", "install", "rtk-ai"], capture_output=True, text=True, timeout=15)
         except Exception:
@@ -149,6 +184,13 @@ def ensure_rtk_installed(
             v = _verify_bin(cand)
             if v:
                 return {"installed": True, "version": v, "path": str(cand)}
+
+        if platform.system() == "Darwin":
+            tar_bin = _download_rtk_macos_tarball(active_home)
+            if tar_bin is not None:
+                v = _verify_bin(tar_bin)
+                if v:
+                    return {"installed": True, "version": v, "path": str(tar_bin)}
 
     return {"installed": False, "version": None, "path": None}
 
@@ -210,6 +252,334 @@ def ensure_chub_installed(
                 return {"installed": True, "version": ver, "path": chub_bin, "config_seeded": seeded}
 
     return {"installed": False, "version": None, "path": None, "config_seeded": seeded}
+
+
+_LAYA_SITECUSTOMIZE_PY = '''"""Compatibility shim for torch 2.2.x on Python 3.12+ (e.g., Intel macOS x86_64)."""
+import sys
+
+if sys.version_info >= (3, 12):
+    try:
+        import torch
+
+        if getattr(torch, "__version__", "").startswith("2.2."):
+            def _noop_compile(model=None, *args, **kwargs):
+                if model is not None and callable(model):
+                    return model
+
+                def _decorator(fn):
+                    return fn
+
+                return _decorator
+
+            torch.compile = _noop_compile
+    except Exception:
+        pass
+'''
+
+_LAYA_DAEMON_PY = '''#!/usr/bin/env python3
+"""Antigravity Swarm Coordinator Laya System 1 HTTP Daemon.
+
+Exposes Laya's native `/health`, `/v1/route`, `/v1/systemone`, and `/v1/systemone/batch`
+routes alongside `/predict` (`{"text": ..., "questions": ...}`) for `decision_router.py`.
+"""
+from __future__ import annotations
+
+import asyncio
+import os
+import socket
+from concurrent.futures import ThreadPoolExecutor
+
+import torch
+import uvicorn
+from fastapi import HTTPException, Request
+from fastapi.responses import JSONResponse
+from uvicorn.protocols.http.auto import AutoHTTPProtocol
+
+from laya.serve import build_router, create_app
+
+
+def build_daemon_app():
+    threads = int(os.environ.get("LAYA_THREADS", "4"))
+    if threads > 0:
+        torch.set_num_threads(threads)
+    if os.environ.get("LAYA_FLUSH_DENORMAL", "1") == "1":
+        torch.set_flush_denormal(True)
+
+    router = build_router()
+    app = create_app(router=router)
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="laya-predict")
+    default_model = os.environ.get("LAYA_DEFAULT_MODEL", "multilingual")
+
+    @app.post("/predict")
+    async def predict_alias(request: Request):
+        try:
+            body = await request.json()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"invalid json: {exc}") from exc
+        if not isinstance(body, dict) or "questions" not in body:
+            raise HTTPException(status_code=400, detail="request body must include 'questions'")
+        state = body.get("state", body.get("text", ""))
+        questions = body["questions"]
+        model = body.get("model") or default_model
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            pool, lambda: router.predict(state, questions, model=model)
+        )
+        return JSONResponse(content=result)
+
+    return app
+
+
+def main() -> None:
+    class NoDelayHTTPProtocol(AutoHTTPProtocol):
+        def connection_made(self, transport):
+            sock = transport.get_extra_info("socket")
+            if sock is not None and sock.family in (socket.AF_INET, socket.AF_INET6):
+                try:
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                except OSError:
+                    pass
+            super().connection_made(transport)
+
+    host = os.environ.get("LAYA_HOST", "127.0.0.1")
+    port = int(os.environ.get("LAYA_PORT", "8765"))
+    log_level = os.environ.get("LAYA_LOG_LEVEL", "warning")
+    uvicorn.run(
+        build_daemon_app(),
+        host=host,
+        port=port,
+        log_level=log_level,
+        http=NoDelayHTTPProtocol,
+    )
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+
+def _resolve_venv_site_packages(venv_dir: Path, laya_venv_py: Path, is_win: bool) -> Path:
+    if laya_venv_py.is_file():
+        try:
+            res = subprocess.run(
+                [str(laya_venv_py), "-c", "import sysconfig; print(sysconfig.get_paths()['purelib'])"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                return Path(res.stdout.strip())
+        except Exception:
+            pass
+    if is_win:
+        return venv_dir / "Lib" / "site-packages"
+    lib_dir = venv_dir / "lib"
+    if lib_dir.is_dir():
+        matches = sorted(lib_dir.glob("python*/site-packages"))
+        if matches:
+            return matches[0]
+    return lib_dir / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+
+
+def ensure_laya_installed(
+    *,
+    home_dir: Path,
+    attempt_install: bool,
+    disable_decision_model: bool = False,
+) -> dict[str, object]:
+    """Provision or probe the isolated Laya System 1 venv, daemon, and Darwin LaunchAgent."""
+    is_win = platform.system() == "Windows"
+    venv_dir = home_dir / ".gemini" / "laya-venv"
+    laya_venv_py = venv_dir / ("Scripts/python.exe" if is_win else "bin/python")
+    daemon_py = venv_dir / "laya_daemon.py"
+    plist_path = home_dir / "Library" / "LaunchAgents" / "com.antigravity.laya-daemon.plist"
+
+    if disable_decision_model:
+        return {
+            "installed": False,
+            "venv_installed": False,
+            "venv_python": None,
+            "daemon_script": None,
+            "sitecustomize_written": False,
+            "plist_path": None,
+            "use_daemon": False,
+            "disabled": True,
+        }
+
+    def _probe_py(py_exe: Path, stmt: str = "import laya") -> bool:
+        if not py_exe.is_file():
+            return False
+        try:
+            res = subprocess.run([str(py_exe), "-c", stmt], capture_output=True, text=True, timeout=15)
+            return res.returncode == 0
+        except Exception:
+            return False
+
+    sitecustomize_written = False
+    wrote_plist: str | None = str(plist_path) if plist_path.is_file() else None
+
+    if attempt_install:
+        venv_existed = laya_venv_py.is_file()
+        venv_dir.parent.mkdir(parents=True, exist_ok=True)
+        uv_bin = shutil.which("uv")
+
+        if not venv_existed:
+            created = False
+            if uv_bin:
+                try:
+                    res_uv = subprocess.run(
+                        [uv_bin, "venv", "--python", "3.12", str(venv_dir)],
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                    )
+                    created = res_uv.returncode == 0 and laya_venv_py.is_file()
+                except Exception:
+                    created = False
+            if not created:
+                try:
+                    subprocess.run(
+                        [sys.executable, "-m", "venv", str(venv_dir)],
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                    )
+                except Exception:
+                    pass
+
+        if laya_venv_py.is_file():
+            if not venv_existed or not _probe_py(laya_venv_py, "import laya, fastapi, uvicorn"):
+                packages = [
+                    "laya",
+                    "numpy<2",
+                    "transformers>=4.48,<5",
+                    "huggingface-hub<1",
+                    "uvicorn",
+                    "fastapi",
+                ]
+                pip_ok = False
+                if uv_bin:
+                    try:
+                        res_pip = subprocess.run(
+                            [uv_bin, "pip", "install", "--python", str(laya_venv_py), *packages],
+                            capture_output=True,
+                            text=True,
+                            timeout=300,
+                        )
+                        pip_ok = res_pip.returncode == 0
+                    except Exception:
+                        pip_ok = False
+                if not pip_ok:
+                    try:
+                        subprocess.run(
+                            [str(laya_venv_py), "-m", "pip", "install", *packages],
+                            capture_output=True,
+                            text=True,
+                            timeout=300,
+                        )
+                    except Exception:
+                        pass
+
+            site_pkgs = _resolve_venv_site_packages(venv_dir, laya_venv_py, is_win)
+            site_pkgs.mkdir(parents=True, exist_ok=True)
+            (site_pkgs / "sitecustomize.py").write_text(_LAYA_SITECUSTOMIZE_PY, encoding="utf-8")
+            sitecustomize_written = True
+
+        venv_dir.mkdir(parents=True, exist_ok=True)
+        daemon_py.write_text(_LAYA_DAEMON_PY, encoding="utf-8")
+
+    host_laya_ok = False
+    try:
+        import laya  # noqa: F401
+
+        host_laya_ok = True
+    except ImportError:
+        host_laya_ok = False
+
+    venv_laya_ok = _probe_py(laya_venv_py, "import laya")
+    use_daemon = bool(venv_laya_ok and daemon_py.is_file())
+
+    if attempt_install and platform.system() == "Darwin" and use_daemon:
+        plist_path.parent.mkdir(parents=True, exist_ok=True)
+        plist_xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+            '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+            '<plist version="1.0">\n'
+            "<dict>\n"
+            "  <key>Label</key>\n"
+            "  <string>com.antigravity.laya-daemon</string>\n"
+            "  <key>ProgramArguments</key>\n"
+            "  <array>\n"
+            f"    <string>{_xml_escape(str(laya_venv_py))}</string>\n"
+            f"    <string>{_xml_escape(str(daemon_py))}</string>\n"
+            "  </array>\n"
+            "  <key>EnvironmentVariables</key>\n"
+            "  <dict>\n"
+            "    <key>LAYA_HOST</key>\n"
+            "    <string>127.0.0.1</string>\n"
+            "    <key>LAYA_PORT</key>\n"
+            "    <string>8765</string>\n"
+            "    <key>LAYA_DEVICE</key>\n"
+            "    <string>cpu</string>\n"
+            "    <key>LAYA_MODELS</key>\n"
+            "    <string>multilingual</string>\n"
+            "    <key>LAYA_DEFAULT_MODEL</key>\n"
+            "    <string>multilingual</string>\n"
+            "    <key>LAYA_MAX_LOADED</key>\n"
+            "    <string>1</string>\n"
+            "    <key>LAYA_PRELOAD</key>\n"
+            "    <string>1</string>\n"
+            "    <key>LAYA_THREADS</key>\n"
+            "    <string>4</string>\n"
+            "    <key>LAYA_FLUSH_DENORMAL</key>\n"
+            "    <string>1</string>\n"
+            "    <key>HF_HUB_DISABLE_SYMLINKS_WARNING</key>\n"
+            "    <string>1</string>\n"
+            "  </dict>\n"
+            "  <key>RunAtLoad</key>\n"
+            "  <true/>\n"
+            "  <key>KeepAlive</key>\n"
+            "  <true/>\n"
+            "  <key>StandardOutPath</key>\n"
+            f"  <string>{_xml_escape(str(venv_dir / 'laya-daemon.out.log'))}</string>\n"
+            "  <key>StandardErrorPath</key>\n"
+            f"  <string>{_xml_escape(str(venv_dir / 'laya-daemon.err.log'))}</string>\n"
+            "</dict>\n"
+            "</plist>\n"
+        )
+        plist_path.write_text(plist_xml, encoding="utf-8")
+        wrote_plist = str(plist_path)
+
+        if home_dir.resolve() == Path.home().resolve() and not os.environ.get("PYTEST_CURRENT_TEST"):
+            uid = str(os.getuid()) if hasattr(os, "getuid") else "501"
+            try:
+                subprocess.run(
+                    ["launchctl", "bootout", f"gui/{uid}", str(plist_path)],
+                    capture_output=True,
+                    timeout=10,
+                )
+                res_boot = subprocess.run(
+                    ["launchctl", "bootstrap", f"gui/{uid}", str(plist_path)],
+                    capture_output=True,
+                    timeout=10,
+                )
+                if res_boot.returncode != 0:
+                    subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True, timeout=10)
+                    subprocess.run(["launchctl", "load", "-w", str(plist_path)], capture_output=True, timeout=10)
+            except Exception:
+                pass
+
+    return {
+        "installed": bool(host_laya_ok or venv_laya_ok),
+        "venv_installed": bool(venv_laya_ok),
+        "venv_python": str(laya_venv_py) if laya_venv_py.is_file() else None,
+        "daemon_script": str(daemon_py) if daemon_py.is_file() else None,
+        "sitecustomize_written": sitecustomize_written,
+        "plist_path": wrote_plist,
+        "use_daemon": use_daemon,
+        "disabled": False,
+    }
 
 
 def _load_golden_skill_names(repo_root: Path) -> set[str]:
@@ -325,6 +695,15 @@ def run_install(
                 if clean_skills and len(skill_names) >= 50:
                     for existing in list(d_root.iterdir()):
                         if existing.is_dir() and existing.name not in skill_names:
+                            backup_dst = (
+                                gemini_dir
+                                / "antigravity-backup"
+                                / "skills-backup"
+                                / d_root.parent.name
+                                / existing.name
+                            )
+                            backup_dst.parent.mkdir(parents=True, exist_ok=True)
+                            copy_tree_clean(existing, backup_dst)
                             shutil.rmtree(existing, onerror=_remove_readonly)
                             cleaned += 1
                 for s_dir in skill_dirs:
@@ -495,6 +874,12 @@ def run_install(
         summary["chub_config_seeded"] = _seed_chub_config(home_dir)
 
     # 7. System 1 Decision Router & Laya Status (preserve existing tuned keys)
+    laya_status = ensure_laya_installed(
+        home_dir=home_dir,
+        attempt_install=install_laya,
+        disable_decision_model=disable_decision_model,
+    )
+
     base_decision_cfg: dict[str, object] = {
         "enabled": not disable_decision_model,
         "prefer_gpu": True,
@@ -507,8 +892,8 @@ def run_install(
         "use_local_snapshot_fastload": True,
     }
     for src_cfg_cand in (
-        repo_root / ".antigravity" / "decision_config.json",
         repo_root / "core_framework" / "decision_config.json",
+        repo_root / ".antigravity" / "decision_config.json",
         gemini_dir / "decision_config.json",
     ):
         if src_cfg_cand.is_file():
@@ -516,18 +901,18 @@ def run_install(
                 loaded_cfg = json.loads(src_cfg_cand.read_text(encoding="utf-8"))
                 if isinstance(loaded_cfg, dict):
                     base_decision_cfg.update(loaded_cfg)
-                    break
             except Exception:
                 pass
     base_decision_cfg["enabled"] = not disable_decision_model
+    if laya_status.get("use_daemon") and not disable_decision_model:
+        base_decision_cfg["use_daemon"] = True
+        base_decision_cfg["server_url"] = "http://127.0.0.1:8765"
     cfg_json = json.dumps(base_decision_cfg, indent=2) + "\n"
     gemini_dir.mkdir(parents=True, exist_ok=True)
     (gemini_dir / "decision_config.json").write_text(cfg_json, encoding="utf-8")
-    if resolved_target is not None:
+    if resolved_target is not None and resolved_target.resolve() != repo_root.resolve():
         (resolved_target / ".antigravity").mkdir(parents=True, exist_ok=True)
         (resolved_target / ".antigravity" / "decision_config.json").write_text(cfg_json, encoding="utf-8")
-    elif home_dir == Path.home() and (repo_root / ".antigravity").is_dir():
-        (repo_root / ".antigravity" / "decision_config.json").write_text(cfg_json, encoding="utf-8")
     summary["decision_model_enabled"] = not disable_decision_model
 
     dr_dest = gemini_dir / "scripts" / "decision_router.py"
@@ -565,18 +950,7 @@ def run_install(
     except Exception:
         summary["decision_router_device"] = "cpu"
 
-    if install_laya:
-        try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "laya"], capture_output=True, timeout=60)
-        except Exception:
-            pass
-
-    try:
-        import laya  # noqa: F401
-
-        summary["laya_sdk_installed"] = True
-    except ImportError:
-        summary["laya_sdk_installed"] = False
+    summary["laya_sdk_installed"] = bool(laya_status.get("installed"))
 
     return summary
 

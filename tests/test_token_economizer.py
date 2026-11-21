@@ -237,8 +237,8 @@ class TestTranscriptReaderAndEffectiveTokens(unittest.TestCase):
             "cache_creation_input_tokens": 400,
             "output_tokens": 100,
         }
-        # gemini-4-carbon / argon / hydrogen: 1.0*1000 + 0.05*2000 + 0.0*400 + 5.0*100 = 1600.0
-        for m in ("gemini-4-carbon", "gemini-4-argon", "gemini-4-hydrogen"):
+        # gemini-4-carbon / neon / hydrogen: 1.0*1000 + 0.05*2000 + 0.0*400 + 5.0*100 = 1600.0
+        for m in ("gemini-4-carbon", "gemini-4-neon", "gemini-4-hydrogen"):
             self.assertAlmostEqual(te.effective_tokens(sample, model=m), 1600.0, places=6)
         # claude-opus-5-5: 1.0*1000 + 0.05*2000 + 1.25*400 + 5.0*100 = 2100.0
         self.assertAlmostEqual(te.effective_tokens(sample, model="claude-opus-5-5"), 2100.0, places=6)

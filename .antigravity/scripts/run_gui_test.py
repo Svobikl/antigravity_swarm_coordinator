@@ -21,8 +21,8 @@ Executes real-surface GUI verification for:
      - Drives Playwright (headless/headed Chromium) when available, with automatic fallback to
        deterministic HTTP + DOM structural inspection.
      - Recursively traverses both Light DOM and open Shadow DOM roots (`shadowRoot`) to detect
-       Home Assistant / Web Component error cards (`<hui-error-card>`, `<hui-error-badge>`,
-       `"Configuration error"`, `"Custom element doesn't exist"`), console.error, uncaught
+       Web Component error cards (`<*-error-card>`, `<*-error-badge>`, `<error-card>`,
+       `<vite-error-overlay>`, `"Configuration error"`, `"Custom element doesn't exist"`), console.error, uncaught
        page exceptions, HTTP 4xx/5xx failures, missing UI text (--assert-text), missing
        interactive selectors (--assert-selector), and forbidden states (--forbid-text,
        --forbid-selector).
@@ -52,8 +52,7 @@ DEFAULT_FORBIDDEN_ERROR_SELECTORS: tuple[str, ...] = (
     "vite-error-overlay",
     "error-boundary",
     "error-card",
-    "hui-error-card",
-    "hui-error-badge",
+    "error-badge",
 )
 
 DEFAULT_FORBIDDEN_ERROR_TEXTS: tuple[str, ...] = (
@@ -103,6 +102,9 @@ class _DOMInspector(HTMLParser):
             return sel[1:] in self.ids
         if sel.startswith("."):
             return sel[1:] in self.classes
+        if sel.startswith("*"):
+            suffix = sel[1:].lower()
+            return any(t.endswith(suffix) for t in self.tags)
         return sel.lower() in self.tags
 
 
@@ -296,6 +298,10 @@ def _try_playwright_verification(
                 if _selector_present(err_sel):
                     findings.append(f"Forbidden error/UI element detected in rendered DOM/Shadow DOM: <{err_sel}>")
 
+            for tag in sorted(all_tags):
+                if tag.endswith(("-error-card", "-error-badge")):
+                    findings.append(f"Forbidden error/UI element detected in rendered DOM/Shadow DOM: <{tag}>")
+
             for err_txt in list(DEFAULT_FORBIDDEN_ERROR_TEXTS) + list(forbid_texts):
                 if err_txt and err_txt.lower() in combined_text.lower():
                     findings.append(f"Forbidden error/broken-state text detected in rendered DOM/Shadow DOM: {err_txt!r}")
@@ -404,6 +410,10 @@ def run_web_gui_test(
         for err_sel in list(DEFAULT_FORBIDDEN_ERROR_SELECTORS) + list(bad_selectors):
             if inspector.matches_selector(err_sel):
                 findings.append(f"Forbidden error/UI element detected in rendered DOM: <{err_sel}>")
+
+        for tag in sorted(inspector.tags):
+            if tag.endswith(("-error-card", "-error-badge")):
+                findings.append(f"Forbidden error/UI element detected in rendered DOM: <{tag}>")
 
         body_lower = body.lower()
         for err_txt in list(DEFAULT_FORBIDDEN_ERROR_TEXTS) + list(bad_texts):
