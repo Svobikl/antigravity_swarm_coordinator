@@ -2,7 +2,7 @@
 
 Complete backup, distribution, and cross-platform setup package (**Apple macOS**, **Windows**, and **Linux**) for the default **Swarm Coordinator**, **Google Research `Harness²` recursive adaptation engine**, **Quad-Model Cross-Family Governance Framework** (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 4 Neon High` + `Gemini 4 Hydrogen High`), and **201 Curated Multi-Domain Golden Catalog Skills** for **Google Antigravity** and **Gemini CLI**.
 
-This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 201 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **128 automated verification tests**.
+This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 201 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **164 automated verification tests**.
 
 ---
 
@@ -237,7 +237,7 @@ Antigravity Swarm Coordinator incorporates a local System 1 Decision Engine (`de
 
 - **Automatic Mode & Tier Routing (CZ/EN):** Evaluates developer prompts (even when explicit `/asw*` commands are omitted) to classify execution modes (Mode 0–5) and assign the appropriate Quad-Model tier (`Gemini 4 Carbon High` for planning/research vs `Gemini 4 Hydrogen High` for implementation).
 - **Automated UI/GUI Verification Triggering:** Detects UI/frontend modification intents (`noul >= 0.75`), automatically enforcing `requires_gui_verification` and localhost Playwright/browser testing.
-- **Active Skill Budget Selection:** Bounded skill routing returning `<= 8` relevant skills from the 201-skill Golden Catalog (including `context-hub` for external API/SDK tasks).
+- **Active Skill Budget Selection (Word-Boundary + Negative-Example Routing):** Bounded skill routing returning `<= 8` relevant skills from the 201-skill Golden Catalog (including `context-hub` for external API/SDK tasks), eliminating substring false positives via word-boundary matching and `SKILL_NEGATIVE_EXAMPLES` disambiguation. Verified on the live 30-prompt bilingual EN/CZ benchmark (`python .antigravity/scripts/decision_router.py --benchmark-routing`): **`38.0% -> 100.0%` Precision@k**, **`F1: 0.4399 -> 1.0000`**, **`-69.14%` false-positive rate**, and **`0.0` `opt_tokens`**.
 - **Review Finding Triage:** Classifies review findings in `step-04-review` to `[patch]`, `[bad_plan]`, or `[defer]` based on defect severity.
 - **VRAM-Aware Hardware Device Selector (`select_optimal_device`):** Inspects GPU VRAM and compute capability via `nvidia-smi`. Automatically selects `"cuda"` when free VRAM `>= 2048 MiB` and total VRAM `>= 4096 MiB` (compute capability `>= 7.0`), and safely falls back to `"cpu"` (`max_loaded=1`) on low-VRAM GPUs like NVIDIA GTX 1060 3GB (`~600 MiB` free) to prevent CUDA OOM crashes.
 - **Configurable Enable/Disable Switch (Low-RAM / Constrained PC Protection):** Supports disabling the Decision Engine completely for low-RAM machines or constrained environments via CLI (`python .antigravity/scripts/decision_router.py --disable` / `--enable`), config file (`decision_config.json` in `.antigravity/` or `~/.gemini/`), installer flag (`python install.py --disable-decision-model`), or environment variable (`ASW_DECISION_MODEL_ENABLED=0`). When disabled, `asw-hook.mjs` and `decision_router.py` short-circuit in 0 ms with zero background processes, zero memory footprint, and zero side effects.
@@ -257,6 +257,11 @@ Selective, zero-API-overhead integration of key mechanisms from `microsoft/Token
   - Folds active prompt-turn tool calls into `SpiralState` (edit churn, distinct files, MD5-normalized failure signature stagnation) and evaluates suspected loops locally in `< 40 ms` via `decision_router.py --mode judge-loop` (`Laya` head + calibrated System 1) against a resolved-turn `p90` `EnvelopeTracker`. Emits at most `r = 1` `ephemeralMessage` hypothesis redirect (`<= 95` tokens) per turn while sparing productive multi-file work with changing failure signatures (`0` false nudges).
 - **Cache-Aware `effective_tokens` Transcript Accounting & A/B Benchmark (`--benchmark`):**
   - Measures true provider-billed cost equivalents (`1.0x` fresh `input_tokens`, `0.05x` `cache_read_tokens`, `5.0x` `output_tokens`), achieving **35.82% raw token reduction** and **39.61% post-warmup `effective_tokens` reduction** with `0.0` optimizer API token overhead.
+- **Layer-6 `2x` Cost-Spike Tripwire & Harness Health Scorecard (`--scorecard`):**
+  - Records per-session `effective_tokens` and outcomes during `--fold`, fires a deterministic `cost_spike_tripwire` when spend hits `>= 2.0x` the rolling mean (`min_samples >= 3`), and reports all 6 Table VIII observability metrics via `python .antigravity/scripts/token_economizer.py --scorecard --repo . --json` (`opt_tokens = 0.0`).
+- **Stale Checkpoint TTL & Zero-Artifact Post-Edit Sensor (`asw-stop-check.mjs` / `asw-lsp-check.mjs`):**
+  - `asw-stop-check.mjs` enforces a `6h` stale checkpoint TTL, plan-matching, and `deferred-work.md` / `status: done` filtering so completed or stale `.asw/start-work/state.json` files never force unapproved plan execution.
+  - `asw-lsp-check.mjs` validates `.py` edits with zero-artifact `ast.parse` (`0` `.pyc`/`__pycache__` clutter) and immediately unlinks `.asw/.pending-lsp-diagnostic.json` when a clean edit passes.
 
 ---
 
@@ -464,7 +469,7 @@ antigravity_swarm_coordinator/
 │       ├── scripts/                   # ESM/Node.js hook, RTK rewriter, LSP, and status scripts
 │       └── skills/                    # ASW utility skills (asw-plan, asw-loop, asw-harness-adapt, ...)
 │
-├── tests/                             # 128 automated unit, negative, E2E, and cross-platform tests
+├── tests/                             # 154 tests in tests/ (+ 10 skill script tests = 164 total)
 │   ├── test_token_economizer.py       # EnvFacts lifecycle, TurnGuard, EnvelopeTracker & effective_tokens
 │   ├── test_token_economizer_e2e.py   # Hook channel hygiene & 6-session A/B token benchmark
 │   ├── test_quality_benchmark.py      # SWE-MiniBench-5 oracle, 8-tool isolation, 4-tier & README parity

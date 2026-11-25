@@ -212,7 +212,7 @@ def select_optimal_device(
         }
 
 
-CORE_SKILL_CATALOG_KEYWORDS = {
+LEGACY_SKILL_CATALOG_KEYWORDS: dict[str, list[str]] = {
     "fastapi-pro": ["fastapi", "uvicorn", "pydantic", "rest api", "endpoint"],
     "playwright-skill": ["playwright", "browser", "e2e", "gui", "web test"],
     "quant-analyst": ["quant", "alpha", "trading", "sharpe", "backtest", "portfolio"],
@@ -243,6 +243,207 @@ CORE_SKILL_CATALOG_KEYWORDS = {
         "api docs", "api", "sdk", "aws",
     ],
 }
+
+CORE_SKILL_CATALOG_KEYWORDS: dict[str, list[str]] = {
+    "fastapi-pro": ["fastapi", "uvicorn", "pydantic", "rest api", "endpoint", "endpoints"],
+    "playwright-skill": ["playwright", "browser", "e2e", "gui", "web test", "web tests", "prohlížeč", "prohlížeči"],
+    "quant-analyst": ["quant", "quantitative", "kvantitativní", "alpha", "trading", "sharpe", "backtest", "backtesting", "portfolio"],
+    "risk-metrics-calculation": ["risk", "risk metrics", "var", "cvar", "drawdown", "drawdownu", "volatility", "volatilita", "riziko"],
+    "frontend-design": ["frontend", "css", "html", "tailwind", "scss", "sass", "layout", "vzhled", "design"],
+    "react-patterns": ["react", "jsx", "tsx", "usestate", "useeffect", "redux", "nextjs", "next.js", "component", "components", "hook", "hooks", "komponenta", "komponenty", "state"],
+    "postgres-best-practices": ["postgres", "postgresql", "pgvector", "psycopg", "asyncpg", "alembic", "psql", "sql", "migration", "migrations", "migrace", "index", "indexes", "vacuum"],
+    "sql-pro": ["sql", "query", "queries", "database", "databáze", "databázi", "schema", "cte", "dotaz", "dotazy"],
+    "docker-expert": ["docker", "container", "containers", "kontejner", "kontejnery", "dockerfile", "docker compose", "compose"],
+    "odoo-module-developer": ["odoo", "erp", "qweb", "ir.model", "module"],
+    "obs-memory": ["obsidian", "vault", "paměť", "paměti", "wikilink", "memory", "note", "notes", "poznámka", "poznámky"],
+    "agent-memory": ["agent-memory", "episodic", "recall", "zkušenosti"],
+    "ui-ux-designer": ["ui", "ux", "dashboard", "dashboardu", "graf", "grafy", "prohlížeč", "prohlížeči", "rozhraní", "wireframe", "usability"],
+    "asw-test-gui": ["asw-test-gui", "gui test", "screen test", "native app"],
+    "test-driven-development": ["tdd", "test", "tests", "testing", "red green", "unit test", "unit tests", "testy", "testů", "otestuj"],
+    "rtk-token-killer": ["rtk", "rtk-token-killer", "cli proxy", "token reduction", "token killer", "token"],
+    "software-architect": ["architect", "architecture", "architektura", "architekturu", "design"],
+    "compliance-maintainability-reviewer": ["review", "lint", "linter", "compliance", "revize", "revizi"],
+    "opposition-reviewer": ["opus", "opposition", "adversarial", "falsify"],
+    "systematic-debugging": ["debug", "debugging", "crash", "pád", "chyba", "chybu", "chyby", "chyb", "hang", "bug", "bugs", "traceback", "ladění"],
+    "python-pro": ["python", "pythonu", "pytest", "asyncio", "pydantic"],
+    "typescript-pro": ["typescript", "ts", "node", "nodejs", "npm"],
+    "context-hub": [
+        "context-hub", "context hub", "chub", "annotate",
+        "stripe", "openai", "anthropic", "supabase", "cloudflare",
+        "webhook", "oauth", "graphql", "rest api", "rest client",
+        "endpoint", "third-party", "external api", "library docs",
+        "api docs", "sdk docs", "api", "sdk", "aws",
+    ],
+    "rust-pro": ["rust", "rustu", "cargo", "tokio", "serde", "crate", "crates", "rustc", "clippy", "rustlang", "borrow checker"],
+    "golang-pro": ["golang", "go", "goroutine", "goroutines", "go.mod", "go test", "go build", "gopath", "gin-gonic", "go-chi"],
+    "cpp-pro": ["c++", "cpp", "cmake", "raii", "std::", "clang", "g++", "msvc", "c++20", "c++23", "c++17", "vcpkg", "conan"],
+    "kubernetes-architect": ["kubernetes", "k8s", "helm", "kubectl", "helm chart", "ingress", "argocd", "gitops", "kustomize", "statefulset", "pod", "pods"],
+    "terraform-skill": ["terraform", "tfstate", "tfvars", "hcl", "iac", "infrastructure as code", "opentofu", "terraform plan", "terraform apply"],
+    "security-auditor": ["security", "vulnerability", "vulnerabilities", "owasp", "cve", "devsecops", "xss", "csrf", "sqli", "sql injection", "penetration", "hardening", "security audit", "bezpečnost", "bezpečnostní", "zranitelnost", "zranitelnosti"],
+    "polars": ["polars", "lazyframe", "parquet", "scan_parquet", "pl.dataframe", "dataframe", "dataframes"],
+    "pptx-official": ["pptx", "powerpoint", "powerpointu", "pitch deck", "slide deck", "slide", "slides", "prezentace", "prezentaci", "slidy", "slidů"],
+    "gdpr-data-handling": ["gdpr", "pii", "anonymization", "anonymize", "anonymizaci", "anonymizace", "osobní údaje", "osobních údajů", "data retention", "dsr", "subject access", "consent", "privacy", "soukromí", "ochrana dat"],
+}
+
+SKILL_NEGATIVE_EXAMPLES: dict[str, dict[str, list[str]]] = {
+    "react-patterns": {
+        "strong_anchors": ["react", "jsx", "tsx", "usestate", "useeffect", "redux", "nextjs", "next.js"],
+        "negative_terms": [
+            "state machine", "finite state", "stavový automat", "stavový", "automat",
+            "state.json", "git", "parser", "parseru", "cli", "daemon", "stop hook",
+            "pretooluse", "posttooluse", "webhook", "bash", "python", "pythonu",
+        ],
+        "ambiguous_only_suppress": ["state", "hook", "hooks", "component", "components", "komponenta", "komponenty"],
+    },
+    "postgres-best-practices": {
+        "strong_anchors": ["postgres", "postgresql", "pgvector", "psycopg", "asyncpg", "alembic", "psql", "sql"],
+        "negative_terms": [
+            "inverted index", "document search", "full-text search", "bm25",
+            "tfidf", "tf-idf", "vector index", "faiss", "hnsw",
+            "list index", "array index", "index.html", "index.ts", "index.js", "python",
+        ],
+        "ambiguous_only_suppress": ["index", "indexes", "migration", "migrations", "migrace"],
+    },
+    "context-hub": {
+        "strong_anchors": [
+            "context-hub", "context hub", "chub", "annotate",
+            "stripe", "openai", "anthropic", "supabase", "cloudflare",
+            "webhook", "oauth", "graphql", "third-party", "external api",
+            "library docs", "api docs", "sdk docs",
+        ],
+        "negative_terms": [
+            "local", "src/", "src/api", "routes.py", ".py",
+            "refactor", "internal", "fastapi", "terraform", "hcl",
+        ],
+        "ambiguous_only_suppress": ["api", "sdk", "rest api", "rest client", "endpoint", "aws"],
+    },
+    "golang-pro": {
+        "strong_anchors": ["golang", "goroutine", "goroutines", "go.mod", "go build", "gopath", "gin-gonic", "go-chi"],
+        "negative_terms": [
+            "go to", "to go", "go back", "go ahead", "go live", "go-live",
+            "go through", "go wrong", "go down", "go up", "go on", "go out",
+            "go for", "let's go", "lets go", "go check", "goal",
+            "go test the", "go test this", "go test it",
+        ],
+        "ambiguous_only_suppress": ["go", "go test"],
+        "require_cue_only_for": ["go"],
+        "require_cue_if_only_ambiguous": [
+            "cli", "grpc", "microservice", "concurrency", "worker",
+            "server", "http", "struct", "channel", "channels",
+        ],
+    },
+    "frontend-design": {
+        "strong_anchors": ["frontend", "css", "html", "tailwind", "scss", "sass", "layout", "vzhled"],
+        "negative_terms": [
+            "system design", "api design", "architecture", "architektura", "architekturu",
+            "backend", "backendu", "database", "databáze", "microservice", "cli", "schema",
+            "pptx", "powerpoint", "powerpointu", "prezentaci", "prezentace",
+        ],
+        "ambiguous_only_suppress": ["design"],
+    },
+    "odoo-module-developer": {
+        "strong_anchors": ["odoo", "erp", "qweb", "ir.model"],
+        "negative_terms": [
+            "python", "typescript", "rust", "golang", "c++", "react",
+            "fastapi", "terraform", "hcl", "auth", "node", "npm", "pytest",
+        ],
+        "ambiguous_only_suppress": ["module"],
+    },
+    "obs-memory": {
+        "strong_anchors": ["obsidian", "vault", "wikilink"],
+        "negative_terms": [
+            "memory leak", "memory safety", "únik paměti", "alokace paměti", "v paměti",
+            "ram", "vram", "heap", "malloc",
+            "valgrind", "oom", "out of memory", "buffer", "release note", "release notes",
+        ],
+        "ambiguous_only_suppress": ["memory", "note", "notes", "paměť", "paměti", "poznámka", "poznámky"],
+    },
+    "rtk-token-killer": {
+        "strong_anchors": ["rtk", "rtk-token-killer", "cli proxy", "token reduction", "token killer"],
+        "negative_terms": [
+            "jwt", "oauth", "bearer", "csrf", "auth", "authentication",
+            "session token", "api key", "refresh token", "access token",
+            "commit", "branch",
+        ],
+        "ambiguous_only_suppress": ["token", "git status"],
+    },
+    "kubernetes-architect": {
+        "strong_anchors": ["kubernetes", "k8s", "helm", "kubectl", "helm chart", "ingress", "argocd", "gitops", "kustomize", "statefulset"],
+        "negative_terms": ["pod linux", "pod linuxem", "pod windows", "pod macos", "pod pythonem", "pod tlakem"],
+        "ambiguous_only_suppress": ["pod", "pods"],
+    },
+    "polars": {
+        "strong_anchors": ["polars", "lazyframe", "scan_parquet", "pl.dataframe"],
+        "negative_terms": ["pandas", "pd.dataframe", "matplotlib", "seaborn"],
+        "ambiguous_only_suppress": ["dataframe", "dataframes", "parquet"],
+    },
+    "pptx-official": {
+        "strong_anchors": ["pptx", "powerpoint", "powerpointu", "pitch deck", "slide deck", "prezentace", "prezentaci", "slidy", "slidů"],
+        "negative_terms": ["carousel", "slider", "css", "swiper", "frontend"],
+        "ambiguous_only_suppress": ["slide", "slides"],
+    },
+    "gdpr-data-handling": {
+        "strong_anchors": ["gdpr", "pii", "anonymization", "anonymize", "anonymizaci", "anonymizace", "osobní údaje", "osobních údajů", "data retention", "dsr", "subject access"],
+        "negative_terms": ["private repo", "private key", "private method"],
+        "ambiguous_only_suppress": ["consent", "privacy"],
+    },
+}
+
+_WORD_CHAR_RE = re.compile(r"[a-z0-9_\u00c0-\u024f]")
+_COMPILED_TERM_PATTERNS: dict[str, re.Pattern[str]] = {}
+
+
+def _compile_term_pattern(term: str) -> re.Pattern[str]:
+    cached = _COMPILED_TERM_PATTERNS.get(term)
+    if cached is not None:
+        return cached
+    prefix = r"(?<![a-z0-9_\u00c0-\u024f])" if term and _WORD_CHAR_RE.match(term[0]) else ""
+    if term.endswith("+"):
+        suffix = r"(?![a-z_])"
+    elif term.endswith(":"):
+        suffix = ""
+    elif term and _WORD_CHAR_RE.match(term[-1]):
+        suffix = r"(?![a-z0-9_\u00c0-\u024f])"
+    else:
+        suffix = ""
+    pat = re.compile(f"{prefix}{re.escape(term)}{suffix}")
+    _COMPILED_TERM_PATTERNS[term] = pat
+    return pat
+
+
+def _matches_term(term: str, lower_text: str) -> bool:
+    return _compile_term_pattern(term).search(lower_text) is not None
+
+
+def _legacy_select_skills(text: str, max_skills: int = 8) -> list[str]:
+    """Exact snapshot of the legacy substring skill selector for before-vs-after benchmarking."""
+    max_skills = min(max(max_skills, 1), 8)
+    if not text or not isinstance(text, str) or not text.strip():
+        return CORE_FALLBACK_SKILLS[: min(4, max_skills)]
+
+    lower = text.lower()
+    scored: list[tuple[str, int]] = []
+    for skill_name, keywords in LEGACY_SKILL_CATALOG_KEYWORDS.items():
+        if skill_name == "context-hub":
+            matches = sum(
+                1
+                for kw in keywords
+                if (
+                    re.search(rf"\b{re.escape(kw)}s?\b", lower)
+                    if len(kw) <= 3
+                    else kw in lower
+                )
+            )
+        else:
+            matches = sum(1 for kw in keywords if kw in lower)
+        if matches > 0:
+            scored.append((skill_name, matches))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    selected = [s[0] for s in scored[:max_skills]]
+    if not selected:
+        return CORE_FALLBACK_SKILLS[: min(4, max_skills)]
+    return selected
 
 CORE_FALLBACK_SKILLS = [
     "swarm-coordinator",
@@ -736,7 +937,7 @@ class DecisionRouter:
         return base_decision
 
     def select_skills(self, prompt: str, max_skills: int = 8) -> list[str]:
-        """Select up to max_skills (capped at 8) relevant skills from the 200-skill catalog."""
+        """Select up to max_skills (capped at 8) relevant skills using word-boundary + negative-example disambiguation."""
         if not self.enabled:
             return []
         max_skills = min(max(max_skills, 1), 8)
@@ -747,20 +948,35 @@ class DecisionRouter:
         scored: list[tuple[str, int]] = []
 
         for skill_name, keywords in CORE_SKILL_CATALOG_KEYWORDS.items():
-            if skill_name == "context-hub":
-                matches = sum(
-                    1
-                    for kw in keywords
-                    if (
-                        re.search(rf"\b{re.escape(kw)}s?\b", lower)
-                        if len(kw) <= 3
-                        else kw in lower
-                    )
-                )
-            else:
-                matches = sum(1 for kw in keywords if kw in lower)
-            if matches > 0:
-                scored.append((skill_name, matches))
+            matched = [kw for kw in keywords if _matches_term(kw, lower)]
+            if not matched:
+                continue
+
+            score = len(matched)
+            neg_rule = SKILL_NEGATIVE_EXAMPLES.get(skill_name)
+            has_strong = False
+            if neg_rule:
+                strong_anchors = set(neg_rule.get("strong_anchors", []))
+                ambiguous_set = set(neg_rule.get("ambiguous_only_suppress", []))
+                negative_terms = neg_rule.get("negative_terms", [])
+                cue_terms = neg_rule.get("require_cue_if_only_ambiguous", [])
+
+                has_strong = any(kw in strong_anchors for kw in matched)
+                only_ambiguous = bool(ambiguous_set) and all(kw in ambiguous_set for kw in matched)
+
+                if not has_strong:
+                    neg_hits = sum(1 for neg in negative_terms if _matches_term(neg, lower))
+                    if neg_hits > 0 and (only_ambiguous or not strong_anchors):
+                        continue
+                    cue_targets = set(neg_rule.get("require_cue_only_for", ambiguous_set))
+                    only_cue_target = bool(cue_targets) and all(kw in cue_targets for kw in matched)
+                    if only_cue_target and cue_terms and not any(_matches_term(c, lower) for c in cue_terms):
+                        continue
+                else:
+                    # Strong domain anchors earn an extra disambiguation weight above generic hits
+                    score += sum(1 for kw in matched if kw in strong_anchors)
+
+            scored.append((skill_name, score))
 
         scored.sort(key=lambda x: x[1], reverse=True)
         selected = [s[0] for s in scored[:max_skills]]
@@ -1088,6 +1304,377 @@ class DecisionRouter:
         }
 
 
+BENCHMARK_ROUTING_PROMPTS: list[dict[str, object]] = [
+    # 18 English engineering/quant/ops/docs prompts
+    {
+        "id": "EN-01",
+        "lang": "en",
+        "prompt": "Build Python backend and run unit tests suite quickly with invariant checks",
+        "expected_skills": ["python-pro", "test-driven-development"],
+        "forbidden_skills": ["ui-ux-designer", "typescript-pro", "risk-metrics-calculation"],
+    },
+    {
+        "id": "EN-02",
+        "lang": "en",
+        "prompt": "Write Python state machine for git log parser",
+        "expected_skills": ["python-pro"],
+        "forbidden_skills": ["react-patterns"],
+    },
+    {
+        "id": "EN-03",
+        "lang": "en",
+        "prompt": "Build Python inverted index for document search",
+        "expected_skills": ["python-pro"],
+        "forbidden_skills": ["postgres-best-practices"],
+    },
+    {
+        "id": "EN-04",
+        "lang": "en",
+        "prompt": "Refactor local Python src/api/routes.py validation handler",
+        "expected_skills": ["python-pro"],
+        "forbidden_skills": ["context-hub"],
+    },
+    {
+        "id": "EN-05",
+        "lang": "en",
+        "prompt": "Fetch Stripe SDK API docs with chub",
+        "expected_skills": ["context-hub"],
+        "forbidden_skills": ["ui-ux-designer"],
+    },
+    {
+        "id": "EN-06",
+        "lang": "en",
+        "prompt": "Implement Rust async Tokio TCP server with serde",
+        "expected_skills": ["rust-pro"],
+        "forbidden_skills": ["typescript-pro", "ui-ux-designer"],
+    },
+    {
+        "id": "EN-07",
+        "lang": "en",
+        "prompt": "Write Go concurrency worker with goroutines",
+        "expected_skills": ["golang-pro"],
+        "forbidden_skills": ["react-patterns"],
+    },
+    {
+        "id": "EN-08",
+        "lang": "en",
+        "prompt": "We want to go to production after goal check and run Python pytest",
+        "expected_skills": ["python-pro"],
+        "forbidden_skills": ["golang-pro", "rtk-token-killer"],
+    },
+    {
+        "id": "EN-09",
+        "lang": "en",
+        "prompt": "Optimize C++20 CMake build with RAII memory safety",
+        "expected_skills": ["cpp-pro"],
+        "forbidden_skills": ["obs-memory", "ui-ux-designer"],
+    },
+    {
+        "id": "EN-10",
+        "lang": "en",
+        "prompt": "Configure Kubernetes Helm chart and Ingress pods",
+        "expected_skills": ["kubernetes-architect"],
+        "forbidden_skills": ["typescript-pro"],
+    },
+    {
+        "id": "EN-11",
+        "lang": "en",
+        "prompt": "Provision enterprise cloud VPC using Terraform HCL modules",
+        "expected_skills": ["terraform-skill"],
+        "forbidden_skills": ["odoo-module-developer"],
+    },
+    {
+        "id": "EN-12",
+        "lang": "en",
+        "prompt": "Perform OWASP security vulnerability audit for XSS and CSRF",
+        "expected_skills": ["security-auditor"],
+        "forbidden_skills": ["ui-ux-designer"],
+    },
+    {
+        "id": "EN-13",
+        "lang": "en",
+        "prompt": "Build fast Parquet ETL pipeline using Polars LazyFrame",
+        "expected_skills": ["polars"],
+        "forbidden_skills": ["ui-ux-designer"],
+    },
+    {
+        "id": "EN-14",
+        "lang": "en",
+        "prompt": "Create executive PowerPoint pitch deck slides in pptx",
+        "expected_skills": ["pptx-official"],
+        "forbidden_skills": ["react-patterns", "frontend-design"],
+    },
+    {
+        "id": "EN-15",
+        "lang": "en",
+        "prompt": "Implement GDPR PII anonymization and data retention policy",
+        "expected_skills": ["gdpr-data-handling"],
+        "forbidden_skills": ["typescript-pro"],
+    },
+    {
+        "id": "EN-16",
+        "lang": "en",
+        "prompt": "Tune Postgres SQL migration and composite index for query performance",
+        "expected_skills": ["postgres-best-practices", "sql-pro"],
+        "forbidden_skills": ["react-patterns"],
+    },
+    {
+        "id": "EN-17",
+        "lang": "en",
+        "prompt": "Calculate portfolio Sharpe ratio, CVaR drawdown and volatility backtest",
+        "expected_skills": ["quant-analyst", "risk-metrics-calculation"],
+        "forbidden_skills": ["ui-ux-designer"],
+    },
+    {
+        "id": "EN-18",
+        "lang": "en",
+        "prompt": "Fix JWT token validation and debug traceback crash in FastAPI",
+        "expected_skills": ["fastapi-pro", "systematic-debugging"],
+        "forbidden_skills": ["rtk-token-killer", "typescript-pro"],
+    },
+    # 12 Czech engineering/quant/ops/docs prompts
+    {
+        "id": "CZ-01",
+        "lang": "cz",
+        "prompt": "Uprav výpočet marže, přidej graf na dashboard a otestuj UI v prohlížeči",
+        "expected_skills": ["ui-ux-designer", "playwright-skill", "test-driven-development"],
+        "forbidden_skills": ["typescript-pro"],
+    },
+    {
+        "id": "CZ-02",
+        "lang": "cz",
+        "prompt": "Optimalizuj SQL dotaz v PostgreSQL databázi a vytvoř migrace",
+        "expected_skills": ["postgres-best-practices", "sql-pro"],
+        "forbidden_skills": ["react-patterns"],
+    },
+    {
+        "id": "CZ-03",
+        "lang": "cz",
+        "prompt": "Napiš Python asyncio skript a přidej unit testy s pytest",
+        "expected_skills": ["python-pro", "test-driven-development"],
+        "forbidden_skills": ["rtk-token-killer", "typescript-pro"],
+    },
+    {
+        "id": "CZ-04",
+        "lang": "cz",
+        "prompt": "Vytvoř Docker container a Dockerfile pro nasazení aplikace",
+        "expected_skills": ["docker-expert"],
+        "forbidden_skills": ["ui-ux-designer"],
+    },
+    {
+        "id": "CZ-05",
+        "lang": "cz",
+        "prompt": "Navrhni architekturu backendu a udělej revizi kódu",
+        "expected_skills": ["software-architect", "compliance-maintainability-reviewer"],
+        "forbidden_skills": ["frontend-design", "ui-ux-designer"],
+    },
+    {
+        "id": "CZ-06",
+        "lang": "cz",
+        "prompt": "Ulož poznámky do Obsidian vault paměti",
+        "expected_skills": ["obs-memory"],
+        "forbidden_skills": ["typescript-pro"],
+    },
+    {
+        "id": "CZ-07",
+        "lang": "cz",
+        "prompt": "Otestuj aplikaci pod Linuxem pomocí Python testů",
+        "expected_skills": ["python-pro", "test-driven-development"],
+        "forbidden_skills": ["kubernetes-architect", "typescript-pro"],
+    },
+    {
+        "id": "CZ-08",
+        "lang": "cz",
+        "prompt": "Oprav chybu a pád v Rust Tokio službě",
+        "expected_skills": ["systematic-debugging", "rust-pro"],
+        "forbidden_skills": ["ui-ux-designer"],
+    },
+    {
+        "id": "CZ-09",
+        "lang": "cz",
+        "prompt": "Připrav firemní prezentaci a slidy v PowerPointu (pptx)",
+        "expected_skills": ["pptx-official"],
+        "forbidden_skills": ["frontend-design"],
+    },
+    {
+        "id": "CZ-10",
+        "lang": "cz",
+        "prompt": "Implementuj anonymizaci osobních údajů podle GDPR",
+        "expected_skills": ["gdpr-data-handling"],
+        "forbidden_skills": ["typescript-pro"],
+    },
+    {
+        "id": "CZ-11",
+        "lang": "cz",
+        "prompt": "Proveď bezpečnostní audit zranitelností OWASP a CSRF",
+        "expected_skills": ["security-auditor"],
+        "forbidden_skills": ["ui-ux-designer"],
+    },
+    {
+        "id": "CZ-12",
+        "lang": "cz",
+        "prompt": "Spočítej kvantitativní portfolio backtest a riziko drawdownu",
+        "expected_skills": ["quant-analyst", "risk-metrics-calculation"],
+        "forbidden_skills": ["ui-ux-designer"],
+    },
+]
+
+
+def _evaluate_router_predictions(
+    cases: list[dict[str, object]],
+    predictor: object,
+) -> dict[str, object]:
+    """Compute genuine precision, recall, F1, and false-positive metrics from live predictions."""
+    total_precision = 0.0
+    total_recall = 0.0
+    total_matched = 0
+    total_predicted = 0
+    total_expected = 0
+    total_unexpected = 0
+    polluted_prompts = 0
+    forbidden_hits = 0
+    forbidden_prompts = 0
+
+    for case in cases:
+        prompt = str(case["prompt"])
+        expected = set(case["expected_skills"])  # type: ignore[arg-type]
+        forbidden = set(case["forbidden_skills"])  # type: ignore[arg-type]
+        predicted = list(predictor(prompt))  # type: ignore[operator]
+        pred_set = set(predicted)
+
+        matched = len(pred_set & expected)
+        unexpected = len(pred_set - expected)
+        forb_hit = len(pred_set & forbidden)
+
+        p = (matched / len(pred_set)) if pred_set else (1.0 if not expected else 0.0)
+        r = (matched / len(expected)) if expected else 1.0
+
+        total_precision += p
+        total_recall += r
+        total_matched += matched
+        total_predicted += len(pred_set)
+        total_expected += len(expected)
+        total_unexpected += unexpected
+        if unexpected > 0:
+            polluted_prompts += 1
+        if forb_hit > 0:
+            forbidden_hits += forb_hit
+            forbidden_prompts += 1
+
+    n = len(cases) or 1
+    precision_at_k = round(total_precision / n, 4)
+    recall_at_k = round(total_recall / n, 4)
+    f1 = (
+        round((2.0 * precision_at_k * recall_at_k) / (precision_at_k + recall_at_k), 4)
+        if (precision_at_k + recall_at_k) > 0
+        else 0.0
+    )
+    unexpected_prediction_rate = round(total_unexpected / total_predicted, 4) if total_predicted > 0 else 0.0
+    prompt_pollution_rate = round(polluted_prompts / n, 4)
+    forbidden_leak_rate = round(forbidden_prompts / n, 4)
+
+    return {
+        "precision_at_k": precision_at_k,
+        "recall_at_k": recall_at_k,
+        "f1": f1,
+        "false_positive_rate": unexpected_prediction_rate,
+        "unexpected_prediction_rate": unexpected_prediction_rate,
+        "prompt_pollution_rate": prompt_pollution_rate,
+        "forbidden_hits": forbidden_hits,
+        "forbidden_leak_rate": forbidden_leak_rate,
+        "matched_expected": total_matched,
+        "total_predicted": total_predicted,
+        "total_expected": total_expected,
+    }
+
+
+def benchmark_skill_routing(router: DecisionRouter | None = None, max_skills: int = 8) -> dict[str, object]:
+    """Run live before-vs-after skill routing benchmark across 30 bilingual (18 EN + 12 CZ) prompts."""
+    active_router = (
+        router
+        if (router is not None and router.enabled)
+        else DecisionRouter(config={"enabled": True, "use_daemon": False}, enable_inproc=False)
+    )
+
+    legacy_metrics = _evaluate_router_predictions(
+        BENCHMARK_ROUTING_PROMPTS,
+        lambda txt: _legacy_select_skills(txt, max_skills=max_skills),
+    )
+    upgraded_metrics = _evaluate_router_predictions(
+        BENCHMARK_ROUTING_PROMPTS,
+        lambda txt: active_router.select_skills(txt, max_skills=max_skills),
+    )
+
+    per_prompt: list[dict[str, object]] = []
+    for case in BENCHMARK_ROUTING_PROMPTS:
+        prompt_text = str(case["prompt"])
+        leg_pred = _legacy_select_skills(prompt_text, max_skills=max_skills)
+        upg_pred = active_router.select_skills(prompt_text, max_skills=max_skills)
+        forbidden = set(case["forbidden_skills"])  # type: ignore[arg-type]
+        per_prompt.append(
+            {
+                "id": case["id"],
+                "lang": case["lang"],
+                "prompt": prompt_text,
+                "expected_skills": case["expected_skills"],
+                "forbidden_skills": case["forbidden_skills"],
+                "legacy_predicted": leg_pred,
+                "upgraded_predicted": upg_pred,
+                "legacy_forbidden_leaks": sorted(set(leg_pred) & forbidden),
+                "upgraded_forbidden_leaks": sorted(set(upg_pred) & forbidden),
+            }
+        )
+
+    en_count = sum(1 for c in BENCHMARK_ROUTING_PROMPTS if c["lang"] == "en")
+    cz_count = sum(1 for c in BENCHMARK_ROUTING_PROMPTS if c["lang"] == "cz")
+
+    legacy_vocab = set(LEGACY_SKILL_CATALOG_KEYWORDS.keys())
+    shared_cases = [
+        c for c in BENCHMARK_ROUTING_PROMPTS
+        if set(c["expected_skills"]).issubset(legacy_vocab)  # type: ignore[arg-type]
+    ]
+    shared_legacy = _evaluate_router_predictions(
+        shared_cases,
+        lambda txt: _legacy_select_skills(txt, max_skills=max_skills),
+    )
+    shared_upgraded = _evaluate_router_predictions(
+        shared_cases,
+        lambda txt: active_router.select_skills(txt, max_skills=max_skills),
+    )
+
+    return {
+        "prompt_count": len(BENCHMARK_ROUTING_PROMPTS),
+        "en_count": en_count,
+        "cz_count": cz_count,
+        "max_skills": max_skills,
+        "opt_tokens": 0.0,
+        "legacy": legacy_metrics,
+        "upgraded": upgraded_metrics,
+        "delta": {
+            "precision_at_k": round(upgraded_metrics["precision_at_k"] - legacy_metrics["precision_at_k"], 4),  # type: ignore[operator]
+            "recall_at_k": round(upgraded_metrics["recall_at_k"] - legacy_metrics["recall_at_k"], 4),  # type: ignore[operator]
+            "f1": round(upgraded_metrics["f1"] - legacy_metrics["f1"], 4),  # type: ignore[operator]
+            "false_positive_rate": round(upgraded_metrics["false_positive_rate"] - legacy_metrics["false_positive_rate"], 4),  # type: ignore[operator]
+            "prompt_pollution_rate": round(upgraded_metrics["prompt_pollution_rate"] - legacy_metrics["prompt_pollution_rate"], 4),  # type: ignore[operator]
+            "forbidden_hits": int(upgraded_metrics["forbidden_hits"]) - int(legacy_metrics["forbidden_hits"]),  # type: ignore[arg-type]
+        },
+        "shared_legacy_domain_subset": {
+            "prompt_count": len(shared_cases),
+            "legacy": shared_legacy,
+            "upgraded": shared_upgraded,
+            "delta": {
+                "precision_at_k": round(shared_upgraded["precision_at_k"] - shared_legacy["precision_at_k"], 4),  # type: ignore[operator]
+                "recall_at_k": round(shared_upgraded["recall_at_k"] - shared_legacy["recall_at_k"], 4),  # type: ignore[operator]
+                "f1": round(shared_upgraded["f1"] - shared_legacy["f1"], 4),  # type: ignore[operator]
+                "false_positive_rate": round(shared_upgraded["false_positive_rate"] - shared_legacy["false_positive_rate"], 4),  # type: ignore[operator]
+                "prompt_pollution_rate": round(shared_upgraded["prompt_pollution_rate"] - shared_legacy["prompt_pollution_rate"], 4),  # type: ignore[operator]
+                "forbidden_hits": int(shared_upgraded["forbidden_hits"]) - int(shared_legacy["forbidden_hits"]),  # type: ignore[arg-type]
+            },
+        },
+        "per_prompt": per_prompt,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="System 1 Decision Router (Laya + Calibrated Fallback)")
     parser.add_argument(
@@ -1105,12 +1692,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--status", action="store_true", help="Show current Decision Router status and configuration")
     parser.add_argument("--device-info", action="store_true", help="Print GPU/CPU device selection analysis")
     parser.add_argument("--preflight", action="store_true", help="Shorthand for --mode preflight")
+    parser.add_argument("--benchmark-routing", action="store_true", help="Run 30-prompt bilingual skill routing benchmark (legacy vs upgraded)")
     parser.add_argument("--cue", type=str, default="", help="Lesson cue for scope classification")
     parser.add_argument("--rule", type=str, default="", help="Lesson rule for scope classification")
     parser.add_argument("--project", type=str, default=None, help="Project name for scope classification")
     args = parser.parse_args(argv)
     if args.preflight:
         args.mode = "preflight"
+
+    if args.benchmark_routing:
+        bench = benchmark_skill_routing(max_skills=args.max_skills)
+        if args.compact:
+            print(json.dumps(bench, separators=(",", ":"), sort_keys=True, ensure_ascii=False))
+        else:
+            print(json.dumps(bench, indent=2, ensure_ascii=False))
+        return 0
 
     if args.disable:
         p = save_decision_config({"enabled": False})

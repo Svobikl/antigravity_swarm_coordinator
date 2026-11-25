@@ -897,6 +897,283 @@ class TestSkillCatalogCuration(unittest.TestCase):
         self.assertIn("G-N(H)", sl_res.stdout)
         self.assertNotIn("G-A", sl_res.stdout)
 
+    def test_m3_m4_stale_checkpoint_ttl_and_zero_artifact_lsp_sensor(self):
+        """Verifies M3 (stale/completed/mismatched checkpoint & deferred-work/status filtering) and M4 (ast.parse zero-pycache + pending diagnostic unlink)."""
+        import json
+        import os
+        import subprocess
+        import tempfile
+        import time
+
+        repo_root = Path(__file__).resolve().parent.parent
+        plugin_src = repo_root / "plugins" / "antigravity-swarm"
+        stop_script = plugin_src / "scripts" / "asw-stop-check.mjs"
+        lsp_script = plugin_src / "scripts" / "asw-lsp-check.mjs"
+        hook_script = plugin_src / "scripts" / "asw-hook.mjs"
+
+        def run_stop(ws_dir: Path) -> dict:
+            res = subprocess.run(
+                ["node", str(stop_script)],
+                cwd=str(plugin_src),
+                input=json.dumps({
+                    "fullyIdle": True,
+                    "workspacePaths": [ws_dir.as_uri()],
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+            return json.loads(res.stdout)
+
+        # --- M3: Stale Checkpoint & Unapproved Plan Safety ---
+        # Case A: Completed state.json + .stop-guard.json + new unapproved plan (0 [x], 2 [ ]) -> {"decision": ""}
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            plans_dir = ws / ".asw" / "plans"
+            sw_dir = ws / ".asw" / "start-work"
+            plans_dir.mkdir(parents=True)
+            sw_dir.mkdir(parents=True)
+            (sw_dir / "state.json").write_text(
+                json.dumps({"status": "ORCHESTRATION COMPLETE", "plan": ".asw/plans/old-plan.md"}),
+                encoding="utf-8",
+            )
+            (sw_dir / ".stop-guard.json").write_text(
+                json.dumps({"signature": "old-plan.md:1:1:0", "count": 1}),
+                encoding="utf-8",
+            )
+            (plans_dir / "new-unapproved.md").write_text(
+                "---\nstatus: ready-for-dev\n---\n# New Plan\n- [ ] Task A\n- [ ] Task B\n",
+                encoding="utf-8",
+            )
+            out_a = run_stop(ws)
+            self.assertEqual(out_a.get("decision"), "", f"Case A must not continue unapproved plan: {out_a}")
+
+        # Case B: Expired (> 6h) state.json + 0 [x] plan -> {"decision": ""} and expired .stop-guard.json unlinked
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            plans_dir = ws / ".asw" / "plans"
+            sw_dir = ws / ".asw" / "start-work"
+            plans_dir.mkdir(parents=True)
+            sw_dir.mkdir(parents=True)
+            state_file = sw_dir / "state.json"
+            state_file.write_text(
+                json.dumps({"status": "IN_PROGRESS", "plan": ".asw/plans/stale.md"}),
+                encoding="utf-8",
+            )
+            guard_file = sw_dir / ".stop-guard.json"
+            guard_file.write_text(
+                json.dumps({"signature": "stale.md:0:2:0", "count": 1}),
+                encoding="utf-8",
+            )
+            seven_hours_ago = time.time() - (7 * 60 * 60)
+            os.utime(state_file, (seven_hours_ago, seven_hours_ago))
+            os.utime(guard_file, (seven_hours_ago, seven_hours_ago))
+            (plans_dir / "stale.md").write_text(
+                "# Stale Plan\n- [ ] Step 1\n- [ ] Step 2\n",
+                encoding="utf-8",
+            )
+            out_b = run_stop(ws)
+            self.assertEqual(out_b.get("decision"), "", f"Case B expired state.json must not continue: {out_b}")
+            self.assertFalse(guard_file.exists(), "Expired .stop-guard.json should be unlinked")
+
+        # Case C: deferred-work.md and status: done / status: deferred plans ignored
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            plans_dir = ws / ".asw" / "plans"
+            plans_dir.mkdir(parents=True)
+            (plans_dir / "deferred-work.md").write_text(
+                "# Deferred Work\n- [x] Old\n- [ ] Future item\n",
+                encoding="utf-8",
+            )
+            out_c1 = run_stop(ws)
+            self.assertEqual(out_c1.get("decision"), "", f"Case C1 deferred-work.md must be ignored: {out_c1}")
+
+            (plans_dir / "finished.md").write_text(
+                "---\nstatus: done\n---\n# Finished\n- [x] Done step\n- [ ] Leftover checkbox\n",
+                encoding="utf-8",
+            )
+            out_c2 = run_stop(ws)
+            self.assertEqual(out_c2.get("decision"), "", f"Case C2 status: done must be ignored: {out_c2}")
+
+            (plans_dir / "postponed.md").write_text(
+                "---\nstatus: deferred\n---\n# Postponed\n- [x] Done step\n- [ ] Later item\n",
+                encoding="utf-8",
+            )
+            out_c3 = run_stop(ws)
+            self.assertEqual(out_c3.get("decision"), "", f"Case C3 status: deferred must be ignored: {out_c3}")
+
+        # Case D: Positive active in-progress plan (via fresh state.json and via 1 [x] / 1 [ ] without state.json)
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            plans_dir = ws / ".asw" / "plans"
+            sw_dir = ws / ".asw" / "start-work"
+            plans_dir.mkdir(parents=True)
+            sw_dir.mkdir(parents=True)
+            (sw_dir / "state.json").write_text(
+                json.dumps({"status": "IN_PROGRESS", "plan": ".asw/plans/active.md"}),
+                encoding="utf-8",
+            )
+            (plans_dir / "active.md").write_text(
+                "# Active Plan\n- [ ] Task 1\n- [ ] Task 2\n",
+                encoding="utf-8",
+            )
+            out_d1 = run_stop(ws)
+            self.assertEqual(out_d1.get("decision"), "continue", f"Case D1 active state.json must continue: {out_d1}")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            plans_dir = ws / ".asw" / "plans"
+            plans_dir.mkdir(parents=True)
+            (plans_dir / "in_flight.md").write_text(
+                "# In Flight\n- [x] Step 1\n- [ ] Step 2\n",
+                encoding="utf-8",
+            )
+            out_d2 = run_stop(ws)
+            self.assertEqual(out_d2.get("decision"), "continue", f"Case D2 checked-item plan must continue: {out_d2}")
+
+        # --- M4: Zero-Artifact ast.parse & Pending Diagnostic Unlink ---
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            target_py = ws / "sensor_mod.py"
+            pending_file = ws / ".asw" / ".pending-lsp-diagnostic.json"
+
+            # 1. Broken .py edit (PostToolUse) -> stages .pending-lsp-diagnostic.json, creates ZERO __pycache__ or .pyc
+            target_py.write_text("def broken_fn(:\n    return 1\n", encoding="utf-8")
+            post_bad = subprocess.run(
+                ["node", str(lsp_script), "--event", "PostToolUse"],
+                cwd=str(plugin_src),
+                input=json.dumps({
+                    "workspacePaths": [ws.as_uri()],
+                    "toolCall": {"args": {"TargetFile": "sensor_mod.py"}},
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+            self.assertEqual(json.loads(post_bad.stdout), {})
+            self.assertTrue(pending_file.is_file(), "Broken .py edit must stage .pending-lsp-diagnostic.json")
+            self.assertEqual(list(ws.rglob("__pycache__")), [], "ast.parse must create zero __pycache__ dirs")
+            self.assertEqual(list(ws.rglob("*.pyc")), [], "ast.parse must create zero .pyc files")
+
+            # 2. Valid .py edit (PostToolUse) on same file -> zero __pycache__/.pyc AND immediately unlinks .pending-lsp-diagnostic.json
+            target_py.write_text("def fixed_fn():\n    return 42\n", encoding="utf-8")
+            post_good = subprocess.run(
+                ["node", str(lsp_script), "--event", "PostToolUse"],
+                cwd=str(plugin_src),
+                input=json.dumps({
+                    "workspacePaths": [ws.as_uri()],
+                    "toolCall": {"args": {"TargetFile": "sensor_mod.py"}},
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+            self.assertEqual(json.loads(post_good.stdout), {})
+            self.assertFalse(pending_file.exists(), "Valid .py edit must unlink .pending-lsp-diagnostic.json")
+            self.assertEqual(list(ws.rglob("__pycache__")), [], "Valid edit must create zero __pycache__ dirs")
+            self.assertEqual(list(ws.rglob("*.pyc")), [], "Valid edit must create zero .pyc files")
+
+            # Confirm asw-hook.mjs does not inject stale error on next turn
+            hook_res = subprocess.run(
+                ["node", str(hook_script)],
+                cwd=str(plugin_src),
+                input=json.dumps({"invocationNum": 2, "workspacePaths": [ws.as_uri()]}),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+            self.assertEqual(json.loads(hook_res.stdout), {})
+
+            # 3. Standalone CLI mode (without --event PostToolUse) on broken .py file still returns injectSteps
+            target_py.write_text("def cli_broken(:\n    pass\n", encoding="utf-8")
+            cli_bad = subprocess.run(
+                ["node", str(lsp_script)],
+                cwd=str(plugin_src),
+                input=json.dumps({
+                    "workspacePaths": [ws.as_uri()],
+                    "toolCall": {"args": {"TargetFile": "sensor_mod.py"}},
+                }),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+            cli_out = json.loads(cli_bad.stdout)
+            eph = cli_out.get("injectSteps", [{}])[0].get("ephemeralMessage", "")
+            self.assertIn("ASW POST-EDIT DIAGNOSTIC", eph)
+            self.assertEqual(list(ws.rglob("__pycache__")), [])
+            self.assertEqual(list(ws.rglob("*.pyc")), [])
+
+        # --- Patch 2: Expired terminal state.json, BOM + YAML comment status, non-canonical LSP path ---
+        # 2a. Expired (>6h) terminal state.json must NOT block freshly edited active plan
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            plans_dir = ws / ".asw" / "plans"
+            sw_dir = ws / ".asw" / "start-work"
+            plans_dir.mkdir(parents=True)
+            sw_dir.mkdir(parents=True)
+            state_file = sw_dir / "state.json"
+            state_file.write_text(
+                json.dumps({"status": "ORCHESTRATION COMPLETE", "plan": ".asw/plans/fresh-plan.md"}),
+                encoding="utf-8",
+            )
+            seven_hours_ago = time.time() - (7 * 60 * 60)
+            os.utime(state_file, (seven_hours_ago, seven_hours_ago))
+            (plans_dir / "fresh-plan.md").write_text(
+                "---\nstatus: in-progress\n---\n# Fresh Plan\n- [x] Step 1\n- [ ] Step 2\n",
+                encoding="utf-8",
+            )
+            out_exp_term = run_stop(ws)
+            self.assertEqual(out_exp_term.get("decision"), "continue", f"Expired terminal state.json must not block active plan: {out_exp_term}")
+
+        # 2b. UTF-8 BOM + inline YAML comment on status: done # finished must be ignored
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            plans_dir = ws / ".asw" / "plans"
+            plans_dir.mkdir(parents=True)
+            (plans_dir / "bom-comment-done.md").write_bytes(
+                b"\xef\xbb\xbf---\nstatus: done # finished\n---\n# Done Plan\n- [x] Step 1\n- [ ] Leftover\n"
+            )
+            out_bom = run_stop(ws)
+            self.assertEqual(out_bom.get("decision"), "", f"BOM + commented status: done must be ignored: {out_bom}")
+
+        # 2c. Non-canonical absolute path (/.../sub/../sub/a.py) unlinks .pending-lsp-diagnostic.json cleanly
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            sub_dir = ws / "sub"
+            sub_dir.mkdir(parents=True)
+            real_py = sub_dir / "a.py"
+            non_canonical_path = f"{ws}/sub/../sub/a.py"
+            pending_file = ws / ".asw" / ".pending-lsp-diagnostic.json"
+
+            real_py.write_text("def broken(:\n    pass\n", encoding="utf-8")
+            subprocess.run(
+                ["node", str(lsp_script), "--event", "PostToolUse"],
+                cwd=str(plugin_src),
+                input=json.dumps({
+                    "workspacePaths": [ws.as_uri()],
+                    "toolCall": {"args": {"TargetFile": str(real_py)}},
+                }),
+                capture_output=True, text=True, timeout=10, check=True,
+            )
+            self.assertTrue(pending_file.is_file())
+
+            real_py.write_text("def ok():\n    return 1\n", encoding="utf-8")
+            subprocess.run(
+                ["node", str(lsp_script), "--event", "PostToolUse"],
+                cwd=str(plugin_src),
+                input=json.dumps({
+                    "workspacePaths": [ws.as_uri()],
+                    "toolCall": {"args": {"TargetFile": non_canonical_path}},
+                }),
+                capture_output=True, text=True, timeout=10, check=True,
+            )
+            self.assertFalse(pending_file.exists(), "Non-canonical absolute path must still unlink .pending-lsp-diagnostic.json")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -747,6 +747,129 @@ class TestDecisionRouter(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    # --- H1 (Task 1): Word-Boundary + Negative-Example Skill Router & 30-Prompt Benchmark ---
+    def test_h1_m1_word_boundary_no_substring_leaks(self):
+        """M1: Word-boundary matching prevents 'ui'/'ts'/'var' substring leaks while matching python-pro & TDD."""
+        prompt = "Build Python backend and run unit tests suite quickly with invariant checks"
+        skills = self.router.select_skills(prompt, max_skills=8)
+        self.assertLessEqual(len(skills), 8)
+        self.assertIn("python-pro", skills)
+        self.assertIn("test-driven-development", skills)
+        self.assertNotIn("ui-ux-designer", skills, "'ui' in build/suite must not trigger ui-ux-designer")
+        self.assertNotIn("typescript-pro", skills, "'ts' in tests must not trigger typescript-pro")
+        self.assertNotIn("risk-metrics-calculation", skills, "'var' in invariant must not trigger risk-metrics-calculation")
+
+    def test_h1_m2_negative_examples_and_domain_expansion(self):
+        """M2: SKILL_NEGATIVE_EXAMPLES suppresses false triggers and expanded domain catalog routes accurately."""
+        self.assertTrue(hasattr(decision_router, "SKILL_NEGATIVE_EXAMPLES"))
+        self.assertIsInstance(decision_router.SKILL_NEGATIVE_EXAMPLES, dict)
+        self.assertGreaterEqual(len(decision_router.SKILL_NEGATIVE_EXAMPLES), 4)
+
+        # Negative disambiguation cases
+        s_state = self.router.select_skills("Write Python state machine for git log parser", max_skills=8)
+        self.assertIn("python-pro", s_state)
+        self.assertNotIn("react-patterns", s_state, "'state' without React cues must not select react-patterns")
+
+        s_index = self.router.select_skills("Build Python inverted index for document search", max_skills=8)
+        self.assertIn("python-pro", s_index)
+        self.assertNotIn("postgres-best-practices", s_index, "'index' without SQL/DB cues must not select postgres-best-practices")
+
+        s_local_api = self.router.select_skills("Refactor local src/api/routes.py validation handler", max_skills=8)
+        self.assertNotIn("context-hub", s_local_api, "Local src/api/ path must not trigger context-hub")
+
+        s_ext_api = self.router.select_skills("Fetch Stripe SDK API docs with chub", max_skills=8)
+        self.assertIn("context-hub", s_ext_api)
+
+        s_go_verb = self.router.select_skills("We want to go to production after goal check", max_skills=8)
+        self.assertNotIn("golang-pro", s_go_verb, "'go to'/'goal' must not trigger golang-pro")
+
+        s_golang = self.router.select_skills("Build Golang gRPC microservice", max_skills=8)
+        self.assertIn("golang-pro", s_golang)
+
+        s_go_conc = self.router.select_skills("Write Go concurrency worker with goroutines", max_skills=8)
+        self.assertIn("golang-pro", s_go_conc)
+
+        # Domain expansion coverage
+        domain_cases = [
+            ("Implement Rust async Tokio TCP server with serde", "rust-pro"),
+            ("Write Go concurrency worker with goroutines", "golang-pro"),
+            ("Optimize C++20 CMake build with RAII memory safety", "cpp-pro"),
+            ("Configure Kubernetes Helm chart and Ingress pods", "kubernetes-architect"),
+            ("Provision AWS VPC using Terraform HCL modules", "terraform-skill"),
+            ("Perform OWASP security vulnerability audit for SQL injection and XSS", "security-auditor"),
+            ("Build fast Parquet ETL pipeline using Polars LazyFrame", "polars"),
+            ("Create executive PowerPoint pitch deck slides in pptx", "pptx-official"),
+            ("Implement GDPR PII anonymization and data retention policy", "gdpr-data-handling"),
+        ]
+        for prompt_text, expected_skill in domain_cases:
+            with self.subTest(expected_skill=expected_skill):
+                selected = self.router.select_skills(prompt_text, max_skills=8)
+                self.assertLessEqual(len(selected), 8)
+                self.assertIn(expected_skill, selected)
+
+        # Flag isolation check on domain prompt
+        with mock.patch.dict("os.environ", {"ASW_DECISION_MODEL_ENABLED": "0"}):
+            disabled = decision_router.DecisionRouter()
+            self.assertEqual(disabled.select_skills("Implement Rust async Tokio TCP server with serde", max_skills=8), [])
+
+    def test_h1_benchmark_skill_routing_30_bilingual_prompts_and_cli(self):
+        """M1-M2 Benchmark: 30 bilingual (18 EN + 12 CZ) prompts prove >= +0.20 P@k, higher F1, and lower FPR."""
+        self.assertTrue(hasattr(decision_router, "LEGACY_SKILL_CATALOG_KEYWORDS"))
+        self.assertTrue(hasattr(decision_router, "benchmark_skill_routing"))
+
+        report = decision_router.benchmark_skill_routing()
+        self.assertEqual(report["prompt_count"], 30)
+        self.assertEqual(report["en_count"], 18)
+        self.assertEqual(report["cz_count"], 12)
+        self.assertEqual(report["opt_tokens"], 0.0)
+        self.assertEqual(len(report["per_prompt"]), 30)
+
+        legacy = report["legacy"]
+        upgraded = report["upgraded"]
+        for side in (legacy, upgraded):
+            for key in ("precision_at_k", "recall_at_k", "f1", "false_positive_rate", "unexpected_prediction_rate", "prompt_pollution_rate"):
+                self.assertIn(key, side)
+
+        self.assertGreaterEqual(
+            upgraded["precision_at_k"] - legacy["precision_at_k"],
+            0.20,
+            f"Expected >= +0.20 precision lift; legacy={legacy}, upgraded={upgraded}",
+        )
+        self.assertGreater(upgraded["f1"], legacy["f1"])
+        self.assertLess(upgraded["false_positive_rate"], legacy["false_positive_rate"])
+        self.assertEqual(upgraded["forbidden_hits"], 0)
+
+        # CLI --benchmark-routing check
+        script_path = CORE_SCRIPTS / "decision_router.py"
+        proc = subprocess.run(
+            [sys.executable, str(script_path), "--benchmark-routing"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        cli_report = json.loads(proc.stdout)
+        self.assertEqual(cli_report["prompt_count"], 30)
+        self.assertGreaterEqual(cli_report["upgraded"]["precision_at_k"] - cli_report["legacy"]["precision_at_k"], 0.20)
+        self.assertIn("shared_legacy_domain_subset", cli_report)
+        subset = cli_report["shared_legacy_domain_subset"]
+        self.assertGreater(subset["prompt_count"], 0)
+        self.assertLess(subset["prompt_count"], 30)
+        self.assertGreater(subset["upgraded"]["precision_at_k"], subset["legacy"]["precision_at_k"])
+
+    def test_h1_patch3_czech_memory_leak_and_lets_go_ui_negative_cases(self):
+        """Patch 3: Czech memory leak excludes obs-memory; 'Let's go test the UI dashboard' excludes golang-pro."""
+        s_mem = self.router.select_skills("Oprav únik paměti v C++ parseru", max_skills=8)
+        self.assertIn("cpp-pro", s_mem)
+        self.assertNotIn("obs-memory", s_mem, "Czech memory-leak prompt must not select obs-memory")
+        self.assertNotIn("react-patterns", s_mem, "Czech parseru prompt must not select react-patterns")
+
+        s_ui = self.router.select_skills("Let's go test the UI dashboard", max_skills=8)
+        self.assertIn("ui-ux-designer", s_ui)
+        self.assertNotIn("golang-pro", s_ui, "'Let's go test the UI' must not select golang-pro")
+
+        s_go_test = self.router.select_skills("Run go test ./... in golang service", max_skills=8)
+        self.assertIn("golang-pro", s_go_test)
+
 
 if __name__ == "__main__":
     unittest.main()

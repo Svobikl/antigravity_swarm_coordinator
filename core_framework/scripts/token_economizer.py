@@ -59,6 +59,9 @@ MAX_FACTS = 4
 MAX_TOKENS = 150
 MAX_RENDERED_CHARS = 600
 MAX_NUDGE_TOKENS = 95
+MAX_SESSION_HISTORY = 200
+COST_SPIKE_THRESHOLD_RATIO = 2.0
+COST_SPIKE_MIN_SAMPLES = 3
 
 ENVFACTS_HEADER = "# environment facts learned from earlier sessions in this repository"
 
@@ -457,6 +460,7 @@ def antigravity_read(
                 {
                     "kind": "tool_use",
                     "step_index": call["planner_step"],
+                    "planner_step": call["planner_step"],
                     "tool": call["tool"],
                     "raw_tool": call["raw_tool"],
                     "summary": call["summary"],
@@ -534,6 +538,7 @@ def antigravity_read(
                     {
                         "kind": "tool_use",
                         "step_index": step_idx,
+                        "planner_step": call["planner_step"],
                         "tool": call["tool"],
                         "raw_tool": call["raw_tool"],
                         "summary": call["summary"],
@@ -635,6 +640,117 @@ def antigravity_session_usage(
         "model": model,
         "raw_tokens": raw_total,
         "effective_tokens": round(eff, 4),
+    }
+
+
+def session_metrics(items: list[dict[str, Any]], model: str = "gemini-4-carbon") -> dict[str, Any]:
+    """Aggregate cache-aware token usage across parsed transcript items without double-counting."""
+    totals: dict[str, int] = {
+        "input_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "output_tokens": 0,
+        "requests": 0,
+    }
+    seen_planner_steps: set[int] = set()
+    seen_usage_ids: set[int] = set()
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        u = it.get("usage")
+        if not isinstance(u, dict):
+            continue
+        p_step = it.get("planner_step")
+        if p_step is not None:
+            step_key = int(p_step)
+            if step_key in seen_planner_steps:
+                continue
+            seen_planner_steps.add(step_key)
+        elif id(u) in seen_usage_ids:
+            continue
+        seen_usage_ids.add(id(u))
+        totals["input_tokens"] += int(u.get("input_tokens", 0) or 0)
+        cr = int(u.get("cache_read_input_tokens", u.get("cache_read_tokens", 0)) or 0)
+        cw = int(u.get("cache_creation_input_tokens", u.get("cache_write_tokens", 0)) or 0)
+        totals["cache_read_tokens"] += cr
+        totals["cache_read_input_tokens"] += cr
+        totals["cache_creation_input_tokens"] += cw
+        totals["output_tokens"] += int(u.get("output_tokens", 0) or 0)
+        totals["requests"] += 1
+
+    raw_total = (
+        totals["input_tokens"]
+        + totals["cache_read_tokens"]
+        + totals["cache_creation_input_tokens"]
+        + totals["output_tokens"]
+    )
+    eff = effective_tokens(totals, model=model)
+    return {
+        **totals,
+        "model": model,
+        "raw_tokens": raw_total,
+        "effective_tokens": round(eff, 4),
+    }
+
+
+def evaluate_cost_tripwire(
+    current_effective_tokens: float,
+    history: list[dict[str, Any]],
+    threshold_ratio: float = COST_SPIKE_THRESHOLD_RATIO,
+    min_samples: int = COST_SPIKE_MIN_SAMPLES,
+) -> dict[str, Any]:
+    """Detect >= 2.0x effective_tokens cost spikes against rolling session baseline."""
+    curr = float(current_effective_tokens or 0.0)
+    samples: list[float] = []
+    for entry in history:
+        if not isinstance(entry, dict):
+            continue
+        val = entry.get("effective_tokens")
+        if isinstance(val, (int, float)) and not isinstance(val, bool) and float(val) > 0.0:
+            samples.append(float(val))
+
+    sample_count = len(samples)
+    if sample_count < int(min_samples):
+        baseline_mean = round(sum(samples) / sample_count, 4) if sample_count > 0 else 0.0
+        return {
+            "triggered": False,
+            "reason": "insufficient_baseline_samples",
+            "current_effective_tokens": round(curr, 4),
+            "baseline_mean": baseline_mean,
+            "ratio": round(curr / baseline_mean, 4) if baseline_mean > 0 else 0.0,
+            "threshold_ratio": float(threshold_ratio),
+            "sample_count": sample_count,
+            "min_samples": int(min_samples),
+            "opt_tokens": 0.0,
+        }
+
+    baseline_mean = sum(samples) / sample_count
+    if baseline_mean <= 0.0:
+        return {
+            "triggered": False,
+            "reason": "zero_baseline_mean",
+            "current_effective_tokens": round(curr, 4),
+            "baseline_mean": 0.0,
+            "ratio": 0.0,
+            "threshold_ratio": float(threshold_ratio),
+            "sample_count": sample_count,
+            "min_samples": int(min_samples),
+            "opt_tokens": 0.0,
+        }
+
+    ratio = curr / baseline_mean
+    triggered = ratio >= float(threshold_ratio)
+    return {
+        "triggered": triggered,
+        "reason": "cost_spike_2x_exceeded" if triggered else "within_baseline",
+        "current_effective_tokens": round(curr, 4),
+        "baseline_mean": round(baseline_mean, 4),
+        "ratio": round(ratio, 4),
+        "threshold_ratio": float(threshold_ratio),
+        "sample_count": sample_count,
+        "min_samples": int(min_samples),
+        "opt_tokens": 0.0,
     }
 
 
@@ -807,6 +923,8 @@ class EnvFactsDistiller:
         )
         self.state_path = resolve_envfacts_path(self.repo_path, self.state_root)
         self.slug = repo_slug(self.repo_path)
+        self._last_session_id: str | None = None
+        self._last_cost_spike_tripwire: dict[str, Any] | None = None
 
     def _default_state(self) -> dict[str, Any]:
         return {
@@ -816,6 +934,7 @@ class EnvFactsDistiller:
             "opt_tokens": 0.0,
             "facts": {},
             "forgotten": {},
+            "session_history": [],
         }
 
     def load_state(self) -> dict[str, Any]:
@@ -829,6 +948,7 @@ class EnvFactsDistiller:
                     data["opt_tokens"] = 0.0
                     data.setdefault("facts", {})
                     data.setdefault("forgotten", {})
+                    data.setdefault("session_history", [])
                     return data
             except Exception:
                 pass
@@ -1019,6 +1139,7 @@ class EnvFactsDistiller:
         self,
         transcript_path: str | Path,
         session_id: str | None = None,
+        model: str = "gemini-4-carbon",
     ) -> dict[str, Any]:
         """Fold an Antigravity JSONL transcript into AD-1 envfacts.json (opt_tokens == 0.0)."""
         if not is_enabled(self.repo_path):
@@ -1028,10 +1149,13 @@ class EnvFactsDistiller:
         state = self.load_state()
         now = int(state.get("now", 0)) + 1
         state["now"] = now
-        sess = session_id or f"sess_{now}_{Path(transcript_path).stem}"
+        resolved_tp = str(Path(transcript_path).resolve())
+        path_hash = hashlib.md5(resolved_tp.encode("utf-8", errors="replace")).hexdigest()[:12]
+        sess = session_id or f"sess_{path_hash}_{Path(transcript_path).stem}"
 
         facts: dict[str, Any] = state.setdefault("facts", {})
         forgotten: dict[str, Any] = state.setdefault("forgotten", {})
+        facts_count_before = len(facts)
         bash_events = [it for it in items if it.get("kind") == "tool_use" and it.get("tool") == "Bash"]
 
         # First evaluate existing ACTIVE/CANDIDATE facts against observed Bash runs
@@ -1072,6 +1196,39 @@ class EnvFactsDistiller:
                     "life": Lifecycle.new_life(now=now, session_id=sess),
                 }
 
+        facts_count_after = len(facts)
+
+        # Record bounded session telemetry and evaluate 2x cost-spike tripwire against prior history
+        env_tracker = EnvelopeTracker.load(self.state_path.parent / "envelope.json")
+        usage = antigravity_session_usage(transcript_path, model=model)
+        outcomes = _analyze_session_outcomes(items, env_tracker, self.repo_path)
+
+        history = [h for h in state.get("session_history", []) if isinstance(h, dict)]
+        existing_idx = next((i for i, h in enumerate(history) if h.get("session_id") == sess), None)
+        prior_history = [h for i, h in enumerate(history) if i != existing_idx]
+        tripwire = evaluate_cost_tripwire(usage["effective_tokens"], prior_history)
+
+        prev_fact_delta = int(history[existing_idx].get("fact_delta", 0)) if existing_idx is not None else 0
+        fact_delta = prev_fact_delta + (facts_count_after - facts_count_before)
+        entry = {
+            "session_id": sess,
+            "effective_tokens": usage["effective_tokens"],
+            "raw_tokens": usage["raw_tokens"],
+            "requests": usage["requests"],
+            "verified_complete": outcomes["verified_complete"],
+            "rework_spiral": outcomes["rework_spiral"],
+            "nudges": outcomes["nudges"],
+            "fact_delta": fact_delta,
+            "ts": int(time.time()),
+        }
+        if existing_idx is not None:
+            history[existing_idx] = entry
+        else:
+            history.append(entry)
+        state["session_history"] = history[-MAX_SESSION_HISTORY:]
+
+        self._last_session_id = sess
+        self._last_cost_spike_tripwire = tripwire
         self.save_state(state)
         return state
 
@@ -1428,6 +1585,98 @@ class TurnGuard:
 # ---------------------------------------------------------------------------
 
 
+def _analyze_session_outcomes(
+    items: list[dict[str, Any]],
+    env_tracker: EnvelopeTracker,
+    repo_path: Path,
+) -> dict[str, Any]:
+    """Derive verified_complete, rework_spiral, and nudges from session transcript items."""
+    last_test_verdict: str | None = None
+    saw_test_cmd = False
+    saw_clean_cmd = False
+    last_cmd_failed: bool | None = None
+    turn_spiral = SpiralState()
+
+    def _inproc_judge(digest: str) -> dict[str, Any]:
+        stuck = (
+            turn_spiral.edit_churn >= 4
+            and turn_spiral.error_outputs >= 6
+            and turn_spiral.stagnation >= 0.20
+        )
+        conf = min(0.95, 0.55 + 0.40 * turn_spiral.stagnation) if stuck else 0.15
+        return {"stuck": stuck, "confidence": round(conf, 4), "source": "inproc_fold_judge"}
+
+    guard = TurnGuard(
+        envelope_tracker=env_tracker,
+        judge_fn=_inproc_judge,
+        max_nudges=1,
+        repo=repo_path,
+    )
+    nudges = 0
+    rework_spiral = False
+
+    for it in items:
+        if it.get("kind") in ("user", "prompt"):
+            txt = str(it.get("text") or "")
+            if not re.search(r"ASW [A-Z0-9_-]+ MODE ENABLED!", txt, re.IGNORECASE):
+                turn_spiral = SpiralState()
+                guard.reset_turn_budget()
+            continue
+
+        turn_spiral.observe(it)
+        if it.get("kind") == "tool_use" and it.get("tool") == "Bash":
+            cmd = str(it.get("command") or "")
+            out = str(it.get("output") or "")
+            is_test_cmd = bool(_TEST_CMD_RE.search(cmd))
+            rv = SpiralState.runner_verdict(out)
+            is_err = bool(it.get("is_error"))
+            exit_code = it.get("exit_code")
+
+            if is_err or rv == "red":
+                last_cmd_failed = True
+            elif exit_code == 0 or rv == "green":
+                last_cmd_failed = False
+                saw_clean_cmd = True
+
+            if is_test_cmd:
+                saw_test_cmd = True
+                if rv == "red" or is_err:
+                    last_test_verdict = "red"
+                elif rv == "green" or exit_code == 0:
+                    last_test_verdict = "green"
+            elif rv == "red" or _FAIL_VERDICT_RE.search(out):
+                saw_test_cmd = True
+                last_test_verdict = "red"
+            elif not cmd and _PASS_VERDICT_RE.search(out):
+                saw_test_cmd = True
+                last_test_verdict = "green"
+
+        if guard.gate_for_judge(turn_spiral):
+            verdict = guard.step(turn_spiral)
+            if verdict.get("nudge"):
+                nudges += 1
+                rework_spiral = True
+
+    if (
+        turn_spiral.edit_churn >= 4
+        and turn_spiral.error_outputs >= 6
+        and turn_spiral.stagnation >= 0.20
+    ):
+        rework_spiral = True
+
+    verified_complete = (
+        last_test_verdict == "green"
+        if saw_test_cmd
+        else bool(saw_clean_cmd and last_cmd_failed is False)
+    )
+
+    return {
+        "verified_complete": verified_complete,
+        "rework_spiral": rework_spiral,
+        "nudges": nudges,
+    }
+
+
 def status(repo: str | Path | None = None, state_root: str | Path | None = None) -> dict[str, Any]:
     if not is_enabled(repo):
         return _disabled_copy()
@@ -1503,11 +1752,12 @@ def fold_transcript(
     repo: str | Path | None = None,
     state_root: str | Path | None = None,
     session_id: str | None = None,
+    model: str = "gemini-4-carbon",
 ) -> dict[str, Any]:
     if not is_enabled(repo):
         return _disabled_copy()
     distiller = EnvFactsDistiller(repo=repo, state_root=state_root)
-    st = distiller.fold_transcript(transcript_path, session_id=session_id)
+    st = distiller.fold_transcript(transcript_path, session_id=session_id, model=model)
 
     # Also fold ended-green prompt-turns into per-repo EnvelopeTracker (envelope.json)
     env_path = distiller.state_path.parent / "envelope.json"
@@ -1539,11 +1789,14 @@ def fold_transcript(
     return {
         "enabled": True,
         "status": "folded",
+        "session_id": distiller._last_session_id,
         "state_path": str(distiller.state_path),
         "envelope_path": str(env_path),
         "envelope_samples": len(tracker.samples),
         "fact_count": len(st.get("facts", {})),
         "active_facts": len(distiller.active_facts(st)),
+        "session_history_count": len(st.get("session_history", [])),
+        "cost_spike_tripwire": distiller._last_cost_spike_tripwire,
         "opt_tokens": 0.0,
         "rendered": st.get("rendered", ""),
     }
@@ -1568,6 +1821,7 @@ def check_turn(
     transcript_path: str | Path,
     repo: str | Path | None = None,
     state_root: str | Path | None = None,
+    model: str = "gemini-4-carbon",
 ) -> dict[str, Any]:
     if not is_enabled(repo):
         return _disabled_copy()
@@ -1617,11 +1871,86 @@ def check_turn(
             write_json_atomic(guard_state_path, {"turn_key": turn_key, "nudges": guard.nudges_this_turn})
         except Exception:
             pass
+
+    turn_usage = session_metrics(turn_items, model=model)
+    st = EnvFactsDistiller(repo=repo_p, state_root=s_root).load_state()
+    tripwire = evaluate_cost_tripwire(turn_usage["effective_tokens"], st.get("session_history", []))
+
     res["enabled"] = True
     res["turns"] = state.turns
     res["edit_churn"] = state.edit_churn
     res["error_outputs"] = state.error_outputs
+    res["turn_effective_tokens"] = turn_usage["effective_tokens"]
+    res["cost_spike_tripwire"] = tripwire
+    res["opt_tokens"] = 0.0
     return res
+
+
+def harness_scorecard(
+    repo: str | Path | None = None,
+    state_root: str | Path | None = None,
+) -> dict[str, Any]:
+    """Compute Section VIII Table VIII Harness Health Scorecard (zero-API, zero-division safe)."""
+    if not is_enabled(repo):
+        return _disabled_copy()
+    distiller = EnvFactsDistiller(repo=repo, state_root=state_root)
+    st = distiller.load_state()
+    history = [h for h in st.get("session_history", []) if isinstance(h, dict)]
+    session_count = len(history)
+    verified_completed_count = sum(1 for h in history if h.get("verified_complete"))
+    rework_spiral_count = sum(1 for h in history if h.get("rework_spiral"))
+    total_nudges = sum(int(h.get("nudges", 0) or 0) for h in history)
+    total_eff = sum(float(h.get("effective_tokens", 0.0) or 0.0) for h in history)
+    total_fact_delta = sum(int(h.get("fact_delta", 0) or 0) for h in history)
+
+    completion_rate = round(verified_completed_count / session_count, 4) if session_count > 0 else 0.0
+    rework_spiral_rate = round(rework_spiral_count / session_count, 4) if session_count > 0 else 0.0
+    escalation_nudge_rate = round(total_nudges / session_count, 4) if session_count > 0 else 0.0
+    cost_per_verified_task = round(total_eff / verified_completed_count, 4) if verified_completed_count > 0 else 0.0
+    mean_effective_tokens = round(total_eff / session_count, 4) if session_count > 0 else 0.0
+    envfacts_growth_rate = round(total_fact_delta / session_count, 4) if session_count > 0 else 0.0
+
+    latest_session = history[-1] if session_count > 0 else None
+    latest_eff = float(latest_session.get("effective_tokens", 0.0) or 0.0) if latest_session else 0.0
+    prior_history = history[:-1] if session_count > 0 else []
+    cost_spike_tripwire = evaluate_cost_tripwire(latest_eff, prior_history)
+
+    rework_spiral_alert = {
+        "triggered": bool(
+            session_count > 0
+            and (
+                bool(latest_session.get("rework_spiral"))
+                or (session_count >= 3 and rework_spiral_rate >= 0.25)
+            )
+        ),
+        "rework_spiral_count": rework_spiral_count,
+        "rework_spiral_rate": rework_spiral_rate,
+        "latest_session_spiral": bool(latest_session.get("rework_spiral")) if latest_session else False,
+        "threshold_rate": 0.25,
+        "opt_tokens": 0.0,
+    }
+
+    return {
+        "enabled": True,
+        "repo": st.get("repo", distiller.repo_path.name or distiller.slug),
+        "repo_slug": distiller.slug,
+        "state_path": str(distiller.state_path),
+        "session_count": session_count,
+        "verified_completed_count": verified_completed_count,
+        "active_facts": len(distiller.active_facts(st)),
+        "fact_count": len(st.get("facts", {})),
+        "completion_rate": completion_rate,
+        "rework_spiral_rate": rework_spiral_rate,
+        "escalation_nudge_rate": escalation_nudge_rate,
+        "cost_per_verified_task": cost_per_verified_task,
+        "mean_effective_tokens": mean_effective_tokens,
+        "envfacts_growth_rate": envfacts_growth_rate,
+        "tripwires": {
+            "cost_spike_tripwire": cost_spike_tripwire,
+            "rework_spiral_alert": rework_spiral_alert,
+        },
+        "opt_tokens": 0.0,
+    }
 
 
 def get_microskills(repo: str | Path | None = None, state_root: str | Path | None = None) -> dict[str, Any]:
@@ -1983,6 +2312,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--microskills", action="store_true", help="List learned EnvFacts micro-skills")
     parser.add_argument("--forget", type=str, default=None, help="Forget a learned micro-skill by ID")
     parser.add_argument("--unforget", type=str, default=None, help="Restore a forgotten micro-skill by ID")
+    parser.add_argument("--scorecard", action="store_true", help="Emit Section VIII Harness Health Scorecard")
     parser.add_argument("--benchmark", action="store_true", help="Run deterministic 6-session A/B benchmark")
     parser.add_argument("--repo", type=str, default=None, help="Target repository directory")
     parser.add_argument("--state-root", type=str, default=None, help="Override state root directory")
@@ -2000,12 +2330,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.benchmark:
         result = run_benchmark(model=args.model, output_path=args.output)
+    elif args.scorecard:
+        result = harness_scorecard(repo=repo, state_root=args.state_root)
     elif args.fold:
-        result = fold_transcript(args.fold, repo=repo, state_root=args.state_root)
+        result = fold_transcript(args.fold, repo=repo, state_root=args.state_root, model=args.model)
     elif args.session_start:
         result = session_start(repo=repo, state_root=args.state_root)
     elif args.check_turn:
-        result = check_turn(args.check_turn, repo=repo, state_root=args.state_root)
+        result = check_turn(args.check_turn, repo=repo, state_root=args.state_root, model=args.model)
     elif args.microskills:
         result = get_microskills(repo=repo, state_root=args.state_root)
     elif args.forget:

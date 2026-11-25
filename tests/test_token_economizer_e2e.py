@@ -28,6 +28,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AG_SCRIPTS = REPO_ROOT / ".antigravity" / "scripts"
 HOOK_SCRIPT = REPO_ROOT / "plugins" / "antigravity-swarm" / "scripts" / "asw-hook.mjs"
+STOP_CHECK_SCRIPT = REPO_ROOT / "plugins" / "antigravity-swarm" / "scripts" / "asw-stop-check.mjs"
+LSP_CHECK_SCRIPT = REPO_ROOT / "plugins" / "antigravity-swarm" / "scripts" / "asw-lsp-check.mjs"
 RTK_REWRITE_SCRIPT = REPO_ROOT / "plugins" / "antigravity-swarm" / "scripts" / "asw-rtk-rewrite.mjs"
 TE_SCRIPT = AG_SCRIPTS / "token_economizer.py"
 MEM_SCRIPT = AG_SCRIPTS / "memory_manager.py"
@@ -581,6 +583,158 @@ class TestTokenEconomizerEndToEndPipeline(unittest.TestCase):
             self.assertIn("<details", readme_txt)
             self.assertIn(post_pct, readme_txt)
             self.assertIn(overall_pct, readme_txt)
+
+    def test_e2e_stop_hook_folds_into_scorecard_and_lsp_clears_stale_diagnostic(self) -> None:
+        """Verify Stop hook -> scorecard 2x tripwire integration and LSP stale-diagnostic unlink."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            ws_dir = root / "isolated_ws"
+            (ws_dir / "src").mkdir(parents=True, exist_ok=True)
+            (ws_dir / "README.md").write_text("# Isolated Workspace\n", encoding="utf-8")
+            home_dir = root / "isolated_home"
+            home_dir.mkdir(parents=True, exist_ok=True)
+            env = _isolated_env(home_dir)
+
+            # 1. Trigger asw-stop-check.mjs across 3 baseline transcripts + 1 >=2.5x spike transcript
+            sessions_dir = root / "stop_sessions"
+            for idx in range(1, 4):
+                t_path = sessions_dir / f"baseline_{idx}.jsonl"
+                _write_jsonl(t_path, _warmup_session_rows(idx))
+                stop_proc = subprocess.run(
+                    ["node", str(STOP_CHECK_SCRIPT)],
+                    input=json.dumps(
+                        {
+                            "cwd": str(ws_dir),
+                            "fullyIdle": True,
+                            "terminationReason": "NO_TOOL_CALL",
+                            "transcriptPath": str(t_path),
+                        }
+                    ),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    env=env,
+                    timeout=20,
+                )
+                self.assertEqual(stop_proc.returncode, 0, stop_proc.stderr)
+                self.assertEqual(json.loads(stop_proc.stdout), {"decision": ""})
+
+            spike_path = sessions_dir / "spike_4.jsonl"
+            _write_jsonl(
+                spike_path,
+                [
+                    {"type": "USER_INPUT", "step_index": 0, "text": "<USER_REQUEST>/asw-loop heavy task</USER_REQUEST>"},
+                    {
+                        "type": "PLANNER_RESPONSE",
+                        "step_index": 1,
+                        "tool_calls": [{"id": "cs1", "name": "run_command", "arguments": {"CommandLine": "python -m pytest -q"}}],
+                        "usage": {"input_tokens": 8000, "cache_read_tokens": 10000, "output_tokens": 800},
+                    },
+                    {
+                        "type": "MODEL",
+                        "subtype": "GENERIC",
+                        "step_index": 2,
+                        "call_id": "cs1",
+                        "text": "Command exited with code 0\n12 passed in 0.41s",
+                    },
+                ],
+            )
+            spike_stop = subprocess.run(
+                ["node", str(STOP_CHECK_SCRIPT)],
+                input=json.dumps(
+                    {
+                        "cwd": str(ws_dir),
+                        "fullyIdle": True,
+                        "terminationReason": "NO_TOOL_CALL",
+                        "transcriptPath": str(spike_path),
+                    }
+                ),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+                timeout=20,
+            )
+            self.assertEqual(spike_stop.returncode, 0, spike_stop.stderr)
+            self.assertEqual(json.loads(spike_stop.stdout), {"decision": ""})
+
+            sc_proc = subprocess.run(
+                [sys.executable, str(TE_SCRIPT), "--scorecard", "--repo", str(ws_dir), "--json"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+                timeout=20,
+            )
+            self.assertEqual(sc_proc.returncode, 0, sc_proc.stderr)
+            scorecard = json.loads(sc_proc.stdout)
+            self.assertEqual(scorecard["session_count"], 4)
+            self.assertEqual(scorecard["completion_rate"], 1.0)
+            self.assertTrue(scorecard["tripwires"]["cost_spike_tripwire"]["triggered"])
+            self.assertGreaterEqual(scorecard["tripwires"]["cost_spike_tripwire"]["ratio"], 2.5)
+            self.assertEqual(scorecard["opt_tokens"], 0.0)
+
+            # 2. Trigger asw-lsp-check.mjs on broken .py -> verify asw-hook.mjs surfaces it -> fix -> unlink before hook
+            py_file = ws_dir / "src" / "sample_mod.py"
+            py_file.write_text("def broken(:\n    pass\n", encoding="utf-8")
+            pending_diag = ws_dir / ".asw" / ".pending-lsp-diagnostic.json"
+
+            lsp_broken_1 = subprocess.run(
+                ["node", str(LSP_CHECK_SCRIPT), "--event", "PostToolUse"],
+                input=json.dumps({"cwd": str(ws_dir), "toolArgs": {"TargetFile": str(py_file)}}),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+                timeout=20,
+            )
+            self.assertEqual(lsp_broken_1.returncode, 0, lsp_broken_1.stderr)
+            self.assertEqual(json.loads(lsp_broken_1.stdout), {})
+            self.assertTrue(pending_diag.is_file())
+            self.assertEqual(list(ws_dir.rglob("__pycache__")), [])
+
+            hook_broken = _run_hook(
+                [],
+                {"invocationNum": 1, "lastUserInput": "continue work", "cwd": str(ws_dir)},
+                env=env,
+            )
+            self.assertIn("ASW POST-EDIT DIAGNOSTIC", hook_broken["injectSteps"][0]["ephemeralMessage"])
+
+            # Re-stage pending diagnostic, then fix the .py file and verify PostToolUse unlinks it before asw-hook.mjs
+            lsp_broken_2 = subprocess.run(
+                ["node", str(LSP_CHECK_SCRIPT), "--event", "PostToolUse"],
+                input=json.dumps({"cwd": str(ws_dir), "toolArgs": {"TargetFile": str(py_file)}}),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+                timeout=20,
+            )
+            self.assertEqual(lsp_broken_2.returncode, 0, lsp_broken_2.stderr)
+            self.assertTrue(pending_diag.is_file())
+
+            py_file.write_text("def fixed():\n    return 42\n", encoding="utf-8")
+            lsp_fixed = subprocess.run(
+                ["node", str(LSP_CHECK_SCRIPT), "--event", "PostToolUse"],
+                input=json.dumps({"cwd": str(ws_dir), "toolArgs": {"TargetFile": str(py_file)}}),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+                timeout=20,
+            )
+            self.assertEqual(lsp_fixed.returncode, 0, lsp_fixed.stderr)
+            self.assertEqual(json.loads(lsp_fixed.stdout), {})
+            self.assertFalse(pending_diag.exists(), "Valid PostToolUse edit must unlink .pending-lsp-diagnostic.json")
+
+            hook_clean = _run_hook(
+                [],
+                {"invocationNum": 1, "lastUserInput": "continue work", "cwd": str(ws_dir)},
+                env=env,
+            )
+            self.assertEqual(hook_clean, {})
+            self.assertEqual(list(ws_dir.rglob("__pycache__")), [])
+            self.assertEqual(list(ws_dir.rglob("*.pyc")), [])
 
 
 if __name__ == "__main__":

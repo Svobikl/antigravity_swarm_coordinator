@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { extname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { safeMode } from "./asw-redact.mjs";
@@ -75,10 +75,18 @@ function checkFileIntegrity(filePath) {
       });
     } else if (ext === ".py") {
       const pyBin = process.platform === "win32" ? "python" : "python3";
-      execFileSync(pyBin, ["-m", "py_compile", filePath], {
-        stdio: "pipe",
-        timeout: 4000,
-      });
+      execFileSync(
+        pyBin,
+        [
+          "-c",
+          "import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_bytes(), filename=sys.argv[1])",
+          filePath,
+        ],
+        {
+          stdio: "pipe",
+          timeout: 4000,
+        }
+      );
     }
   } catch (err) {
     const msg = String(err?.stderr || err?.message || "Syntax error").slice(0, 300);
@@ -92,23 +100,37 @@ const rawTarget = extractTargetFile(payload);
 const targetFile =
   rawTarget && typeof rawTarget === "string"
     ? isAbsolute(rawTarget)
-      ? rawTarget
+      ? resolve(rawTarget)
       : resolve(repoDir, rawTarget)
     : "";
 const diagnostic = checkFileIntegrity(targetFile);
 
 if (isPostToolUseEvent(payload)) {
+  const aswDir = join(repoDir, ".asw");
+  const pendingPath = join(aswDir, ".pending-lsp-diagnostic.json");
   if (diagnostic) {
     try {
-      const aswDir = join(repoDir, ".asw");
       mkdirSync(aswDir, { recursive: true });
       writeFileSync(
-        join(aswDir, ".pending-lsp-diagnostic.json"),
-        JSON.stringify({ diagnostic, ts: Date.now() }),
+        pendingPath,
+        JSON.stringify({ diagnostic, file: targetFile, ts: Date.now() }),
         "utf8"
       );
     } catch {
       // fail-open
+    }
+  } else if (targetFile && existsSync(pendingPath)) {
+    try {
+      const parsed = JSON.parse(readFileSync(pendingPath, "utf8"));
+      if (!parsed?.file || parsed.file === targetFile) {
+        unlinkSync(pendingPath);
+      }
+    } catch {
+      try {
+        unlinkSync(pendingPath);
+      } catch {
+        // ignore
+      }
     }
   }
   process.stdout.write("{}");
