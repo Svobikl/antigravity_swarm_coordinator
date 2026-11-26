@@ -24,6 +24,7 @@ Adversarial Engine + Gemini 4 Neon (High) whenever Claude Opus 5.5 credits/quota
 """
 
 import argparse
+import ast
 import json
 import math
 import os
@@ -31,6 +32,8 @@ import re
 import shutil
 import subprocess
 import sys
+import textwrap
+from collections import deque
 from pathlib import Path
 
 
@@ -202,12 +205,15 @@ def build_git_diff_from_files(files_arg: str | None, workdir: Path) -> str:
         elif target_path.is_file():
             # Untracked or newly created file: synthesize unified diff additions in UTF-8
             file_text = read_text_resilient(target_path)
-            added_lines = "\n".join(f"+{line}" for line in file_text.splitlines())
+            lines_list = file_text.splitlines()
+            added_lines = "\n".join(f"+{line}" for line in lines_list)
+            hunk_hdr = f"@@ -0,0 +1,{len(lines_list)} @@\n" if lines_list else ""
             synth_chunk = (
                 f"diff --git a/{rel_posix} b/{rel_posix}\n"
                 f"new file mode 100644\n"
                 f"--- /dev/null\n"
                 f"+++ b/{rel_posix}\n"
+                f"{hunk_hdr}"
                 f"{added_lines}\n"
             )
             diff_chunks.append(synth_chunk)
@@ -407,7 +413,316 @@ def scan_public_repo_privacy(repo_dir: Path, forbid_terms_csv: str | None = None
     return 0
 
 
-def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str, list[dict], str]:
+_SHARED_RUNTIME_RESOURCE_RE = re.compile(
+    r"(?:^|[/\\])(decision_router\.py|token_economizer\.py|asw-[A-Za-z0-9_-]+\.mjs|decision_config\.json)$",
+    re.IGNORECASE,
+)
+_SHARED_RUNTIME_INLINE_RE = re.compile(
+    r"\b(decision_router\.py|token_economizer\.py|asw-[A-Za-z0-9_-]+\.mjs|decision_config\.json)\b",
+    re.IGNORECASE,
+)
+_DAG_IGNORED_DIRS = {
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".asw",
+    ".agent-workspace",
+}
+_DAG_CODE_EXTS = {".py", ".mjs", ".js", ".ts", ".tsx", ".jsx"}
+_ESM_IMPORT_PATTERNS = (
+    re.compile(r"""import\s+(?:[^'"]+?\s+from\s+)?['"]([^'"]+)['"]"""),
+    re.compile(r"""export\s+[^'"]*?\s+from\s+['"]([^'"]+)['"]"""),
+    re.compile(r"""require\s*\(\s*['"]([^'"]+)['"]\s*\)"""),
+    re.compile(r"""import\s*\(\s*['"]([^'"]+)['"]\s*\)"""),
+)
+
+
+def _norm_rel(path_str: str) -> str:
+    cleaned = path_str.replace("\\", "/").strip()
+    while cleaned.startswith("./"):
+        cleaned = cleaned[2:]
+    return cleaned
+
+
+def _collect_py_docstring_ids(tree: ast.AST) -> set[int]:
+    ids: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.body and isinstance(node.body[0], ast.Expr):
+                val = node.body[0].value
+                if isinstance(val, ast.Constant) and isinstance(val.value, str):
+                    ids.add(id(val))
+    return ids
+
+
+def build_repo_dependency_graph(
+    repo_root: Path,
+    candidate_files: list[str] | set[str] | tuple[str, ...] | None = None,
+) -> dict[str, set[str]]:
+    """Build a static repository dependency DAG across Python AST imports, ESM imports, CLI spawns, and shared JSON configs.
+
+    Missing/not-yet-created files yield 0 edges without raising FileNotFoundError (`Missing=0` guard).
+    """
+    if repo_root is None or not repo_root.exists() or not repo_root.is_dir():
+        return {}
+
+    root = repo_root.resolve()
+    existing_files: dict[str, Path] = {}
+    lower_to_rel: dict[str, str] = {}
+    py_module_to_rel: dict[str, str] = {}
+    stem_to_py_rels: dict[str, list[str]] = {}
+    basename_to_rels: dict[str, list[str]] = {}
+
+    for fpath in root.rglob("*"):
+        if not fpath.is_file():
+            continue
+        try:
+            rel_path = fpath.relative_to(root)
+        except ValueError:
+            continue
+        if any(part in _DAG_IGNORED_DIRS for part in rel_path.parts[:-1]):
+            continue
+        if fpath.suffix.lower() not in (_DAG_CODE_EXTS | {".json"}):
+            continue
+        rel = rel_path.as_posix()
+        existing_files[rel] = fpath
+        lower_to_rel[rel.lower()] = rel
+        basename_to_rels.setdefault(fpath.name.lower(), []).append(rel)
+
+        if fpath.suffix.lower() == ".py":
+            parts = list(rel_path.with_suffix("").parts)
+            if parts and parts[-1] == "__init__":
+                mod_name = ".".join(parts[:-1])
+            else:
+                mod_name = ".".join(parts)
+            if mod_name:
+                py_module_to_rel[mod_name] = rel
+            stem = fpath.stem
+            if stem != "__init__":
+                stem_to_py_rels.setdefault(stem, []).append(rel)
+
+    # Also register explicit candidate files that exist on disk (e.g., inside .antigravity/scripts or tests)
+    cand_norm: list[str] = []
+    if candidate_files:
+        for cf in candidate_files:
+            nc = _norm_rel(cf)
+            if not nc:
+                continue
+            cand_norm.append(nc)
+            cand_abs = root / nc
+            if cand_abs.is_file() and nc not in existing_files:
+                existing_files[nc] = cand_abs
+                lower_to_rel[nc.lower()] = nc
+                basename_to_rels.setdefault(cand_abs.name.lower(), []).append(nc)
+                if cand_abs.suffix.lower() == ".py":
+                    parts = list(Path(nc).with_suffix("").parts)
+                    mod_name = ".".join(parts[:-1]) if parts and parts[-1] == "__init__" else ".".join(parts)
+                    if mod_name:
+                        py_module_to_rel[mod_name] = nc
+                    if cand_abs.stem != "__init__":
+                        stem_to_py_rels.setdefault(cand_abs.stem, []).append(nc)
+
+    def _resolve_py_module(mod_name: str) -> str | None:
+        if not mod_name:
+            return None
+        parts = mod_name.split(".")
+        for end in range(len(parts), 0, -1):
+            prefix = ".".join(parts[:end])
+            if prefix in py_module_to_rel:
+                return py_module_to_rel[prefix]
+        if len(parts) == 1 and parts[0] in stem_to_py_rels:
+            matches = stem_to_py_rels[parts[0]]
+            if len(matches) == 1:
+                return matches[0]
+            for m in matches:
+                if m in cand_norm:
+                    return m
+        return None
+
+    def _resolve_rel_module(base_dir: Path, mod_parts: list[str]) -> str | None:
+        target_base = _norm_rel((base_dir / "/".join(mod_parts)).as_posix())
+        for suffix in (".py", "/__init__.py"):
+            cand = target_base + suffix
+            if cand in existing_files:
+                return cand
+            if cand.lower() in lower_to_rel:
+                return lower_to_rel[cand.lower()]
+        return None
+
+    def _resolve_shared_resource(raw_ref: str, source_rel: str) -> str | None:
+        cleaned = _norm_rel(raw_ref)
+        if cleaned in existing_files:
+            return cleaned
+        if cleaned.lower() in lower_to_rel:
+            return lower_to_rel[cleaned.lower()]
+        src_parent = Path(source_rel).parent
+        rel_joined = _norm_rel((src_parent / cleaned).as_posix())
+        if rel_joined in existing_files:
+            return rel_joined
+        m = _SHARED_RUNTIME_INLINE_RE.search(cleaned)
+        if m:
+            res_name = m.group(1)
+            rels = basename_to_rels.get(res_name.lower(), [])
+            if len(rels) == 1:
+                return rels[0]
+            return res_name
+        return None
+
+    def _extract_edges_for_file(rel: str) -> set[str]:
+        fpath = existing_files.get(rel)
+        if fpath is None:
+            return set()
+        ext = fpath.suffix.lower()
+        if ext not in _DAG_CODE_EXTS:
+            return set()
+        source = read_text_resilient(fpath)
+        if not source.strip():
+            return set()
+        edges: set[str] = set()
+        src_parent = Path(rel).parent
+
+        if ext == ".py":
+            try:
+                tree = ast.parse(source)
+            except SyntaxError:
+                tree = None
+            if tree is not None:
+                doc_ids = _collect_py_docstring_ids(tree)
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            resolved = _resolve_py_module(alias.name)
+                            if resolved and resolved != rel:
+                                edges.add(resolved)
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.level > 0:
+                            base = src_parent
+                            for _ in range(node.level - 1):
+                                base = base.parent
+                            if node.module:
+                                resolved = _resolve_rel_module(base, node.module.split("."))
+                                if resolved and resolved != rel:
+                                    edges.add(resolved)
+                            for alias in node.names:
+                                sub_parts = (node.module.split(".") if node.module else []) + [alias.name]
+                                resolved = _resolve_rel_module(base, sub_parts)
+                                if resolved and resolved != rel:
+                                    edges.add(resolved)
+                        elif node.module:
+                            resolved = _resolve_py_module(node.module)
+                            if resolved and resolved != rel:
+                                edges.add(resolved)
+                            for alias in node.names:
+                                sub_resolved = _resolve_py_module(f"{node.module}.{alias.name}")
+                                if sub_resolved and sub_resolved != rel:
+                                    edges.add(sub_resolved)
+                    elif isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in doc_ids:
+                        if _SHARED_RUNTIME_INLINE_RE.search(node.value):
+                            resolved = _resolve_shared_resource(node.value, rel)
+                            if resolved and resolved != rel:
+                                edges.add(resolved)
+        else:
+            code_lines = [
+                ln for ln in source.splitlines()
+                if not ln.lstrip().startswith(("//", "/*", "*"))
+            ]
+            code_text = "\n".join(code_lines)
+            for pat in _ESM_IMPORT_PATTERNS:
+                for m in pat.finditer(code_text):
+                    spec = m.group(1).strip()
+                    if spec.startswith((".", "/")):
+                        raw_target = _norm_rel(os.path.normpath((src_parent / spec).as_posix()))
+                        for ext_cand in ("", ".mjs", ".js", ".ts", ".tsx", ".jsx", "/index.mjs", "/index.js"):
+                            cand = raw_target + ext_cand
+                            if cand in existing_files and cand != rel:
+                                edges.add(cand)
+                                break
+                            if cand.lower() in lower_to_rel and lower_to_rel[cand.lower()] != rel:
+                                edges.add(lower_to_rel[cand.lower()])
+                                break
+            for m in _SHARED_RUNTIME_INLINE_RE.finditer(code_text):
+                resolved = _resolve_shared_resource(m.group(1), rel)
+                if resolved and resolved != rel:
+                    edges.add(resolved)
+        return edges
+
+    graph: dict[str, set[str]] = {}
+    if candidate_files is not None:
+        queue: deque[str] = deque()
+        visited: set[str] = set()
+        for cf in cand_norm:
+            resolved_cf = cf if cf in existing_files else lower_to_rel.get(cf.lower())
+            if resolved_cf and resolved_cf not in visited:
+                visited.add(resolved_cf)
+                queue.append(resolved_cf)
+        while queue:
+            cur = queue.popleft()
+            edges = _extract_edges_for_file(cur)
+            if edges:
+                graph[cur] = edges
+                for nxt in sorted(edges):
+                    if nxt in existing_files and nxt not in visited:
+                        visited.add(nxt)
+                        queue.append(nxt)
+    else:
+        for rel in sorted(existing_files.keys()):
+            edges = _extract_edges_for_file(rel)
+            if edges:
+                graph[rel] = edges
+
+    return graph
+
+
+def _bfs_reachable(graph: dict[str, set[str]], start: str) -> dict[str, list[str]]:
+    """Return shortest path from `start` to each reachable dependency node (excluding `start`)."""
+    if start not in graph:
+        return {}
+    paths: dict[str, list[str]] = {}
+    queue: deque[list[str]] = deque([[start]])
+    visited: set[str] = {start}
+    while queue:
+        path = queue.popleft()
+        cur = path[-1]
+        for nxt in sorted(graph.get(cur, ())):
+            if nxt in visited:
+                continue
+            visited.add(nxt)
+            new_path = path + [nxt]
+            paths[nxt] = new_path
+            queue.append(new_path)
+    return paths
+
+
+def _infer_plan_repo_root(plan_path: Path, candidate_files: list[str], workdir: Path | None = None) -> Path:
+    """Resolve the repository root corresponding to `plan_path` and its candidate files."""
+    if workdir is not None:
+        return workdir.resolve()
+    resolved_plan = plan_path.resolve()
+    if resolved_plan.parent.name == "plans" and resolved_plan.parent.parent.name == ".asw":
+        plan_root = resolved_plan.parent.parent.parent
+    else:
+        plan_root = resolved_plan.parent
+
+    if candidate_files:
+        for cf in candidate_files:
+            if (plan_root / _norm_rel(cf)).exists():
+                return plan_root
+        cwd = Path.cwd().resolve()
+        if cwd != plan_root:
+            for cf in candidate_files:
+                if (cwd / _norm_rel(cf)).exists():
+                    return cwd
+    return plan_root
+
+
+def audit_plan(
+    plan_path: Path,
+    fallback_reason: str | None = None,
+    workdir: Path | None = None,
+) -> tuple[str, list[dict], str]:
     """Audit an implementation plan across the 6 mandatory adversarial vectors and Anti-Shortcut Law."""
     if not plan_path.exists():
         return "PLAN_REVISION_REQUIRED", [{"vector": "Vector 1", "level": "CRITICAL", "message": f"Plan file does not exist: {plan_path}"}], "File not found."
@@ -479,29 +794,46 @@ def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str
                     "message": f"Line {line_no} contains username in path: {line.strip()[:80]}"
                 })
 
-    # Vector 4: Parallel Wave File-Collision Serialization
+    # Vector 4: Parallel Wave File-Collision & NP-Bench Transitive Dependency Serialization
     todos_match = re.search(r"##\s+(?:TODOs|Execution Tasks)(.*?)(?=\n##\s+[A-Z]|\Z)", raw, re.DOTALL | re.IGNORECASE)
     todos_text = todos_match.group(1) if todos_match else raw
     task_snippets = re.split(r"\n(?=-\s+\[[ xX]\])", todos_text)
 
-    task_file_map = {}
+    task_file_map: dict[str, list[str]] = {}
+    task_raw_files: dict[str, list[str]] = {}
+    task_test_files: dict[str, list[str]] = {}
     for t in task_snippets:
         if not t.strip() or not re.search(r"-\s+\[[ xX]\]", t):
             continue
         first_line = t.strip().splitlines()[0]
-        task_id_match = re.search(r"-\s+\[[ xX]\]\s*(\d+|Task\s*\d+)", first_line, re.IGNORECASE)
+        task_id_match = re.search(r"-\s+\[[ xX]\]\s*[*_`]*(\d+|Task\s*\d+)", first_line, re.IGNORECASE)
         task_id = task_id_match.group(1).lower().replace("task", "").strip() if task_id_match else first_line[:30]
 
         files_match = re.search(r"-\s+\*?\*?Files\*?\*?:(.*?)(?=\n\s*-\s+\*?\*?[A-Z]|\Z)", t, re.DOTALL | re.IGNORECASE)
         if files_match:
-            files = re.findall(r"[`'\"]([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9_]+)[`'\"]", files_match.group(1))
+            raw_files = re.findall(r"[`'\"]?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9_]+)[`'\"]?", files_match.group(1))
+            clean_files = [_norm_rel(f) for f in raw_files if not f.startswith("http")]
+            task_file_map[task_id] = [f.lower() for f in clean_files]
+            task_raw_files[task_id] = clean_files
         else:
-            files = re.findall(r"[`'\"]([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9_]+)[`'\"]", t)
+            raw_files = re.findall(r"[`'\"]([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9_]+)[`'\"]", t)
+            clean_files = [_norm_rel(f) for f in raw_files if "/" in f and not f.startswith("http")]
+            task_file_map[task_id] = [f.lower() for f in clean_files]
+            task_raw_files[task_id] = clean_files
 
-        task_file_map[task_id] = [f.replace("\\", "/").strip().lower() for f in files if "/" in f and not f.startswith("http")]
+        # Also extract test files referenced in RED/GREEN/QA lines for transitive DAG coverage
+        t_tests: list[str] = []
+        for tline in t.splitlines():
+            if re.search(r"\b(?:red|green|qa|test)\b", tline, re.IGNORECASE):
+                for tf in re.findall(r"[`'\"]?([a-zA-Z0-9_\-\./\\]+\.(?:py|mjs|js|ts|tsx|jsx))[`'\"]?", tline):
+                    ntf = _norm_rel(tf)
+                    if not ntf.startswith("http") and ntf not in task_raw_files[task_id] and ntf not in t_tests:
+                        if "test" in ntf.lower():
+                            t_tests.append(ntf)
+        task_test_files[task_id] = t_tests
 
     waves_match = re.search(r"##\s+Parallel Execution Waves(.*?)(?=\n##\s+[A-Z]|\Z)", raw, re.DOTALL | re.IGNORECASE)
-    wave_map = {}
+    wave_map: dict[str, str] = {}
     if waves_match:
         current_wave = "default"
         for line in waves_match.group(1).splitlines():
@@ -513,31 +845,105 @@ def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str
                 wave_map[tm.lower()] = current_wave
 
     if wave_map:
-        for w in set(wave_map.values()):
-            wave_tasks = [t for t, wv in wave_map.items() if wv == w]
-            file_to_tasks = {}
-            for wt in wave_tasks:
-                for f in task_file_map.get(wt, []):
-                    file_to_tasks.setdefault(f, []).append(wt)
-            for f, ts in file_to_tasks.items():
-                if len(ts) > 1:
-                    findings.append({
-                        "vector": "Vector 4: Parallel Wave File-Collision Serialization",
-                        "level": "CRITICAL",
-                        "message": f"Parallel wave file collision in Wave {w}: file '{f}' targeted concurrently by tasks {ts} without serialization."
-                    })
+        wave_groups = {
+            w: [t for t, wv in wave_map.items() if wv == w]
+            for w in sorted(set(wave_map.values()))
+        }
     else:
-        file_to_tasks = {}
-        for t_id, flist in task_file_map.items():
-            for f in flist:
-                file_to_tasks.setdefault(f, []).append(t_id)
+        wave_groups = {"default": list(task_file_map.keys())}
+
+    for w, wave_tasks in wave_groups.items():
+        file_to_tasks: dict[str, list[str]] = {}
+        for wt in wave_tasks:
+            for f in task_file_map.get(wt, []):
+                file_to_tasks.setdefault(f, []).append(wt)
         for f, ts in file_to_tasks.items():
             if len(ts) > 1:
+                if w == "default" and not wave_map:
+                    msg = f"Parallel wave file collision: file '{f}' targeted by multiple tasks: {ts} without explicit serialization."
+                else:
+                    msg = f"Parallel wave file collision in Wave {w}: file '{f}' targeted concurrently by tasks {ts} without serialization."
                 findings.append({
                     "vector": "Vector 4: Parallel Wave File-Collision Serialization",
                     "level": "CRITICAL",
-                    "message": f"Parallel wave file collision: file '{f}' targeted by multiple tasks: {ts} without explicit serialization."
+                    "message": msg,
                 })
+
+    # NP-Bench Transitive Wave Race Detection across parallel waves (>= 2 tasks)
+    all_plan_candidates = [
+        f
+        for flist in list(task_raw_files.values()) + list(task_test_files.values())
+        for f in flist
+    ]
+    graph_root = _infer_plan_repo_root(plan_path, all_plan_candidates, workdir=workdir)
+    dep_graph = build_repo_dependency_graph(graph_root, candidate_files=all_plan_candidates)
+    if dep_graph:
+        seen_races: set[str] = set()
+        for w, wave_tasks in wave_groups.items():
+            if len(wave_tasks) < 2:
+                continue
+            task_seeds: dict[str, list[str]] = {}
+            task_owned: dict[str, set[str]] = {}
+            task_reach: dict[str, dict[str, tuple[str, list[str]]]] = {}
+
+            for wt in wave_tasks:
+                seeds: list[str] = []
+                for f in task_raw_files.get(wt, []) + task_test_files.get(wt, []):
+                    if f not in seeds:
+                        seeds.append(f)
+                task_seeds[wt] = seeds
+                task_owned[wt] = set(seeds)
+                reach_map: dict[str, tuple[str, list[str]]] = {}
+                for s in seeds:
+                    for dst, path in _bfs_reachable(dep_graph, s).items():
+                        if dst not in reach_map or len(path) < len(reach_map[dst][1]):
+                            reach_map[dst] = (s, path)
+                task_reach[wt] = reach_map
+
+            directed_pairs: set[tuple[str, str]] = set()
+            for t_a in wave_tasks:
+                for t_b in wave_tasks:
+                    if t_a == t_b:
+                        continue
+                    for dst, (_seed, path) in task_reach[t_a].items():
+                        if dst in task_owned[t_b]:
+                            edge_str = f"task_{t_a}({path[0]}) -> {' -> '.join(path[1:])}(task_{t_b})"
+                            if edge_str not in seen_races:
+                                seen_races.add(edge_str)
+                                directed_pairs.add((t_a, t_b))
+                                directed_pairs.add((t_b, t_a))
+                                findings.append({
+                                    "vector": "Vector 4: Parallel Wave File-Collision Serialization",
+                                    "level": "CRITICAL",
+                                    "message": f"NP_BENCH_TRANSITIVE_WAVE_RACE in Wave {w}: {edge_str} introduces transitive dependency race across parallel tasks without serialization.",
+                                })
+
+            # Shared CLI / JSON config resource races across disjoint tasks in the same wave
+            def _task_sort_key(tid: str) -> tuple[int, str]:
+                return (0, f"{int(tid):09d}") if tid.isdigit() else (1, tid)
+
+            ordered_tasks = sorted(wave_tasks, key=_task_sort_key, reverse=True)
+            for idx_a, t_hi in enumerate(ordered_tasks):
+                for t_lo in ordered_tasks[idx_a + 1:]:
+                    if (t_hi, t_lo) in directed_pairs:
+                        continue
+                    shared_nodes = sorted(
+                        set(task_reach[t_hi].keys())
+                        & set(task_reach[t_lo].keys())
+                    )
+                    for shared in shared_nodes:
+                        if not _SHARED_RUNTIME_RESOURCE_RE.search(shared):
+                            continue
+                        s_hi, _ = task_reach[t_hi][shared]
+                        s_lo, _ = task_reach[t_lo][shared]
+                        edge_str = f"task_{t_hi}({s_hi}) -> {shared} <- {s_lo}(task_{t_lo})"
+                        if edge_str not in seen_races:
+                            seen_races.add(edge_str)
+                            findings.append({
+                                "vector": "Vector 4: Parallel Wave File-Collision Serialization",
+                                "level": "CRITICAL",
+                                "message": f"NP_BENCH_TRANSITIVE_WAVE_RACE in Wave {w}: {edge_str} shares runtime/config dependency across parallel tasks without serialization.",
+                            })
 
     # Vector 5: 3-Layer Verification Completeness
     req_phases = ["red", "green", "qa", "evidence", "cleanup"]
@@ -616,6 +1022,295 @@ def audit_plan(plan_path: Path, fallback_reason: str | None = None) -> tuple[str
     return verdict, findings, "\n".join(review_text)
 
 
+_BLIND_HUNK_HEADER_RE = re.compile(r"^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@")
+_BLIND_STRIP_BASENAMES = {
+    ".memlog.md",
+    "program_state.md",
+    "task_graph.json",
+    "requirement_coverage.csv",
+}
+
+
+def _is_blind_stripped_path(rel_path: str) -> bool:
+    norm = _norm_rel(rel_path).lower()
+    if not norm or norm == "/dev/null":
+        return False
+    return norm.startswith(".asw/") or "/.asw/" in norm
+
+
+def _sec_contains_plan_or_notes_markers(sec: list[str], rel_path: str) -> bool:
+    if not rel_path.lower().endswith(".md"):
+        return False
+    body = "\n".join(sec).lower()
+    return any(
+        marker in body
+        for marker in (
+            "<frozen-after-approval>",
+            "## implementation notes",
+            "## review triage log",
+            "## plan change log",
+            "leaf task receipt",
+        )
+    )
+
+
+def _clean_blind_diff_path(raw_path: str) -> str:
+    cleaned = raw_path.strip().split("\t")[0].strip()
+    if cleaned.startswith('"') and cleaned.endswith('"') and len(cleaned) >= 2:
+        cleaned = cleaned[1:-1]
+    if cleaned == "/dev/null":
+        return cleaned
+    if cleaned.startswith(("a/", "b/")):
+        cleaned = cleaned[2:]
+    return _norm_rel(cleaned)
+
+
+def _extract_fn_branches(fn_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    branches: list[str] = []
+
+    def _visit(stmt: ast.AST) -> None:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            return
+        if isinstance(stmt, ast.If):
+            branches.append(f"L{stmt.lineno}: if {ast.unparse(stmt.test)}")
+            for child in stmt.body:
+                _visit(child)
+            if stmt.orelse:
+                if len(stmt.orelse) == 1 and isinstance(stmt.orelse[0], ast.If):
+                    _visit(stmt.orelse[0])
+                else:
+                    branches.append(f"L{stmt.orelse[0].lineno}: else")
+                    for child in stmt.orelse:
+                        _visit(child)
+            return
+        if isinstance(stmt, (ast.For, ast.AsyncFor)):
+            kw = "async for" if isinstance(stmt, ast.AsyncFor) else "for"
+            branches.append(f"L{stmt.lineno}: {kw} {ast.unparse(stmt.target)} in {ast.unparse(stmt.iter)}")
+            for child in stmt.body + stmt.orelse:
+                _visit(child)
+            return
+        if isinstance(stmt, ast.While):
+            branches.append(f"L{stmt.lineno}: while {ast.unparse(stmt.test)}")
+            for child in stmt.body + stmt.orelse:
+                _visit(child)
+            return
+        if isinstance(stmt, (ast.Try, getattr(ast, "TryStar", ast.Try))):
+            branches.append(f"L{stmt.lineno}: try")
+            for child in stmt.body:
+                _visit(child)
+            for handler in stmt.handlers:
+                exc_t = ast.unparse(handler.type) if handler.type else "Exception"
+                branches.append(f"L{handler.lineno}: except {exc_t}")
+                for child in handler.body:
+                    _visit(child)
+            for child in stmt.orelse + stmt.finalbody:
+                _visit(child)
+            return
+        if isinstance(stmt, ast.Return):
+            val = ast.unparse(stmt.value) if stmt.value is not None else "None"
+            branches.append(f"L{stmt.lineno}: return {val}")
+            return
+        if isinstance(stmt, ast.Raise):
+            exc = ast.unparse(stmt.exc) if stmt.exc is not None else "re-raise"
+            branches.append(f"L{stmt.lineno}: raise {exc}")
+            return
+        if hasattr(ast, "Match") and isinstance(stmt, ast.Match):
+            branches.append(f"L{stmt.lineno}: match {ast.unparse(stmt.subject)}")
+            for case in stmt.cases:
+                branches.append(f"L{case.pattern.lineno if hasattr(case.pattern, 'lineno') else stmt.lineno}: case {ast.unparse(case.pattern)}")
+                for child in case.body:
+                    _visit(child)
+            return
+        if isinstance(stmt, (ast.With, ast.AsyncWith)):
+            for child in stmt.body:
+                _visit(child)
+
+    for top_stmt in fn_node.body:
+        _visit(top_stmt)
+    return branches
+
+
+def _extract_ast_symbols_from_source(
+    source: str,
+    rel_path: str,
+    target_lines: set[int] | None = None,
+) -> list[dict]:
+    if not source.strip():
+        return []
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        try:
+            tree = ast.parse(textwrap.dedent(source))
+        except SyntaxError:
+            return []
+
+    symbols: list[dict] = []
+
+    def _walk_body(stmts: list[ast.stmt], class_prefix: str = "") -> None:
+        for node in stmts:
+            if isinstance(node, ast.ClassDef):
+                nxt_prefix = f"{class_prefix}.{node.name}" if class_prefix else node.name
+                _walk_body(node.body, nxt_prefix)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                end_ln = getattr(node, "end_lineno", node.lineno) or node.lineno
+                if target_lines is not None and not any(node.lineno <= ln <= end_ln for ln in target_lines):
+                    continue
+                prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+                args_src = ast.unparse(node.args)
+                ret_src = f" -> {ast.unparse(node.returns)}" if node.returns is not None else ""
+                qualname = f"{class_prefix}.{node.name}" if class_prefix else node.name
+                sig = f"{prefix} {qualname}({args_src}){ret_src}"
+                symbols.append({
+                    "file": rel_path,
+                    "function": qualname,
+                    "signature": sig,
+                    "lineno": node.lineno,
+                    "end_lineno": end_ln,
+                    "branches": _extract_fn_branches(node),
+                })
+
+    _walk_body(tree.body)
+    return symbols
+
+
+def prepare_blind_review_packet(
+    diff_content: str = "",
+    workdir: Path | None = None,
+    plan_path: Path | None = None,  # Explicitly ignored: Stage-1 blind review must never leak plan metadata/notes/matrix
+    diff_path: Path | None = None,
+) -> dict:
+    """Build a Stage-1 RETRACE blind review packet containing ONLY raw code diff (.asw/ stripped) + AST changed functions, signatures, and branches."""
+    del plan_path  # Never read plan_path in blind stage
+    raw_diff_text = diff_content if diff_content else read_text_resilient(diff_path)
+    eff_workdir = workdir.resolve() if workdir else Path.cwd().resolve()
+
+    # Split into per-file sections and strip .asw/ plan/review/evidence/scratch hunks
+    sections: list[list[str]] = []
+    current_sec: list[str] = []
+    for line in raw_diff_text.splitlines():
+        if line.startswith("diff --git "):
+            if current_sec:
+                sections.append(current_sec)
+            current_sec = [line]
+        else:
+            current_sec.append(line)
+    if current_sec:
+        sections.append(current_sec)
+
+    filtered_sections: list[str] = []
+    changed_files: list[str] = []
+    stripped_files: list[str] = []
+    py_hunk_lines: dict[str, set[int]] = {}
+    py_fallback_src: dict[str, list[str]] = {}
+
+    for sec in sections:
+        if not any(ln.strip() for ln in sec):
+            continue
+        sec_file = ""
+        for ln in sec:
+            if _BLIND_HUNK_HEADER_RE.match(ln):
+                break
+            if ln.startswith("+++ "):
+                cand = _clean_blind_diff_path(ln[4:])
+                if cand != "/dev/null":
+                    sec_file = cand
+                    break
+            elif ln.startswith("diff --git "):
+                parts = ln.strip().split()
+                if parts:
+                    sec_file = _clean_blind_diff_path(parts[-1])
+        if _is_blind_stripped_path(sec_file):
+            if sec_file not in stripped_files:
+                stripped_files.append(sec_file)
+            continue
+
+        filtered_sections.append("\n".join(sec))
+        if sec_file and sec_file not in changed_files:
+            changed_files.append(sec_file)
+
+        if sec_file.endswith(".py"):
+            new_line = 0
+            in_hunk = False
+            for ln in sec:
+                hm = _BLIND_HUNK_HEADER_RE.match(ln)
+                if hm:
+                    new_line = int(hm.group(3))
+                    in_hunk = True
+                    continue
+                if not in_hunk:
+                    continue
+                if ln.startswith("+") and not ln.startswith("+++"):
+                    py_hunk_lines.setdefault(sec_file, set()).add(new_line)
+                    py_fallback_src.setdefault(sec_file, []).append(ln[1:])
+                    new_line += 1
+                elif ln.startswith("-") and not ln.startswith("---"):
+                    continue
+                elif ln.startswith("\\"):
+                    continue
+                else:
+                    py_fallback_src.setdefault(sec_file, []).append(ln[1:] if ln.startswith(" ") else ln)
+                    new_line += 1
+
+    filtered_diff = "\n".join(filtered_sections).strip()
+    if filtered_diff:
+        filtered_diff += "\n"
+
+    ast_symbols: list[dict] = []
+    for rel_py in sorted(set(list(py_hunk_lines.keys()) + [f for f in changed_files if f.endswith(".py")])):
+        disk_file = eff_workdir / rel_py
+        if disk_file.is_file():
+            src = read_text_resilient(disk_file)
+            syms = _extract_ast_symbols_from_source(src, rel_py, py_hunk_lines.get(rel_py))
+        else:
+            src = "\n".join(py_fallback_src.get(rel_py, []))
+            syms = _extract_ast_symbols_from_source(src, rel_py, None)
+        ast_symbols.extend(syms)
+
+    lines = [
+        "# Blind Review Packet (RETRACE Stage-1)",
+        "",
+        "**Mode**: `prepare-blind-review`",
+        "**opt_tokens**: `0.0`",
+        f"**Changed Files**: {', '.join(f'`{f}`' for f in changed_files) if changed_files else '*(none)*'}",
+        "",
+        "## AST Changed Functions, Signatures & Control-Flow Branches",
+        "",
+    ]
+    if not ast_symbols:
+        lines.append("- *(No modified Python function definitions detected in filtered diff)*")
+    else:
+        for sym in ast_symbols:
+            lines.append(f"### `{sym['file']}` :: `{sym['function']}` (lines {sym['lineno']}-{sym['end_lineno']})")
+            lines.append(f"- **Signature**: `{sym['signature']}`")
+            if sym["branches"]:
+                lines.append("- **Branches**:")
+                for br in sym["branches"]:
+                    lines.append(f"  - `{br}`")
+            else:
+                lines.append("- **Branches**: *(linear / no control-flow branches)*")
+            lines.append("")
+
+    lines.extend([
+        "## Raw Code Diff (`.asw/` stripped)",
+        "",
+        "```diff",
+        filtered_diff.rstrip("\n") if filtered_diff else "(empty diff)",
+        "```",
+    ])
+    packet_text = "\n".join(lines) + "\n"
+
+    return {
+        "mode": "prepare-blind-review",
+        "opt_tokens": 0.0,
+        "files": changed_files,
+        "stripped_files": stripped_files,
+        "ast_changed_symbols": ast_symbols,
+        "raw_diff": filtered_diff,
+        "packet_text": packet_text,
+    }
+
+
 def audit_diff(
     plan_path: Path | None,
     diff_path: Path | None,
@@ -623,6 +1318,9 @@ def audit_diff(
     diff_content_override: str | None = None,
     fallback_reason: str | None = None,
     workdir: Path | None = None,
+    verify_mutations: bool = False,
+    mutation_threshold: float = 0.75,
+    mutation_tests: list[str] | tuple[str, ...] | None = None,
 ) -> tuple[str, list[dict], str]:
     """Audit code diff and evidence across the 4 opposition-reviewer attack vectors and Anti-Shortcut tripwires."""
     findings = []
@@ -1119,6 +1817,66 @@ def audit_diff(
                     "message": f"BMAD_DELETION_OR_ADOPTION_GAP: Deleted or renamed symbol '{sym}' is still called by surviving/sibling code without updating all call sites."
                 })
 
+    # STING AST Mutation Verification Gate (optional --verify-mutations)
+    mutation_summary_line = None
+    if verify_mutations and diff_content.strip():
+        try:
+            try:
+                from mutation_verifier import run_mutation_verification
+            except ImportError:
+                script_dir = str(Path(__file__).resolve().parent)
+                if script_dir not in sys.path:
+                    sys.path.insert(0, script_dir)
+                from mutation_verifier import run_mutation_verification
+
+            mut_res = run_mutation_verification(
+                repo_dir=eff_workdir,
+                diff_text=diff_content,
+                test_targets=mutation_tests,
+                threshold=mutation_threshold,
+            )
+            mut_status = mut_res.get("status", "unknown")
+            mut_score = float(mut_res.get("mutation_score", 0.0))
+            mut_killed = int(mut_res.get("killed", 0))
+            mut_viable = int(mut_res.get("viable", 0))
+            mut_survived = int(mut_res.get("survived", 0))
+            mutation_summary_line = (
+                f"**STING Mutation Gate**: `{mut_status.upper()} "
+                f"(score={mut_score:.2f}, threshold={mutation_threshold:.2f}, "
+                f"killed={mut_killed}/{mut_viable}, survived={mut_survived}, opt_tokens=0.0)`"
+            )
+            if not mut_res.get("passed", False):
+                if mut_status == "baseline_tests_failed":
+                    findings.append({
+                        "vector": "3. Edge Cases & Boundary Breakdown",
+                        "level": "CRITICAL",
+                        "message": (
+                            f"STING_MUTATION_GATE_FAILED: Baseline test suite failed before mutation verification "
+                            f"(returncode={mut_res.get('baseline_returncode')})."
+                        ),
+                    })
+                else:
+                    survivors = mut_res.get("survivors", [])
+                    surv_str = ", ".join(
+                        f"{s.get('location', '?')} ({s.get('operator', '?')})"
+                        for s in survivors[:10]
+                    )
+                    findings.append({
+                        "vector": "3. Edge Cases & Boundary Breakdown",
+                        "level": "CRITICAL",
+                        "message": (
+                            f"STING_MUTATION_GATE_FAILED: Mutation kill score {mut_score:.2f} < threshold {mutation_threshold:.2f} "
+                            f"(killed={mut_killed}/{mut_viable}, survived={mut_survived}). "
+                            f"Surviving mutants: {surv_str}"
+                        ),
+                    })
+        except Exception as exc:
+            findings.append({
+                "vector": "3. Edge Cases & Boundary Breakdown",
+                "level": "CRITICAL",
+                "message": f"STING_MUTATION_GATE_FAILED: Mutation verifier execution error: {exc}",
+            })
+
     diff_kb = max(len(diff_content.encode("utf-8")) / 1024.0, 0.001)
     blind_hunter_floor = min(int(math.sqrt(diff_kb) + 1), 10)
 
@@ -1140,6 +1898,8 @@ def audit_diff(
         f"**Reviewer**: {reviewer_line}",
         f"**BMAD 5-Lens Audit**: `blind-hunter (floor N={blind_hunter_floor}, diff={diff_kb:.2f} kB) + edge-case-hunter + verification-gap + intent-alignment + opus-cross-family`",
     ]
+    if mutation_summary_line:
+        review_text.append(mutation_summary_line)
     if active_fallback:
         review_text.append(
             f"**Fallback Mode**: `ACTIVE (Reason: {active_fallback} -> Deterministic Adversarial Engine + gemini-4-neon-high)`"
@@ -1179,7 +1939,7 @@ def main():
     parser.add_argument("--clean-scratch", type=Path, help="Non-interactively clean a scratch directory (including __pycache__)")
     parser.add_argument("--scan-public-repo", type=Path, help="Scan a target repo/directory for RFC1918 LAN IPs, API secrets, and forbidden PII terms")
     parser.add_argument("--forbid-terms", type=str, help="Comma-separated list of custom PII/location terms to block in --scan-public-repo")
-    parser.add_argument("--mode", choices=["plan-review", "diff-review"], help="Review mode")
+    parser.add_argument("--mode", choices=["plan-review", "diff-review", "prepare-blind-review"], help="Review mode")
     parser.add_argument("--plan", type=Path, help="Path to implementation plan (auto-discovered from .asw/plans if omitted)")
     parser.add_argument("--diff", type=Path, help="Path to code diff (or use --files for self-contained diff generation)")
     parser.add_argument("--files", type=str, help="Comma-separated list of modified/untracked files to diff directly in UTF-8")
@@ -1187,6 +1947,10 @@ def main():
     parser.add_argument("--fallback-reason", type=str, help="Explicit fallback reason when Claude Opus 5.5 credits/quota are exhausted")
     parser.add_argument("--workdir", type=Path, default=None, help="Explicit working directory root (defaults to current working directory)")
     parser.add_argument("--output", type=Path, help="Output markdown review artifact path (optional)")
+    parser.add_argument("--json", action="store_true", help="Emit structured JSON output (supported for prepare-blind-review)")
+    parser.add_argument("--verify-mutations", action="store_true", help="Run STING diff-scoped AST mutation testing gate during diff-review")
+    parser.add_argument("--mutation-threshold", type=float, default=0.75, help="Minimum mutation kill score required by --verify-mutations (default: 0.75)")
+    parser.add_argument("--mutation-tests", type=str, default=None, help="Comma-separated pytest target paths for --verify-mutations")
 
     args = parser.parse_args()
     repo_root = Path(__file__).resolve().parent.parent.parent
@@ -1215,7 +1979,11 @@ def main():
         if not plan_path:
             sys.stderr.write("Error: --plan is required when no .asw/plans/*.md file exists.\n")
             return 2
-        verdict, findings, report = audit_plan(plan_path, fallback_reason=args.fallback_reason)
+        verdict, findings, report = audit_plan(
+            plan_path,
+            fallback_reason=args.fallback_reason,
+            workdir=args.workdir.resolve() if args.workdir else None,
+        )
         out_path = args.output or (workdir / ".asw" / "reviews" / f"plan-review-{plan_path.stem}.md")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(report, encoding="utf-8")
@@ -1223,6 +1991,29 @@ def main():
         if not args.output:
             sys.stdout.write(report + "\n")
         return 0 if verdict == "PLAN_APPROVED" else 1
+
+    if args.mode == "prepare-blind-review":
+        raw_diff = ""
+        if args.diff and args.diff.exists():
+            raw_diff = read_text_resilient(args.diff)
+        if args.files or not raw_diff.strip():
+            gen_diff = build_git_diff_from_files(args.files, workdir)
+            raw_diff = (raw_diff + "\n" + gen_diff).strip() if raw_diff.strip() else gen_diff
+
+        packet = prepare_blind_review_packet(
+            diff_content=raw_diff,
+            workdir=workdir,
+            plan_path=args.plan,
+        )
+        as_json = args.json or (args.output is not None and args.output.suffix.lower() == ".json")
+        rendered = json.dumps(packet, indent=2) + "\n" if as_json else packet["packet_text"]
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(rendered, encoding="utf-8")
+            sys.stdout.write(f"Blind review packet written to {args.output} (opt_tokens={packet['opt_tokens']})\n")
+        else:
+            sys.stdout.write(rendered)
+        return 0
 
     if args.mode == "diff-review":
         plan_path = args.plan or discover_latest_plan(workdir, repo_root)
@@ -1232,6 +2023,11 @@ def main():
             if args.diff and args.diff.exists():
                 diff_override = read_text_resilient(args.diff) + "\n" + diff_override
 
+        mut_tests = (
+            [t.strip() for t in re.split(r"[,;]+", args.mutation_tests) if t.strip()]
+            if args.mutation_tests
+            else None
+        )
         verdict, findings, report = audit_diff(
             plan_path=plan_path,
             diff_path=args.diff,
@@ -1239,6 +2035,9 @@ def main():
             diff_content_override=diff_override,
             fallback_reason=args.fallback_reason,
             workdir=workdir,
+            verify_mutations=args.verify_mutations,
+            mutation_threshold=args.mutation_threshold,
+            mutation_tests=mut_tests,
         )
         out_path = args.output or (workdir / ".asw" / "reviews" / "diff-review-latest.md")
         out_path.parent.mkdir(parents=True, exist_ok=True)

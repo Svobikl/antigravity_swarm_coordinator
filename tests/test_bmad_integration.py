@@ -340,6 +340,73 @@ class TestBMADMethodIntegration(unittest.TestCase):
             self.assertEqual(len(vps_errs), 1)
             self.assertIn("Arithmetic error in claim 'CLAIM-002'", vps_errs[0])
 
+    def test_vq_m5_two_stage_retrace_egdp_and_mirror_parity(self):
+        """VQ-M5: Reviewer agents enforce 2-Stage RETRACE + EGDP + STING mutation gate across 3 byte-identical mirrors."""
+        mirror_dirs = [
+            REPO_ROOT / "plugins" / "antigravity-swarm" / "agents",
+            REPO_ROOT / ".antigravity" / "agents",
+            REPO_ROOT / "core_framework" / "agents",
+        ]
+        expected_tools = {
+            "asw-reviewer.md": "tools: [read_file, write_file, edit_file, run_command, manage_task, search_web]",
+            "asw-opposition-reviewer.md": "tools: [read_file, run_command, manage_task, search_web]",
+        }
+        required_tokens = [
+            "RETRACE",
+            "EGDP",
+            "STING",
+            "Stage 1",
+            "Stage 2",
+            "--mode prepare-blind-review",
+            "--mode diff-review",
+            "--verify-mutations",
+            "0.75",
+            "I/O & Edge-Case Matrix",
+            "<frozen-after-approval>",
+            "## Implementation Notes",
+            "subagent: true",
+            "mainAgent: false",
+            "<= 250 tokens",
+            "<thought>",
+            "unconstrained",
+        ]
+
+        for agent_file, tools_line in expected_tools.items():
+            ref_bytes = (mirror_dirs[0] / agent_file).read_bytes()
+            for md_dir in mirror_dirs[1:]:
+                self.assertEqual(
+                    (md_dir / agent_file).read_bytes(),
+                    ref_bytes,
+                    f"{md_dir / agent_file} is not byte-identical to {mirror_dirs[0] / agent_file}",
+                )
+
+            txt = ref_bytes.decode("utf-8")
+            self.assertIn(tools_line, txt, f"{agent_file} changed expected tools frontmatter")
+            for tok in required_tokens:
+                self.assertIn(tok, txt, f"{agent_file} missing required RETRACE/EGDP/STING token: {tok}")
+
+            # Ensure Stage 1 blind reconstruction precedes Stage 2 matrix/mutation reconciliation
+            s1_idx = txt.index("Stage 1")
+            s2_idx = txt.index("Stage 2")
+            blind_idx = txt.index("--mode prepare-blind-review")
+            diff_idx = txt.index("--verify-mutations")
+            self.assertLess(s1_idx, s2_idx, f"{agent_file} must order Stage 1 before Stage 2")
+            self.assertLess(blind_idx, diff_idx, f"{agent_file} must run prepare-blind-review before --verify-mutations")
+
+        # Preserve all 5 BMAD lenses in asw-reviewer.md and all 4 Attack Vectors in asw-opposition-reviewer.md
+        rev_txt = (mirror_dirs[0] / "asw-reviewer.md").read_text(encoding="utf-8")
+        for lens in ("blind-hunter", "edge-case-hunter", "verification-gap", "intent-alignment", "opus-cross-family"):
+            self.assertIn(lens, rev_txt, f"asw-reviewer.md missing BMAD lens: {lens}")
+
+        opp_txt = (mirror_dirs[0] / "asw-opposition-reviewer.md").read_text(encoding="utf-8")
+        for vec in (
+            "1. Scope, Plan Integrity",
+            "2. Research, ML Falsification",
+            "3. Edge Cases, Boundary Breakdown",
+            "4. Downstream, Blast-Radius",
+        ):
+            self.assertIn(vec, opp_txt, f"asw-opposition-reviewer.md missing Attack Vector: {vec}")
+
 
 if __name__ == "__main__":
     unittest.main()

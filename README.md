@@ -2,7 +2,7 @@
 
 Complete backup, distribution, and cross-platform setup package (**Apple macOS**, **Windows**, and **Linux**) for the default **Swarm Coordinator**, **Google Research `Harness²` recursive adaptation engine**, **Quad-Model Cross-Family Governance Framework** (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 4 Neon High` + `Gemini 4 Hydrogen High`), and **201 Curated Multi-Domain Golden Catalog Skills** for **Google Antigravity** and **Gemini CLI**.
 
-This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 201 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **164 automated verification tests**.
+This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 201 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **183 automated verification tests**.
 
 ---
 
@@ -390,6 +390,14 @@ Whenever `/asw-start-work`, `/asw`, or `/asw-review` audits a change since `base
 - **`[patch]`** ➔ Localized code or test defect. Re-engages the warmed `step-03` subagent `conversationId` for a targeted fix, re-runs 3-layer verification, and marks `-> RESOLVED`.
 - **`[defer]`** ➔ Valid out-of-scope observation moved to `.asw/plans/deferred-work.md`.
 
+### 🛡️ Zero-LLM Verification Quality Gates (`opt_tokens = 0.0`)
+
+**Design Goal (2026 Verification Spine Upgrade):** Eliminate the three primary residual sources of silent multi-agent quality failures identified in 2026 software-engineering research—*(1) co-evolved weak or tautological unit tests passing buggy code* (`STING` `arXiv:2604.01518`, `ExecCritic` `arXiv:2609.09133`, `PyTation` `arXiv:2601.19088`), *(2) hidden cross-file import, CLI, and config execution races across parallel subagent waves* (`NP-Bench` `arXiv:2610.07261`), and *(3) reviewer sycophancy/anchoring on author-written implementation notes* (`RETRACE` `arXiv:2608.08950`, `EGDP` `arXiv:2607.10411`)—while keeping deterministic verification overhead at **`0.0` extra LLM optimizer tokens** and zero quality/cost regression on `SWE-MiniBench-5`:
+
+- **Diff-Scoped Python AST Mutation Gate (`mutation_verifier.py`, `STING` + `PyTation`):** Mutates changed Python diff hunks across 7 AST operators (`< <= > >=`, `== !=`, `and or`, `not`, `in / not in`, `return` constants, guard returns) with `ast.dump` equivalence pruning and isolated temp `pytest -x -q` runs (`15s` timeout, max `12` mutants, `opt_tokens = 0.0`), enforcing `score >= 0.75` (`file:line` survivor diagnostics). On `python .antigravity/scripts/mutation_verifier.py --benchmark-quality`, weak-suite catch rate rises from **`0.0% -> 100.0%`** and gate accuracy from **`50.0% -> 100.0%`** vs. legacy `Tripwire 3A`.
+- **Static Transitive Dependency-DAG Wave Race Gate (`NP_BENCH_TRANSITIVE_WAVE_RACE`):** `invoke_opus_reviewer.py --mode plan-review` builds a static dependency graph (Python AST imports, ESM imports, CLI wrappers, and `decision_config.json`) across wave files and tests, raising `CRITICAL NP_BENCH_TRANSITIVE_WAVE_RACE` whenever parallel wave tasks collide transitively (`task_a(file_x) -> file_y(task_b)`).
+- **2-Stage `RETRACE + EGDP` Blind-First Review (`prepare-blind-review` & `--verify-mutations`):** `asw-reviewer` and `asw-opposition-reviewer` run Stage-1 blind review on `python .antigravity/scripts/invoke_opus_reviewer.py --mode prepare-blind-review` (raw diff + AST changed functions, signatures, and branches only; `.asw/`, Notes, receipts, and `<frozen-after-approval>` stripped), then run Stage-2 contract/matrix verification and `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --verify-mutations`.
+
 ### 💡 Practical Copy-Paste Workflow Examples
 
 ```text
@@ -447,6 +455,7 @@ antigravity_swarm_coordinator/
 │   │   ├── token_economizer.py        # Zero-LLM EnvFacts, live TurnGuard, EnvelopeTracker & effective_tokens
 │   │   ├── decision_router.py         # Local System 1 Laya router & <40ms loop judge (--mode judge-loop)
 │   │   ├── invoke_opus_reviewer.py    # Claude Opus 5.5 Plan & Diff Opposition Review CLI
+│   │   ├── mutation_verifier.py       # Zero-LLM diff-scoped AST mutation gate (score >= 0.75)
 │   │   ├── run_harness_adapt.py       # Harness² recursive adaptation CLI runner
 │   │   ├── sync_harness_experience.py # Path-independent Obsidian Vault experience sync
 │   │   ├── curate_skill_catalog.py    # Curates & normalizes the 201-skill Golden Catalog
@@ -469,7 +478,7 @@ antigravity_swarm_coordinator/
 │       ├── scripts/                   # ESM/Node.js hook, RTK rewriter, LSP, and status scripts
 │       └── skills/                    # ASW utility skills (asw-plan, asw-loop, asw-harness-adapt, ...)
 │
-├── tests/                             # 154 tests in tests/ (+ 10 skill script tests = 164 total)
+├── tests/                             # 173 tests in tests/ (+ 10 skill script tests = 183 total)
 │   ├── test_token_economizer.py       # EnvFacts lifecycle, TurnGuard, EnvelopeTracker & effective_tokens
 │   ├── test_token_economizer_e2e.py   # Hook channel hygiene & 6-session A/B token benchmark
 │   ├── test_quality_benchmark.py      # SWE-MiniBench-5 oracle, 8-tool isolation, 4-tier & README parity
@@ -478,6 +487,7 @@ antigravity_swarm_coordinator/
 │   ├── test_antigravity_substrate.py  # Immutable governance & 8-skill budget enforcement
 │   ├── test_swarm_adapter.py          # Quad-Model channel routing & git worktree isolation
 │   ├── test_opus_reviewer.py          # Claude Opus 5.5 plan-review & diff-review gates
+│   ├── test_mutation_verifier.py      # Diff-scoped AST mutator, 12-case benchmark & Windows cleanup
 │   ├── test_experience_obsidian_sync.py # Continual learning & Obsidian Vault sync
 │   ├── test_context_hub_integration.py # Context Hub (@aisuite/chub) firewall, routing, vault sync & E2E
 │   ├── test_skill_catalog_curation.py # 201-skill Golden Catalog, Windows RTK find guard & BOM bounds

@@ -598,6 +598,83 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
             self.assertEqual(preserved_cfg.get("cpu_threads"), 4)
             self.assertEqual(preserved_cfg.get("server_url"), "http://127.0.0.1:8765")
 
+    def test_verification_quality_gates_scripts_and_retrace_agents_deployed(self):
+        """M6: run_install() deploys mutation_verifier.py, invoke_opus_reviewer.py, and 2-Stage RETRACE agent MDs byte-identically."""
+        import importlib.util
+
+        install_py = self.repo_root / "install.py"
+        spec = importlib.util.spec_from_file_location("installer_mod_vq4", install_py)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_home = Path(tmp) / "fake_home"
+            fake_home.mkdir(parents=True)
+            summary = mod.run_install(
+                repo_root=self.repo_root,
+                home_dir=fake_home,
+                skip_prompt=True,
+                skip_skills=True,
+                skip_plugin=False,
+                skip_vault=True,
+                skip_rtk=True,
+                skip_chub=True,
+                install_laya=False,
+            )
+            self.assertTrue(summary.get("plugin_installed"))
+            self.assertGreaterEqual(int(summary.get("agents_synced", 0)), 2)
+
+            for script_name in ("mutation_verifier.py", "invoke_opus_reviewer.py"):
+                ag_src = self.repo_root / ".antigravity" / "scripts" / script_name
+                cf_src = self.repo_root / "core_framework" / "scripts" / script_name
+                global_dst = fake_home / ".gemini" / "scripts" / script_name
+                ag_dst = fake_home / ".gemini" / ".antigravity" / "scripts" / script_name
+
+                self.assertTrue(global_dst.is_file(), f"Missing deployed script: {global_dst}")
+                self.assertTrue(ag_dst.is_file(), f"Missing deployed script: {ag_dst}")
+                expected_bytes = ag_src.read_bytes()
+                self.assertEqual(cf_src.read_bytes(), expected_bytes, f"core_framework parity mismatch: {script_name}")
+                self.assertEqual(global_dst.read_bytes(), expected_bytes, f"~/.gemini/scripts mismatch: {script_name}")
+                self.assertEqual(ag_dst.read_bytes(), expected_bytes, f"~/.gemini/.antigravity/scripts mismatch: {script_name}")
+
+            plugin_agents_dir = fake_home / ".gemini" / "config" / "plugins" / "antigravity-swarm" / "agents"
+            for agent_name in ("asw-reviewer.md", "asw-opposition-reviewer.md"):
+                ag_agent = self.repo_root / ".antigravity" / "agents" / agent_name
+                cf_agent = self.repo_root / "core_framework" / "agents" / agent_name
+                pl_agent = self.repo_root / "plugins" / "antigravity-swarm" / "agents" / agent_name
+                deployed_agent = plugin_agents_dir / agent_name
+
+                self.assertTrue(deployed_agent.is_file(), f"Missing deployed agent: {deployed_agent}")
+                expected_bytes = ag_agent.read_bytes()
+                self.assertEqual(cf_agent.read_bytes(), expected_bytes, f"core_framework parity mismatch: {agent_name}")
+                self.assertEqual(pl_agent.read_bytes(), expected_bytes, f"plugin parity mismatch: {agent_name}")
+                self.assertEqual(deployed_agent.read_bytes(), expected_bytes, f"deployed plugin agent mismatch: {agent_name}")
+
+                agent_text = deployed_agent.read_text(encoding="utf-8")
+                self.assertIn("RETRACE", agent_text)
+                self.assertIn("prepare-blind-review", agent_text)
+                self.assertIn("Stage 1", agent_text)
+                self.assertIn("Stage 2", agent_text)
+
+            # Negative isolation: skip_plugin=True does not deploy plugin agents, while scripts still sync
+            fake_home_no_plugin = Path(tmp) / "fake_home_no_plugin"
+            fake_home_no_plugin.mkdir(parents=True)
+            mod.run_install(
+                repo_root=self.repo_root,
+                home_dir=fake_home_no_plugin,
+                skip_prompt=True,
+                skip_skills=True,
+                skip_plugin=True,
+                skip_vault=True,
+                skip_rtk=True,
+                skip_chub=True,
+                install_laya=False,
+            )
+            self.assertFalse(
+                (fake_home_no_plugin / ".gemini" / "config" / "plugins" / "antigravity-swarm" / "agents" / "asw-reviewer.md").exists()
+            )
+            self.assertTrue((fake_home_no_plugin / ".gemini" / "scripts" / "mutation_verifier.py").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()
