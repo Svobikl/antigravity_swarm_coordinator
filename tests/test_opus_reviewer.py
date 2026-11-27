@@ -980,6 +980,258 @@ class TestOpusReviewer(unittest.TestCase):
 
         self.assertEqual(self.script_path.read_bytes(), cf_script_path.read_bytes())
 
+    def test_m4_prepare_blind_review_identical_mirrors_collapse_and_json_flag(self):
+        """M4: Identical mirrors collapse into collapsed_mirrors TOON+stub, ASTs use dumps_smart TOON (>=3), and --json omits packet_text unless --include-packet-text."""
+        scripts_dir = str(self.repo_root / ".antigravity" / "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        import invoke_opus_reviewer as reviewer
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            asw_plan = tmp_path / ".asw" / "plans" / "secret_plan.md"
+            asw_plan.parent.mkdir(parents=True, exist_ok=True)
+            asw_plan.write_text(
+                "<!-- <frozen-after-approval> -->\nSecret plan note M4\n<!-- </frozen-after-approval> -->\n",
+                encoding="utf-8",
+            )
+
+            py_src = (
+                "def func_alpha(x: int) -> int:\n"
+                "    if x < 0:\n"
+                "        return 0\n"
+                "    return x + 1\n\n"
+                "def func_beta(y: int) -> int:\n"
+                "    if y > 10:\n"
+                "        return 10\n"
+                "    return y\n\n"
+                "def func_gamma(z: str) -> str:\n"
+                "    if not z:\n"
+                "        return 'empty'\n"
+                "    return z.strip()\n"
+            )
+            md_src = "---\nname: sample-agent\n---\nLine 1\nLine 2\nLine 3\n"
+
+            script_mirrors = [
+                ".antigravity/scripts/sample_tool.py",
+                "core_framework/scripts/sample_tool.py",
+            ]
+            agent_mirrors = [
+                ".antigravity/agents/sample_agent.md",
+                "core_framework/agents/sample_agent.md",
+                "plugins/antigravity-swarm/agents/sample_agent.md",
+            ]
+            for rel in script_mirrors:
+                p = tmp_path / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(py_src, encoding="utf-8")
+            for rel in agent_mirrors:
+                p = tmp_path / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(md_src, encoding="utf-8")
+
+            py_hunk = "\n".join(f"+{ln}" for ln in py_src.splitlines())
+            md_hunk = "\n".join(f"+{ln}" for ln in md_src.splitlines())
+            diff_parts = [
+                "diff --git a/.asw/plans/secret_plan.md b/.asw/plans/secret_plan.md\n"
+                "--- /dev/null\n"
+                "+++ b/.asw/plans/secret_plan.md\n"
+                "@@ -0,0 +1,3 @@\n"
+                "+<!-- <frozen-after-approval> -->\n"
+                "+Secret plan note M4\n"
+                "+<!-- </frozen-after-approval> -->\n"
+            ]
+            for rel in script_mirrors:
+                diff_parts.append(
+                    f"diff --git a/{rel} b/{rel}\n"
+                    f"new file mode 100644\n"
+                    f"--- /dev/null\n"
+                    f"+++ b/{rel}\n"
+                    f"@@ -0,0 +1,14 @@\n"
+                    f"{py_hunk}\n"
+                )
+            for rel in agent_mirrors:
+                diff_parts.append(
+                    f"diff --git a/{rel} b/{rel}\n"
+                    f"new file mode 100644\n"
+                    f"--- /dev/null\n"
+                    f"+++ b/{rel}\n"
+                    f"@@ -0,0 +1,6 @@\n"
+                    f"{md_hunk}\n"
+                )
+
+            diff_file = tmp_path / "mirrors.diff"
+            diff_file.write_text("".join(diff_parts), encoding="utf-8")
+
+            packet = reviewer.prepare_blind_review_packet(
+                diff_content=diff_file.read_text(encoding="utf-8"),
+                workdir=tmp_path,
+                plan_path=asw_plan,
+            )
+            self.assertEqual(packet["stripped_files"], [".asw/plans/secret_plan.md"])
+            self.assertNotIn("Secret plan note M4", json.dumps(packet))
+            self.assertEqual(packet["files"], script_mirrors + agent_mirrors)
+            self.assertEqual(len(packet["collapsed_mirrors"]), 3)
+            collapsed_map = {m["mirror_file"]: m for m in packet["collapsed_mirrors"]}
+            self.assertEqual(
+                collapsed_map["core_framework/scripts/sample_tool.py"]["canonical_file"],
+                ".antigravity/scripts/sample_tool.py",
+            )
+            self.assertEqual(
+                collapsed_map["core_framework/agents/sample_agent.md"]["canonical_file"],
+                ".antigravity/agents/sample_agent.md",
+            )
+            self.assertEqual(
+                collapsed_map["plugins/antigravity-swarm/agents/sample_agent.md"]["canonical_file"],
+                ".antigravity/agents/sample_agent.md",
+            )
+            for entry in packet["collapsed_mirrors"]:
+                self.assertRegex(entry["sha256"], r"^[0-9a-f]{12}$")
+                self.assertGreater(entry["saved_diff_lines"], 0)
+
+            self.assertIn(
+                "# [BYTE-IDENTICAL MIRROR OF .antigravity/scripts/sample_tool.py | sha256=",
+                packet["raw_diff"],
+            )
+            self.assertEqual(packet["raw_diff"].count("def func_alpha"), 1)
+            self.assertEqual(len(packet["ast_changed_symbols"]), 3)
+            self.assertTrue(all(s["file"] == ".antigravity/scripts/sample_tool.py" for s in packet["ast_changed_symbols"]))
+            self.assertIn("## Collapsed Byte-Identical Mirrors", packet["packet_text"])
+            self.assertIn("collapsed_mirrors[3]{mirror_file,canonical_file,sha256,saved_diff_lines}:", packet["packet_text"])
+            self.assertIn("ast_changed_symbols[3]{file,function,lineno,end_lineno,signature,branches}:", packet["packet_text"])
+
+            # CLI --json omits packet_text by default
+            proc_json = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.script_path),
+                    "--mode",
+                    "prepare-blind-review",
+                    "--diff",
+                    str(diff_file),
+                    "--workdir",
+                    str(tmp_path),
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(self.repo_root),
+            )
+            self.assertEqual(proc_json.returncode, 0, proc_json.stderr)
+            parsed = json.loads(proc_json.stdout)
+            self.assertNotIn("packet_text", parsed)
+            self.assertEqual(len(parsed["collapsed_mirrors"]), 3)
+            self.assertNotIn("Secret plan note M4", proc_json.stdout)
+
+            # CLI --output *.json also omits packet_text unless --include-packet-text
+            out_json_path = tmp_path / "packet.json"
+            proc_out_json = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.script_path),
+                    "--mode",
+                    "prepare-blind-review",
+                    "--diff",
+                    str(diff_file),
+                    "--workdir",
+                    str(tmp_path),
+                    "--output",
+                    str(out_json_path),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(self.repo_root),
+            )
+            self.assertEqual(proc_out_json.returncode, 0, proc_out_json.stderr)
+            out_parsed = json.loads(out_json_path.read_text(encoding="utf-8"))
+            self.assertNotIn("packet_text", out_parsed)
+
+            # CLI --json --include-packet-text includes packet_text
+            proc_inc = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.script_path),
+                    "--mode",
+                    "prepare-blind-review",
+                    "--diff",
+                    str(diff_file),
+                    "--workdir",
+                    str(tmp_path),
+                    "--json",
+                    "--include-packet-text",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(self.repo_root),
+            )
+            self.assertEqual(proc_inc.returncode, 0, proc_inc.stderr)
+            inc_parsed = json.loads(proc_inc.stdout)
+            self.assertIn("packet_text", inc_parsed)
+            self.assertEqual(inc_parsed["packet_text"], packet["packet_text"])
+
+    def test_m5_prepare_blind_review_divergent_mirror_not_collapsed(self):
+        """M5: A 1-line divergent mirror must never collapse and must retain full diff + AST for both files."""
+        scripts_dir = str(self.repo_root / ".antigravity" / "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        import invoke_opus_reviewer as reviewer
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            src_a = "def calc(x: int) -> int:\n    return x + 1\n"
+            src_b = "def calc(x: int) -> int:\n    return x + 2\n"
+            p_a = tmp_path / ".antigravity" / "scripts" / "div_tool.py"
+            p_b = tmp_path / "core_framework" / "scripts" / "div_tool.py"
+            p_a.parent.mkdir(parents=True, exist_ok=True)
+            p_b.parent.mkdir(parents=True, exist_ok=True)
+            p_a.write_text(src_a, encoding="utf-8")
+            p_b.write_text(src_b, encoding="utf-8")
+
+            diff_divergent = (
+                "diff --git a/.antigravity/scripts/div_tool.py b/.antigravity/scripts/div_tool.py\n"
+                "--- /dev/null\n"
+                "+++ b/.antigravity/scripts/div_tool.py\n"
+                "@@ -0,0 +1,2 @@\n"
+                "+def calc(x: int) -> int:\n"
+                "+    return x + 1\n"
+                "diff --git a/core_framework/scripts/div_tool.py b/core_framework/scripts/div_tool.py\n"
+                "--- /dev/null\n"
+                "+++ b/core_framework/scripts/div_tool.py\n"
+                "@@ -0,0 +1,2 @@\n"
+                "+def calc(x: int) -> int:\n"
+                "+    return x + 2\n"
+            )
+            pkt = reviewer.prepare_blind_review_packet(diff_content=diff_divergent, workdir=tmp_path)
+            self.assertEqual(pkt["collapsed_mirrors"], [])
+            self.assertIn("return x + 1", pkt["raw_diff"])
+            self.assertIn("return x + 2", pkt["raw_diff"])
+            self.assertNotIn("BYTE-IDENTICAL MIRROR", pkt["raw_diff"])
+            ast_files = sorted(s["file"] for s in pkt["ast_changed_symbols"])
+            self.assertEqual(ast_files, [".antigravity/scripts/div_tool.py", "core_framework/scripts/div_tool.py"])
+
+            # Even if diff hunk text looks identical, divergent bytes on disk must prevent collapsing
+            diff_same_hunk = (
+                "diff --git a/.antigravity/scripts/div_tool.py b/.antigravity/scripts/div_tool.py\n"
+                "--- a/.antigravity/scripts/div_tool.py\n"
+                "+++ b/.antigravity/scripts/div_tool.py\n"
+                "@@ -1,2 +1,2 @@\n"
+                " def calc(x: int) -> int:\n"
+                "+    return x + 1\n"
+                "diff --git a/core_framework/scripts/div_tool.py b/core_framework/scripts/div_tool.py\n"
+                "--- a/core_framework/scripts/div_tool.py\n"
+                "+++ b/core_framework/scripts/div_tool.py\n"
+                "@@ -1,2 +1,2 @@\n"
+                " def calc(x: int) -> int:\n"
+                "+    return x + 1\n"
+            )
+            pkt_disk_div = reviewer.prepare_blind_review_packet(diff_content=diff_same_hunk, workdir=tmp_path)
+            self.assertEqual(pkt_disk_div["collapsed_mirrors"], [])
+            self.assertNotIn("BYTE-IDENTICAL MIRROR", pkt_disk_div["raw_diff"])
+            self.assertEqual(
+                sorted(s["file"] for s in pkt_disk_div["ast_changed_symbols"]),
+                [".antigravity/scripts/div_tool.py", "core_framework/scripts/div_tool.py"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

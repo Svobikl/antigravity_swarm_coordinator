@@ -494,6 +494,74 @@ class TestBMADMethodIntegration(unittest.TestCase):
 
         self.assertEqual(SPINE_SCRIPT.read_bytes(), cf_spine_script.read_bytes())
 
+    def test_m6_bmad_lint_spine_format_json_and_toon(self):
+        """M6: bmad_lint_spine.py defaults to pretty JSON and emits encode_smart TOON via --format toon."""
+        cf_spine_script = REPO_ROOT / "core_framework" / "scripts" / "bmad_lint_spine.py"
+        toon_mod = _load_module("toon_codec_m6", REPO_ROOT / ".antigravity" / "scripts" / "toon_codec.py")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            clean_spine = tmp_dir / "clean_spine.md"
+            clean_spine.write_text(
+                "---\ntitle: Clean Spine\n---\n"
+                "## Stack\n| Name | Version |\n| --- | --- |\n| Python | 3.12 |\n\n"
+                "### AD-1 Clean Rule\n- **Binds:** API\n- **Prevents:** Drift\n- **Rule:** Validate.\n",
+                encoding="utf-8",
+            )
+            broken_spine = tmp_dir / "broken_spine.md"
+            broken_spine.write_text(
+                "---\ntitle: Broken Spine\n---\n"
+                "## Stack\n| Name | Version |\n| --- | --- |\n| Python | |\n| FastAPI | TBD |\n\n"
+                "### AD-2 Out Of Order\n- **Binds:** API\n\n"
+                "### AD-1 Reversed\n- **Rule:** TBD placeholder.\n",
+                encoding="utf-8",
+            )
+
+            for script in (SPINE_SCRIPT, cf_spine_script):
+                # Clean spine: default JSON vs --format toon (<3 rows -> compact JSON fallback)
+                p_def = subprocess.run(
+                    [sys.executable, str(script), "--file", str(clean_spine)],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                def_data = json.loads(p_def.stdout)
+                self.assertTrue(def_data["ok"])
+                self.assertEqual(def_data["total_findings"], 0)
+
+                p_clean_toon = subprocess.run(
+                    [sys.executable, str(script), "--file", str(clean_spine), "--format", "toon"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                clean_toon_data = toon_mod.decode_toon("# JSON\n" + p_clean_toon.stdout) if not p_clean_toon.stdout.startswith("#") else toon_mod.decode_toon(p_clean_toon.stdout)
+                self.assertTrue(clean_toon_data["ok"])
+                self.assertEqual(clean_toon_data["total_findings"], 0)
+
+                # Multi-finding spine (>=3 findings): --format toon emits # TOON-OBJECT with @table "findings"[N]{...}:
+                p_json = subprocess.run(
+                    [sys.executable, str(script), "--file", str(broken_spine), "--format", "json"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                json_data = json.loads(p_json.stdout)
+                self.assertFalse(json_data["ok"])
+                self.assertGreaterEqual(json_data["total_findings"], 3)
+
+                p_toon = subprocess.run(
+                    [sys.executable, str(script), "--file", str(broken_spine), "--format", "toon"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertIn("# TOON-OBJECT", p_toon.stdout)
+                self.assertIn('@table "findings"[', p_toon.stdout)
+                decoded = toon_mod.decode_toon(p_toon.stdout)
+                self.assertEqual(decoded, json_data)
+                self.assertLess(len(p_toon.stdout), len(p_json.stdout))
+
 
 if __name__ == "__main__":
     unittest.main()

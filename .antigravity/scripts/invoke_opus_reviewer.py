@@ -25,6 +25,8 @@ Adversarial Engine + Gemini 4 Neon (High) whenever Claude Opus 5.5 credits/quota
 
 import argparse
 import ast
+import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -1072,6 +1074,52 @@ _BLIND_STRIP_BASENAMES = {
     "task_graph.json",
     "requirement_coverage.csv",
 }
+_MIRROR_ROOT_PREFIXES = (
+    "plugins/antigravity-swarm/",
+    "core_framework/",
+    ".antigravity/",
+    "plugins/",
+    "global_entrypoint/",
+)
+_MIRROR_TAIL_DIRS = ("scripts/", "agents/", "skills/", "rules/")
+
+
+def _load_toon_codec():
+    """Dynamically load encode_toon, encode_smart, dumps_smart from sibling toon_codec.py."""
+    sibling = Path(__file__).resolve().parent / "toon_codec.py"
+    spec = importlib.util.spec_from_file_location("_toon_codec_for_reviewer", sibling)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load sibling toon_codec.py at {sibling}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.encode_toon, mod.encode_smart, mod.dumps_smart
+
+
+def _normalize_mirror_tail(rel_path: str) -> str | None:
+    """Normalize a mirror file path to its shared tail across known mirror roots."""
+    norm = _norm_rel(rel_path)
+    if not norm or norm == "/dev/null":
+        return None
+    for prefix in _MIRROR_ROOT_PREFIXES:
+        if norm.startswith(prefix):
+            tail = norm[len(prefix) :]
+            if tail == "GEMINI.md" or tail.startswith(_MIRROR_TAIL_DIRS):
+                return tail
+            return None
+    return None
+
+
+def _extract_normalized_diff_payload(sec: list[str]) -> str:
+    """Extract path-independent diff hunk payload for mirror comparison."""
+    for idx, ln in enumerate(sec):
+        if _BLIND_HUNK_HEADER_RE.match(ln):
+            return "\n".join(sec[idx:])
+    payload_lines = [
+        ln
+        for ln in sec
+        if not ln.startswith(("diff --git ", "index ", "--- ", "+++ ", "rename from ", "rename to "))
+    ]
+    return "\n".join(payload_lines).strip()
 
 
 def _is_blind_stripped_path(rel_path: str) -> bool:
@@ -1207,9 +1255,9 @@ def _extract_ast_symbols_from_source(
                 symbols.append({
                     "file": rel_path,
                     "function": qualname,
-                    "signature": sig,
                     "lineno": node.lineno,
                     "end_lineno": end_ln,
+                    "signature": sig,
                     "branches": _extract_fn_branches(node),
                 })
 
@@ -1223,8 +1271,9 @@ def prepare_blind_review_packet(
     plan_path: Path | None = None,  # Explicitly ignored: Stage-1 blind review must never leak plan metadata/notes/matrix
     diff_path: Path | None = None,
 ) -> dict:
-    """Build a Stage-1 RETRACE blind review packet containing ONLY raw code diff (.asw/ stripped) + AST changed functions, signatures, and branches."""
+    """Build a Stage-1 RETRACE blind review packet containing ONLY raw code diff (.asw/ stripped), deduplicated mirrors, and AST symbols."""
     del plan_path  # Never read plan_path in blind stage
+    encode_toon, _encode_smart, dumps_smart = _load_toon_codec()
     raw_diff_text = diff_content if diff_content else read_text_resilient(diff_path)
     eff_workdir = workdir.resolve() if workdir else Path.cwd().resolve()
 
@@ -1244,6 +1293,9 @@ def prepare_blind_review_packet(
     filtered_sections: list[str] = []
     changed_files: list[str] = []
     stripped_files: list[str] = []
+    collapsed_mirrors: list[dict] = []
+    collapsed_set: set[str] = set()
+    mirror_groups: dict[str, list[tuple[str, str, bytes | None]]] = {}
     py_hunk_lines: dict[str, set[int]] = {}
     py_fallback_src: dict[str, list[str]] = {}
 
@@ -1267,6 +1319,52 @@ def prepare_blind_review_packet(
             if sec_file not in stripped_files:
                 stripped_files.append(sec_file)
             continue
+
+        norm_hunk = _extract_normalized_diff_payload(sec)
+        mirror_tail = _normalize_mirror_tail(sec_file) if sec_file else None
+        disk_path = (eff_workdir / sec_file) if sec_file else None
+        cur_disk_bytes: bytes | None = None
+        if disk_path is not None and disk_path.is_file():
+            try:
+                cur_disk_bytes = disk_path.read_bytes()
+            except OSError:
+                cur_disk_bytes = None
+
+        matched_canonical: str | None = None
+        if mirror_tail and norm_hunk:
+            for cand_file, cand_hunk, cand_disk_bytes in mirror_groups.get(mirror_tail, []):
+                if norm_hunk != cand_hunk:
+                    continue
+                if (cur_disk_bytes is not None) != (cand_disk_bytes is not None):
+                    continue
+                if cur_disk_bytes is not None and cur_disk_bytes != cand_disk_bytes:
+                    continue
+                matched_canonical = cand_file
+                break
+
+        if matched_canonical is not None:
+            hash_src = cur_disk_bytes if cur_disk_bytes is not None else norm_hunk.encode("utf-8")
+            sha256_12 = hashlib.sha256(hash_src).hexdigest()[:12]
+            saved_diff_lines = max(0, len(sec) - 2)
+            collapsed_mirrors.append(
+                {
+                    "mirror_file": sec_file,
+                    "canonical_file": matched_canonical,
+                    "sha256": sha256_12,
+                    "saved_diff_lines": saved_diff_lines,
+                }
+            )
+            collapsed_set.add(sec_file)
+            filtered_sections.append(
+                f"diff --git a/{sec_file} b/{sec_file}\n"
+                f"# [BYTE-IDENTICAL MIRROR OF {matched_canonical} | sha256={sha256_12} | {saved_diff_lines} diff lines collapsed]"
+            )
+            if sec_file and sec_file not in changed_files:
+                changed_files.append(sec_file)
+            continue
+
+        if mirror_tail and sec_file:
+            mirror_groups.setdefault(mirror_tail, []).append((sec_file, norm_hunk, cur_disk_bytes))
 
         filtered_sections.append("\n".join(sec))
         if sec_file and sec_file not in changed_files:
@@ -1300,7 +1398,11 @@ def prepare_blind_review_packet(
         filtered_diff += "\n"
 
     ast_symbols: list[dict] = []
-    for rel_py in sorted(set(list(py_hunk_lines.keys()) + [f for f in changed_files if f.endswith(".py")])):
+    for rel_py in sorted(
+        set(list(py_hunk_lines.keys()) + [f for f in changed_files if f.endswith(".py") and f not in collapsed_set])
+    ):
+        if rel_py in collapsed_set:
+            continue
         disk_file = eff_workdir / rel_py
         if disk_file.is_file():
             src = read_text_resilient(disk_file)
@@ -1317,11 +1419,24 @@ def prepare_blind_review_packet(
         "**opt_tokens**: `0.0`",
         f"**Changed Files**: {', '.join(f'`{f}`' for f in changed_files) if changed_files else '*(none)*'}",
         "",
+    ]
+    if collapsed_mirrors:
+        lines.extend([
+            "## Collapsed Byte-Identical Mirrors",
+            "",
+            encode_toon(collapsed_mirrors, name="collapsed_mirrors"),
+            "",
+        ])
+
+    lines.extend([
         "## AST Changed Functions, Signatures & Control-Flow Branches",
         "",
-    ]
+    ])
     if not ast_symbols:
         lines.append("- *(No modified Python function definitions detected in filtered diff)*")
+    elif len(ast_symbols) >= 3:
+        lines.append(dumps_smart(ast_symbols, name="ast_changed_symbols", min_rows=3))
+        lines.append("")
     else:
         for sym in ast_symbols:
             lines.append(f"### `{sym['file']}` :: `{sym['function']}` (lines {sym['lineno']}-{sym['end_lineno']})")
@@ -1348,6 +1463,7 @@ def prepare_blind_review_packet(
         "opt_tokens": 0.0,
         "files": changed_files,
         "stripped_files": stripped_files,
+        "collapsed_mirrors": collapsed_mirrors,
         "ast_changed_symbols": ast_symbols,
         "raw_diff": filtered_diff,
         "packet_text": packet_text,
@@ -1991,6 +2107,7 @@ def main():
     parser.add_argument("--workdir", type=Path, default=None, help="Explicit working directory root (defaults to current working directory)")
     parser.add_argument("--output", type=Path, help="Output markdown review artifact path (optional)")
     parser.add_argument("--json", action="store_true", help="Emit structured JSON output (supported for prepare-blind-review)")
+    parser.add_argument("--include-packet-text", action="store_true", help="Include packet_text in JSON output for prepare-blind-review")
     parser.add_argument("--verify-mutations", action="store_true", help="Run STING diff-scoped AST mutation testing gate during diff-review")
     parser.add_argument("--mutation-threshold", type=float, default=0.75, help="Minimum mutation kill score required by --verify-mutations (default: 0.75)")
     parser.add_argument("--mutation-tests", type=str, default=None, help="Comma-separated pytest target paths for --verify-mutations")
@@ -2049,7 +2166,13 @@ def main():
             plan_path=args.plan,
         )
         as_json = args.json or (args.output is not None and args.output.suffix.lower() == ".json")
-        rendered = json.dumps(packet, indent=2) + "\n" if as_json else packet["packet_text"]
+        if as_json:
+            json_packet = dict(packet)
+            if not args.include_packet_text:
+                json_packet.pop("packet_text", None)
+            rendered = json.dumps(json_packet, indent=2) + "\n"
+        else:
+            rendered = packet["packet_text"]
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(rendered, encoding="utf-8")

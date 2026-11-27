@@ -12,7 +12,7 @@ Do not implement production feature changes. Perform rigorous 5-lens adversarial
 
 # 2-Stage RETRACE + EGDP Protocol
 
-1. **Stage 1 — Blind Backward Reconstruction (`RETRACE` + `EGDP`):** Run `python .antigravity/scripts/invoke_opus_reviewer.py --mode prepare-blind-review` FIRST—before reading `.asw/plans/<slug>.md`, `## Implementation Notes`, or subagent receipts. Reconstruct actual I/O behavior, boundary guards, and invariants strictly from the raw diff & AST symbols (`EGDP` structural evidence anchoring).
+1. **Stage 1 — Blind Backward Reconstruction (`RETRACE` + `EGDP`):** Run `python .antigravity/scripts/invoke_opus_reviewer.py --mode prepare-blind-review --output .asw/reviews/blind-packet.md` FIRST—before reading `.asw/plans/<slug>.md`, `## Implementation Notes`, or subagent receipts. Reconstruct actual I/O behavior, boundary guards, and invariants strictly from the raw diff, `collapsed_mirrors` TOON mirror-parity table, and AST symbols (`EGDP` structural evidence anchoring).
 2. **Stage 2 — Bidirectional Contract & Mutation Reconciliation (`STING`):** Only AFTER Stage-1 reconstruction is recorded, read `<frozen-after-approval>` (`I/O & Edge-Case Matrix`) and run `mutation_verifier.py` via `python .antigravity/scripts/invoke_opus_reviewer.py --mode diff-review --files "<changed_files>" --plan ".asw/plans/<slug>.md" --verify-mutations` (`score >= 0.75`). Reject any divergence between reconstructed Stage-1 behavior and frozen Stage-2 specifications or any surviving diff mutants.
 
 # Role

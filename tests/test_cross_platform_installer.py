@@ -675,6 +675,61 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
             )
             self.assertTrue((fake_home_no_plugin / ".gemini" / "scripts" / "mutation_verifier.py").is_file())
 
+    def test_toon_codec_ste100_hooks_and_blind_packet_deployed(self):
+        """run_install() deploys toon_codec.py byte-identically, STE-100 clean asw-hook.mjs, and blind-packet asw-reviewer.md."""
+        import importlib.util
+        import json
+
+        install_py = self.repo_root / "install.py"
+        spec = importlib.util.spec_from_file_location("installer_mod_toon", install_py)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_home = Path(tmp) / "fake_home"
+            fake_home.mkdir(parents=True)
+            summary = mod.run_install(
+                repo_root=self.repo_root,
+                home_dir=fake_home,
+                skip_prompt=True,
+                skip_skills=True,
+                skip_plugin=False,
+                skip_vault=True,
+                skip_rtk=True,
+                skip_chub=True,
+                install_laya=False,
+            )
+            self.assertTrue(summary.get("plugin_installed"))
+
+            ag_toon = self.repo_root / ".antigravity" / "scripts" / "toon_codec.py"
+            global_toon = fake_home / ".gemini" / "scripts" / "toon_codec.py"
+            ag_dst_toon = fake_home / ".gemini" / ".antigravity" / "scripts" / "toon_codec.py"
+            self.assertTrue(global_toon.is_file(), f"Missing deployed script: {global_toon}")
+            self.assertTrue(ag_dst_toon.is_file(), f"Missing deployed script: {ag_dst_toon}")
+            expected_bytes = ag_toon.read_bytes()
+            self.assertEqual(global_toon.read_bytes(), expected_bytes, "~/.gemini/scripts/toon_codec.py mismatch")
+            self.assertEqual(ag_dst_toon.read_bytes(), expected_bytes, "~/.gemini/.antigravity/scripts/toon_codec.py mismatch")
+
+            deployed_hook = fake_home / ".gemini" / "config" / "plugins" / "antigravity-swarm" / "scripts" / "asw-hook.mjs"
+            self.assertTrue(deployed_hook.is_file(), f"Missing deployed hook: {deployed_hook}")
+            lint_proc = subprocess.run(
+                [sys.executable, str(global_toon), "--lint-ste100", str(deployed_hook), "--json"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=15,
+            )
+            self.assertEqual(lint_proc.returncode, 0, f"STE-100 lint failed: {lint_proc.stderr}\n{lint_proc.stdout}")
+            lint_report = json.loads(lint_proc.stdout)
+            self.assertTrue(lint_report.get("ok"), f"Expected ok=True, got: {lint_report}")
+            self.assertEqual(lint_report.get("total_violations"), 0, f"Expected 0 STE-100 violations: {lint_report}")
+
+            deployed_reviewer = fake_home / ".gemini" / "config" / "plugins" / "antigravity-swarm" / "agents" / "asw-reviewer.md"
+            self.assertTrue(deployed_reviewer.is_file(), f"Missing deployed reviewer: {deployed_reviewer}")
+            reviewer_text = deployed_reviewer.read_text(encoding="utf-8")
+            self.assertIn("--output .asw/reviews/blind-packet.md", reviewer_text)
+            self.assertIn("collapsed_mirrors", reviewer_text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,12 +19,24 @@ Checks:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import sys
 from pathlib import Path
 
 sys.dont_write_bytecode = True
+
+
+def _load_toon_dumps_smart():
+    """Dynamically load dumps_smart from sibling toon_codec.py."""
+    sibling = Path(__file__).resolve().parent / "toon_codec.py"
+    spec = importlib.util.spec_from_file_location("_toon_codec_for_spine", sibling)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load sibling toon_codec.py at {sibling}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.dumps_smart
 
 AD_HEADING = re.compile(r"^#{2,4}\s*AD-(\d+)\b(.*)$", re.MULTILINE)
 HEADING = re.compile(r"^#{1,6}\s", re.MULTILINE)
@@ -386,8 +398,19 @@ def main(argv: list[str] | None = None) -> int:
         default="auto",
         help="lint mode: spine, plan-contract, or auto (default)",
     )
-    ap.add_argument("-o", "--output", help="write JSON output to file instead of stdout")
+    ap.add_argument(
+        "--format",
+        choices=("json", "toon"),
+        default="json",
+        help="output format: json (default) or toon (smart TOON/compact JSON via toon_codec)",
+    )
+    ap.add_argument("-o", "--output", help="write JSON/TOON output to file instead of stdout")
     args = ap.parse_args(argv)
+
+    def _format_output(payload: dict) -> str:
+        if args.format == "toon":
+            return _load_toon_dumps_smart()(payload, name="findings", min_rows=3)
+        return json.dumps(payload, indent=2)
 
     if args.file:
         target_path = Path(args.file).resolve()
@@ -397,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not target_path.is_file():
         result = {"ok": False, "error": f"{target_path} not found", "findings": [], "total_findings": 0}
-        out = json.dumps(result, indent=2)
+        out = _format_output(result)
         if args.output:
             Path(args.output).write_text(out + "\n", encoding="utf-8")
         else:
@@ -417,7 +440,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         result = lint_spine(text, name=target_path.name)
 
-    out = json.dumps(result, indent=2)
+    out = _format_output(result)
     if args.output:
         Path(args.output).write_text(out + "\n", encoding="utf-8")
     else:

@@ -2,7 +2,7 @@
 
 Complete backup, distribution, and cross-platform setup package (**Apple macOS**, **Windows**, and **Linux**) for the default **Swarm Coordinator**, **Google Research `Harness²` recursive adaptation engine**, **Quad-Model Cross-Family Governance Framework** (`Gemini 4 Carbon High` + `Claude Opus 5.5` + `Gemini 4 Neon High` + `Gemini 4 Hydrogen High`), and **201 Curated Multi-Domain Golden Catalog Skills** for **Google Antigravity** and **Gemini CLI**.
 
-This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 201 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **183 automated verification tests**.
+This repository contains the complete coordinator architecture—100% **path-independent** across users and operating systems—including the global configuration entry point prompt, immutable governance rules (Sections 1–28), the `BMAD-METHOD V7` frozen-contract & 5-lens review gates, the `Harness²` self-improving harness engine, native `Claude Opus 5.5` adversarial plan & diff review gates, validation scripts, **all 201 curated multi-domain skills**, the ASW engine plugin (`antigravity-swarm`), and **219 automated verification tests**.
 
 ---
 
@@ -263,6 +263,23 @@ Selective, zero-API-overhead integration of key mechanisms from `microsoft/Token
 - **Stale Checkpoint TTL & Zero-Artifact Post-Edit Sensor (`asw-stop-check.mjs` / `asw-lsp-check.mjs`):**
   - `asw-stop-check.mjs` enforces a `6h` stale checkpoint TTL, plan-matching, and `deferred-work.md` / `status: done` filtering so completed or stale `.asw/start-work/state.json` files never force unapproved plan execution.
   - `asw-lsp-check.mjs` validates `.py` edits with zero-artifact `ast.parse` (`0` `.pyc`/`__pycache__` clutter) and immediately unlinks `.asw/.pending-lsp-diagnostic.json` when a clean edit passes.
+
+### 🗜️ Input-Only `TOON`, Blind-Packet Mirror Deduplication & Pragmatic `ASD-STE100` Directives
+
+Grounded in provider-logged telemetry across an 8-subagent production wave (`7,115,348` `effective_tokens`, where `cache_read` accounted for `41.24%`, `fresh_in` / tool results for `34.84%`, and subagent `visible_reply` prose for just **`0.106%`**), the coordinator applies zero-LLM (`opt_tokens = 0.0`) structural compression strictly where empirical bottlenecks exist:
+
+- **Input-Only `TOON` (`toon_codec.py`, `arXiv:2603.03306` Smart Profitability Gate):** Encodes uniform tabular records (`ast_changed_symbols`, `collapsed_mirrors`, `spine_lint_findings`) in lossless, 100% type-preserving `TOON` (`name[N]{f1,f2,...}:`) while automatically falling back to compact JSON on small (`N < 3`), ragged, or deeply nested payloads (never forcing LLM `TOON` output generation).
+- **RETRACE Blind-Packet Mirror Deduplication (`prepare-blind-review` + `--output .asw/reviews/blind-packet.md`):** Collapses byte-identical mirror hunks (`.antigravity/`, `core_framework/`, `plugins/antigravity-swarm/`) into a SHA-256-verified `collapsed_mirrors` `TOON` table (preserving full diffs whenever any 1-byte mirror drift occurs) and eliminates 2.0× `packet_text` double-serialization on `--json` output.
+- **Pragmatic `ASD-STE100` Directives (`asw-hook.mjs` + `toon_codec.py --lint-ste100`):** Rewrites all 8 static `asw-hook.mjs` mode directives into active imperative clauses (`<= 22` prose words/bullet, `0` conversational filler phrases, `100%` gate-keyword preservation).
+- **Why `Caveman` Was Evaluated & Rejected:** Because external subagent replies are already capped at `<= 250` tokens (`0.106%` of `effective_tokens`) and CLI stdout is already compressed **`-87.8%`** by `rtk` + **`-39.61%`** by `TokenEconomizer`, injecting a `~1,160`-token output-voice skill yields net-negative token economics while risking dropped edge-case caveats during bug diagnosis.
+
+| Empirical Benchmark / Live E2E Surface | Baseline (`Before`) | Upgraded (`After`) | Measured Delta & Quality Proof |
+| :--- | ---: | ---: | :--- |
+| **`toon_codec.py --benchmark`** (`6` tabular + `4` fallback payloads) | Pretty / Compact JSON | Smart `TOON` / JSON | **`-54.34%`** vs. pretty JSON (`-42.88%` vs. compact), `10/10` lossless round-trip, `STING = 1.00` (`24/24`) |
+| **Real Repo Commits** (`ce8c448`, `6bb2ec1`, `6605a69` blind `.json` / `.md`) | `363–767 KB` (`.json`) | `121–231 KB` (`.json`) | **`-64.51%` to `-69.91%`** `.json` bytes (`-31.41%` to `-42.30%` `.md` bytes; `17 ➔ 5` `read_file` chunks) |
+| **`bmad_lint_spine.py --format toon`** (multi-finding spine) | `464` est. tokens | `272` est. tokens | **`-41.38%`** tokens with automatic `encode_smart` fallback on `0`-finding runs |
+| **`asw-hook.mjs` Directives** (`8` static mode prompts) | `3,548` est. tokens | `2,185` est. tokens | **`-38.42%`** (`-1,363` tok), `0` STE-100 violations (`max_prose_words = 21 <= 22`) |
+| **Live `asw-reviewer` E2E A/B** (`Gemini 4 Neon High`, 3 seeded bugs) | `1,422,404` raw / `341,926.6` eff. tok | `884,830` raw / `241,990.5` eff. tok | **`-37.79%` raw tokens** (`-39.22%` `cache_read`, `-25.45%` `fresh_in`), **`-29.23%` `effective_tokens`**, **`3/3` (`100%`) defect recall parity** |
 
 ---
 
