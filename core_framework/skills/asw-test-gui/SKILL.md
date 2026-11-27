@@ -1,13 +1,15 @@
 ---
 name: asw-test-gui
-description: On-demand physical GUI and localhost Playwright verification for web, native, and mobile apps.
+description: Auto-activated and on-demand physical GUI and Playwright verification for web, native, and mobile apps.
 ---
 
 # Antigravity Swarm Physical GUI Tester (`asw-test-gui`)
 
-Use this skill **on-demand when explicitly requested by the user** (either standalone as `asw-test-gui` to physically test the latest implementation, or chained at the end of `asw-loop` / `asw-start-work` / `asw-goal` when the user specifies `asw-test-gui`).
+This skill activates in two ways:
+- **Automatically (`requires_gui_verification: true`):** Whenever `/asw`, `/asw-plan`, `/asw-start-work`, or `/asw-goal` targets an action, build, fix, or verify GUI task (`decision_router.py` -> `asw-hook.mjs` appends `ASW TEST-GUI MODE ENABLED!`). Automatic activation is skipped on read-only questions (`ASW CONSULTATION / MODE 1`), non-GUI backend tasks, visual-only README/SVG edits, or when `ASW_DECISION_MODEL_ENABLED=0`.
+- **Explicitly on-demand:** Whenever the user specifies `asw-test-gui` in their prompt (standalone to physically test the latest implementation, or chained with `/asw`, `/asw-loop`, `/asw-start-work`, or `/asw-goal`).
 
-Do NOT invoke `asw-test-gui` automatically on every backend or non-GUI task unless the user specifies `asw-test-gui` in their prompt.
+Do NOT invoke `asw-test-gui` on non-GUI backend tasks, read-only consultation questions, or visual-only README/SVG edits unless the user explicitly specifies `asw-test-gui`.
 
 ## Purpose
 

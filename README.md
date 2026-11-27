@@ -357,6 +357,28 @@ python3 .antigravity/scripts/run_harness_adapt.py --demo \
 
 With the integration of **BMAD-METHOD V7** (Section 28) alongside our **Quad-Model Routing** and **Section 26–27 Universal Reliability Gates**, the Swarm Coordinator enforces strict structural guardrails against instruction amnesia, silent test-expectation tampering, and missed caller updates. Follow the principles and command guide below to get maximum reliability out of every session.
 
+### 🧭 Recommended Daily Usage & Automatic Sub-Skill Orchestration
+
+In day-to-day engineering, you only need **two primary workflows**—everything else is orchestrated automatically under the hood:
+
+1. **`/asw <task>` — Autonomous End-to-End Delivery (Default Daily Driver):** Use for features, bugfixes, UI updates, refactors, cleanups, or quick architecture questions.
+2. **`/asw-plan <task>` ➔ `start-work <slug>` — Contract-First Delivery:** Use for multi-file features, risky refactors, or model integrations when you want to review and lock the `<!-- <frozen-after-approval> -->` contract and `I/O & Edge-Case Matrix` before any code is modified.
+
+**Zero-Token Automatic Sub-Skill & Mode Orchestration (`0.0` extra LLM tokens):**
+On every `/asw`, `/asw-plan`, `/asw-start-work`, and `/asw-goal` invocation, `asw-hook.mjs` queries `decision_router.py` locally (`< 40 ms`) and automatically injects only the relevant sub-skills and domain skills within the strict `<= 8` active skill cap:
+- **Action GUI / Frontend / Desktop / Mobile Tasks** (`React`, `Next.js`, `Vue`, `Tailwind`, `Flutter`, `Electron`, `PyQt`, `SwiftUI`, `dashboard`, etc.) ➔ Automatically activates **`asw-ui-ux`** + **`asw-test-gui`**, enforcing the live Playwright DOM, `shadowRoot` error-card, `console.error`, and screenshot verification gate.
+- **Visual Documentation / SVG / README Enhancements** ➔ Automatically activates **`asw-ui-ux`** alone, skipping unnecessary localhost servers and Playwright runs.
+- **Crashes, Hangs & Tracebacks** ➔ Automatically activates **`asw-debug`** for hypothesis-driven root-cause isolation and the 3-strike anti-thrashing circuit breaker.
+- **Structural Splits, Renames & File Reorganization** ➔ Automatically activates **`asw-refactor`** under regression test protection.
+- **Dead-Code & Boilerplate Removal** ➔ Automatically activates **`asw-cleanup`** to strip clutter safely.
+- **Read-Only Questions (`/asw <question>?`)** ➔ Prompts framed as pure questions without action, fix, or verify verbs automatically route to **`Mode 1` Read-Only Consultation** (`ASW CONSULTATION / MODE 1`), answering directly from repository context without triggering TDD edits or Playwright.
+- **Quote-Safe Command Resolution** ➔ Quoted or backticked command names in prose (for example, `"asw-plan"` or `` `asw-plan` ``) never hijack your leading command (while preserving natural contractions like `don't`).
+
+**When Standalone Commands Are Still Useful:**
+- **`/asw-review`**: Audit an existing branch, PR, or uncommitted working-tree diff across all 5 orthogonal review lenses without starting a new implementation task.
+- **`/asw-goal`**: Drive long-horizon, multi-campaign Mode 5 programs or quantitative research with persistent `.memlog.md` checkpoints until explicit stop criteria pass.
+- **`/asw-harness-adapt`**: Run a dedicated Google Research `Harness²` `Propose ➔ Probe ➔ Compose ➔ Select ➔ Reflect` sweep to evolve project skills, tool guidance, or hooks from execution rollouts.
+
 ### 🏆 3 Golden Operating Principles
 
 1. **Separate Planning (`/asw-plan`) from Execution (`/asw-start-work`) on Medium & Large Tasks:**

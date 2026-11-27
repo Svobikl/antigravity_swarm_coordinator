@@ -870,6 +870,347 @@ class TestDecisionRouter(unittest.TestCase):
         s_go_test = self.router.select_skills("Run go test ./... in golang service", max_skills=8)
         self.assertIn("golang-pro", s_go_test)
 
+    # --- Auto Sub-Skill Orchestration (Task 1: M1-M5) ---
+    def test_aso_m1_strip_ignored_regions_and_contractions(self):
+        """M1: _strip_ignored_regions strips backticks/quotes (EN/CZ/curly) while preserving contractions."""
+        strip_fn = decision_router._strip_ignored_regions
+        self.assertEqual(
+            strip_fn('I don\'t use "asw-plan" or `asw-review` and it isn\'t needed'),
+            "I don't use   or   and it isn't needed",
+        )
+        self.assertEqual(
+            strip_fn("I can't run 'asw-plan' and Let's test 'don't stop'"),
+            "I can't run   and Let's test  ",
+        )
+        self.assertEqual(
+            strip_fn("používám „asw-plan“ a “asw-review” a ‘asw-goal’ ale don’t panic"),
+            "používám   a   a   ale don’t panic",
+        )
+        self.assertEqual(
+            strip_fn("Check ```/asw-plan\nfoo``` now"),
+            "Check   now",
+        )
+
+    def test_aso_m1_leading_command_priority_and_quoted_immunity(self):
+        """M1: Leading /asw wins over quoted or trailing /asw-plan; modifiers like asw-test-gui remain active."""
+        q_meta = self.router.route_prompt('/asw ja prakticky pouzivam pouze "asw" a obcas "asw-plan", neni to skoda?')
+        self.assertEqual(q_meta["recommended_mode"], "mode_1")
+        self.assertEqual(q_meta["execution_mode"], "mode_1")
+        self.assertEqual(q_meta["recommended_command"], "asw-consultation")
+        self.assertTrue(q_meta["is_consultation"])
+        self.assertFalse(q_meta["requires_gui_verification"])
+        self.assertEqual(q_meta["auto_subskills"], [])
+
+        act_quoted = self.router.route_prompt('/asw implementuj funkci a ne "asw-plan"')
+        self.assertEqual(act_quoted["recommended_command"], "asw-loop")
+        self.assertIn(act_quoted["recommended_mode"], ("mode_2", "mode_3"))
+        self.assertFalse(act_quoted["is_consultation"])
+
+        act_trailing = self.router.route_prompt("/asw oprav funkci a nepouzivej /asw-plan")
+        self.assertEqual(act_trailing["recommended_command"], "asw-loop")
+        self.assertFalse(act_trailing["is_consultation"])
+
+        mod_gui = self.router.route_prompt("/asw asw-test-gui verify dashboard")
+        self.assertTrue(mod_gui["requires_gui_verification"])
+        self.assertIn("asw-test-gui", mod_gui["auto_subskills"])
+
+    def test_aso_m2_pure_readonly_mode1_consultation(self):
+        """M2: Pure read-only /asw <question>? routes to mode_1 consultation without GUI/TDD."""
+        for prompt in (
+            "/asw Jak funguje caching?",
+            "/asw how does the router work?",
+            "Co dělá tato funkce?",
+        ):
+            with self.subTest(prompt=prompt):
+                res = self.router.route_prompt(prompt)
+                self.assertEqual(res["recommended_mode"], "mode_1")
+                self.assertEqual(res["execution_mode"], "mode_1")
+                self.assertEqual(res["recommended_command"], "asw-consultation")
+                self.assertTrue(res["is_consultation"])
+                self.assertFalse(res["requires_gui_verification"])
+                self.assertFalse(res["requires_subagent_plan_wave"])
+                self.assertEqual(res["auto_subskills"], [])
+                self.assertEqual(res["opt_tokens"], 0.0)
+
+    def test_aso_m3_m4_bilingual_gui_gate_and_visual_docs(self):
+        """M3/M4: Action GUI prompts activate asw-ui-ux + asw-test-gui; read-only skips; SVG/README activates only asw-ui-ux."""
+        gui_action_prompts = (
+            "/asw vytvoř moderní React dashboard s grafy",
+            "/asw build a Flutter mobile UI",
+            "/asw oprav chybu ve webové aplikaci",
+            "/asw-plan navrhni Electron rozhraní",
+        )
+        for prompt in gui_action_prompts:
+            with self.subTest(prompt=prompt):
+                res = self.router.route_prompt(prompt)
+                self.assertTrue(res["requires_gui_verification"], f"Expected GUI verification for {prompt!r}")
+                self.assertIn("asw-ui-ux", res["auto_subskills"])
+                self.assertIn("asw-test-gui", res["auto_subskills"])
+
+        res_bug_gui = self.router.route_prompt("/asw oprav chybu ve webové aplikaci")
+        self.assertIn("asw-debug", res_bug_gui["auto_subskills"])
+
+        for ro_prompt in ("/asw jak funguje React state?", "/asw používá to asw-ui-ux?"):
+            with self.subTest(ro_prompt=ro_prompt):
+                res = self.router.route_prompt(ro_prompt)
+                self.assertFalse(res["requires_gui_verification"])
+                self.assertEqual(res["auto_subskills"], [])
+                self.assertEqual(res["recommended_mode"], "mode_1")
+                self.assertTrue(res["is_consultation"])
+
+        res_svg = self.router.route_prompt("/asw Vylepši README a přidej SVG architekturu")
+        self.assertFalse(res_svg["requires_gui_verification"])
+        self.assertIn("asw-ui-ux", res_svg["auto_subskills"])
+        self.assertNotIn("asw-test-gui", res_svg["auto_subskills"])
+
+        for backend_prompt in ("asw-loop implementuj backend endpoint", "/asw implementuj FastAPI endpoint"):
+            with self.subTest(backend_prompt=backend_prompt):
+                res = self.router.route_prompt(backend_prompt)
+                self.assertFalse(res["requires_gui_verification"])
+                self.assertNotIn("asw-ui-ux", res["auto_subskills"])
+                self.assertNotIn("asw-test-gui", res["auto_subskills"])
+
+    def test_aso_m5_zero_llm_auto_subskills_and_budget(self):
+        """M5: Zero-LLM auto_subskills trigger debug/refactor/cleanup, respect <=8 combined budget, and preserve 1.0 P@k."""
+        for dbg_prompt in ("/asw padá Traceback", "/asw aplikace zamrzá při startu", "/asw debug crash in worker"):
+            res = self.router.route_prompt(dbg_prompt)
+            self.assertIn("asw-debug", res["auto_subskills"])
+            self.assertEqual(res["opt_tokens"], 0.0)
+
+        res_quoted_dbg = self.router.route_prompt('/asw jak funguje "padá" v logu?')
+        self.assertEqual(res_quoted_dbg["auto_subskills"], [])
+
+        for ref_prompt in ("/asw rozděl soubor utils.py a přejmenuj funkce", "/asw refactor and split module"):
+            res = self.router.route_prompt(ref_prompt)
+            self.assertIn("asw-refactor", res["auto_subskills"])
+
+        for cln_prompt in ("/asw vyčisti kód a odstraň mrtvý kód", "/asw cleanup dead code and ai slop"):
+            res = self.router.route_prompt(cln_prompt)
+            self.assertIn("asw-cleanup", res["auto_subskills"])
+
+        heavy_prompt = (
+            "/asw oprav chybu a padá React dashboard, rozděl soubor a přejmenuj komponenty, "
+            "vyčisti mrtvý kód, přidej FastAPI Postgres Docker Kubernetes Playwright Python"
+        )
+        res_heavy = self.router.route_prompt(heavy_prompt)
+        auto = res_heavy["auto_subskills"]
+        dom = res_heavy["selected_skills"]
+        self.assertGreaterEqual(len(auto), 4)
+        self.assertEqual(len(set(auto) & set(dom)), 0)
+        self.assertLessEqual(len(auto) + len(dom), 8)
+        self.assertEqual(res_heavy["opt_tokens"], 0.0)
+
+        pred_heavy = self.router.predict(heavy_prompt)
+        self.assertLessEqual(len(pred_heavy["auto_subskills"]) + len(pred_heavy["selected_skills"]), 8)
+
+        bench = decision_router.benchmark_skill_routing(self.router)
+        self.assertEqual(bench["upgraded"]["precision_at_k"], 1.0)
+
+    def test_aso_feature_flag_negative_isolation_and_cli_compact(self):
+        """Negative isolation: flag 0 / enabled=false returns empty skills; CLI --mode route-prompt --compact --prompt emits full contract."""
+        import os
+
+        with mock.patch.dict(os.environ, {"ASW_DECISION_MODEL_ENABLED": "0"}):
+            dis = decision_router.DecisionRouter()
+            r_dis = dis.route_prompt("/asw vytvoř React dashboard a oprav chybu")
+            self.assertFalse(r_dis["enabled"])
+            self.assertEqual(r_dis["auto_subskills"], [])
+            self.assertEqual(r_dis["selected_skills"], [])
+            self.assertFalse(r_dis["requires_gui_verification"])
+            self.assertEqual(r_dis["opt_tokens"], 0.0)
+
+        dis_cfg = decision_router.DecisionRouter(config={"enabled": False})
+        r_cfg = dis_cfg.predict("/asw padá Traceback")
+        self.assertFalse(r_cfg["enabled"])
+        self.assertEqual(r_cfg["auto_subskills"], [])
+        self.assertEqual(r_cfg["selected_skills"], [])
+        self.assertFalse(r_cfg["requires_gui_verification"])
+
+        script_path = CORE_SCRIPTS / "decision_router.py"
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(script_path),
+                "--mode",
+                "route-prompt",
+                "--compact",
+                "--prompt",
+                "/asw vytvoř moderní React dashboard s grafy",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        cli_data = json.loads(proc.stdout.strip())
+        for key in (
+            "auto_subskills",
+            "selected_skills",
+            "requires_gui_verification",
+            "recommended_mode",
+            "recommended_command",
+            "is_consultation",
+            "opt_tokens",
+        ):
+            self.assertIn(key, cli_data)
+        self.assertTrue(cli_data["requires_gui_verification"])
+        self.assertIn("asw-ui-ux", cli_data["auto_subskills"])
+        self.assertIn("asw-test-gui", cli_data["auto_subskills"])
+        self.assertEqual(cli_data["opt_tokens"], 0.0)
+        self.assertLessEqual(len(cli_data["auto_subskills"]) + len(cli_data["selected_skills"]), 8)
+
+    def test_aso_mutation_boundary_guards(self):
+        """Boundary guards killing AST mutants in both .antigravity and core_framework decision_router mirrors."""
+        import importlib.util
+
+        modules = [decision_router]
+        core_path = CORE_SCRIPTS / "decision_router.py"
+        if core_path.is_file() and core_path.resolve() != Path(decision_router.__file__).resolve():
+            spec = importlib.util.spec_from_file_location("core_decision_router", str(core_path))
+            if spec is not None and spec.loader is not None:
+                core_mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(core_mod)
+                modules.append(core_mod)
+
+        for mod in modules:
+            strip_fn = mod._strip_ignored_regions
+            self.assertEqual(strip_fn(""), "")
+            self.assertEqual(strip_fn(None), "")  # type: ignore[arg-type]
+            self.assertEqual(strip_fn(123), "")  # type: ignore[arg-type]
+
+            strip_q_fn = mod._strip_quoted_spans
+            self.assertEqual(strip_q_fn(""), "")
+            self.assertEqual(strip_q_fn(None), "")  # type: ignore[arg-type]
+            self.assertEqual(strip_q_fn(123), "")  # type: ignore[arg-type]
+
+            gui_fn = mod._detect_gui_intent
+            self.assertFalse(gui_fn("/asw jak funguje React UI?")["requires_gui_verification"])
+            self.assertTrue(gui_fn("/asw vytvoř React UI")["requires_gui_verification"])
+            self.assertFalse(gui_fn("/asw vytvoř React UI", is_question_only=True)["requires_gui_verification"])
+            self.assertTrue(
+                gui_fn("/asw jak funguje React UI?", is_question_only=False, has_action_verb=True)[
+                    "requires_gui_verification"
+                ]
+            )
+
+            router_inst = mod.DecisionRouter()
+            with mock.patch.object(router_inst, "select_skills", side_effect=AssertionError("must not call select_skills when budget is full")):
+                full_dec = router_inst._build_decision(
+                    choice="mode_3",
+                    execution_mode="mode_3",
+                    recommended_tier="carbon_plan_research",
+                    requires_gui_verification=False,
+                    requires_subagent_plan_wave=True,
+                    answer_confidence=1.0,
+                    noul=0.3,
+                    auto_subskills=[f"s{i}" for i in range(8)],
+                    prompt_for_skills="python fastapi",
+                )
+            self.assertEqual(full_dec["selected_skills"], [])
+
+            # Patch-1 & Patch-2 regression assertions across both mirrors
+            bare_loop = router_inst.route_prompt("asw-loop Implement auth, add tests, and update docs")
+            self.assertEqual(bare_loop["recommended_command"], "asw-loop")
+            self.assertEqual(bare_loop["execution_mode"], "mode_3")
+            self.assertFalse(bare_loop["requires_gui_verification"])
+
+            bare_loop_q = router_inst.route_prompt("asw-loop Jak funguje caching?")
+            self.assertEqual(bare_loop_q["recommended_command"], "asw-loop")
+            self.assertFalse(bare_loop_q["is_consultation"])
+
+            bare_asw = router_inst.route_prompt("asw implement parser and ignore /asw-plan")
+            self.assertEqual(bare_asw["recommended_command"], "asw-loop")
+            self.assertFalse(bare_asw["is_consultation"])
+
+            consult_res = router_inst.route_prompt("/asw Jak funguje caching?")
+            self.assertTrue(consult_res["is_consultation"])
+            self.assertNotIn("implementation-developer", consult_res["selected_skills"])
+            self.assertNotIn("validator-build-test-agent", consult_res["selected_skills"])
+
+            quoted_skills = router_inst.select_skills(
+                "/asw don't use “asw-review” here, implement the parser", max_skills=8
+            )
+            self.assertNotIn("compliance-maintainability-reviewer", quoted_skills)
+
+            # _enrich_with_laya must NOT flip requires_gui_verification when gui_ans is {} or mode_1 consultation
+            daemon_inst = mod.DecisionRouter(
+                server_url="http://127.0.0.1:18765",
+                enable_inproc=False,
+                config={"enabled": True, "use_daemon": True, "compact_question_schema": True},
+            )
+            fake_no_gui = json.dumps({
+                "answers": {
+                    "execution_mode": {"choice": "mode_3", "answer_confidence": 0.9, "probabilities": {"mode_3": 0.9}},
+                },
+                "routing": {"source": "daemon"},
+            }).encode("utf-8")
+
+            class _FakeRespNoGui:
+                status = 200
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def read(self): return fake_no_gui
+
+            base_non_gui = router_inst._build_decision(
+                choice="mode_3",
+                execution_mode="mode_3",
+                recommended_tier="carbon_plan_research",
+                requires_gui_verification=False,
+                requires_subagent_plan_wave=True,
+                answer_confidence=0.92,
+                noul=0.70,
+                recommended_command="asw-loop",
+                is_consultation=False,
+                auto_subskills=[],
+                prompt_for_skills="asw-loop Implement auth, add tests, and update docs",
+            )
+            with mock.patch("urllib.request.urlopen", return_value=_FakeRespNoGui()):
+                enriched = daemon_inst._enrich_with_laya(
+                    "asw-loop Implement auth, add tests, and update docs", dict(base_non_gui)
+                )
+            self.assertFalse(enriched["requires_gui_verification"])
+            self.assertEqual(enriched["noul"], 0.70)
+
+            # Laya override to mode_1 strips implementation/validator skills and ignores high gui_noul
+            fake_mode1 = json.dumps({
+                "answers": {
+                    "execution_mode": {"choice": "mode_1", "answer_confidence": 0.95, "probabilities": {"mode_1": 0.95}},
+                    "requires_gui_verification": {"noul": 0.90},
+                },
+            }).encode("utf-8")
+
+            class _FakeRespMode1:
+                status = 200
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def read(self): return fake_mode1
+
+            with mock.patch("urllib.request.urlopen", return_value=_FakeRespMode1()):
+                enriched_m1 = daemon_inst._enrich_with_laya("Jak funguje auth?", dict(base_non_gui))
+            self.assertTrue(enriched_m1["is_consultation"])
+            self.assertEqual(enriched_m1["recommended_command"], "asw-consultation")
+            self.assertFalse(enriched_m1["requires_gui_verification"])
+            self.assertNotIn("implementation-developer", enriched_m1["selected_skills"])
+            self.assertNotIn("validator-build-test-agent", enriched_m1["selected_skills"])
+
+            # Exact gui_noul == 0.75 boundary kills >= -> > mutant
+            for boundary_val, expected_gui in ((0.75, True), (0.74, False)):
+                fake_b = json.dumps({
+                    "answers": {
+                        "execution_mode": {"choice": "mode_3", "answer_confidence": 0.9},
+                        "requires_gui_verification": {"noul": boundary_val},
+                    },
+                }).encode("utf-8")
+
+                class _FakeRespBoundary:
+                    status = 200
+                    def __enter__(self_r): return self_r
+                    def __exit__(self_r, *args): return False
+                    def read(self_r): return fake_b
+
+                with mock.patch("urllib.request.urlopen", return_value=_FakeRespBoundary()):
+                    res_b = daemon_inst._enrich_with_laya("implement auth", dict(base_non_gui))
+                self.assertEqual(res_b["requires_gui_verification"], expected_gui)
+
 
 if __name__ == "__main__":
     unittest.main()

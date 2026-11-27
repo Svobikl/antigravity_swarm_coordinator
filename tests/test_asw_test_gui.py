@@ -72,6 +72,107 @@ class TestAswTestGui(unittest.TestCase):
         self.assertIn("ASW LOOP MODE ENABLED", msg_loop_only)
         self.assertNotIn("ASW TEST-GUI MODE ENABLED", msg_loop_only)
 
+    def test_auto_gui_verification_and_subskills_across_commands_m3_m6(self):
+        """M3/M4/M6: Auto GUI verification & sub-skills across /asw, /asw-plan, /asw-start-work, /asw-goal + backend & flag=0 isolation."""
+        import os
+
+        def run_hook(prompt: str, extra_env: dict[str, str] | None = None) -> str:
+            env = dict(os.environ)
+            env.pop("ASW_DECISION_MODEL_ENABLED", None)
+            if extra_env:
+                env.update(extra_env)
+            proc = subprocess.run(
+                ["node", str(self.hook_path)],
+                input=json.dumps({"invocationNum": 1, "lastUserInput": prompt, "cwd": str(self.repo_root)}),
+                capture_output=True,
+                text=True,
+                cwd=str(self.repo_root),
+                env=env,
+                timeout=15,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            data = json.loads(proc.stdout)
+            return data["injectSteps"][0]["userMessage"]
+
+        def extract_skills_block(msg: str) -> str:
+            marker = "AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:"
+            self.assertIn(marker, msg)
+            idx = msg.index(marker)
+            return msg[idx:]
+
+        # M3: /asw UI app prompt auto-activates TEST_GUI_DIRECTIVE + asw-ui-ux + asw-test-gui
+        msg_asw_ui = run_hook("/asw vytvoř moderní React dashboard s grafy")
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_asw_ui)
+        self.assertIn("ASW TEST-GUI MODE ENABLED!", msg_asw_ui)
+        block_asw = extract_skills_block(msg_asw_ui)
+        self.assertIn("asw-ui-ux", block_asw)
+        self.assertIn("asw-test-gui", block_asw)
+        self.assertLessEqual(len(block_asw.split()), 90)
+
+        # M6: /asw-plan, /asw-start-work, /asw-goal with UI prompt auto-append TEST_GUI_DIRECTIVE + sub-skills
+        for prompt, expected_header in (
+            ("/asw-plan navrhni React UI formulář", "ASW PLAN MODE ENABLED!"),
+            ("/asw-start-work dokonči React formulář", "ASW START-WORK MODE ENABLED!"),
+            ("/asw-goal vytvoř React dashboard", "ASW GOAL MODE ENABLED!"),
+        ):
+            msg = run_hook(prompt)
+            self.assertIn(expected_header, msg)
+            self.assertIn("ASW TEST-GUI MODE ENABLED!", msg)
+            blk = extract_skills_block(msg)
+            self.assertIn("asw-ui-ux", blk)
+            self.assertIn("asw-test-gui", blk)
+
+        # M4: Visual README / SVG improvement -> asw-ui-ux WITHOUT TEST_GUI_DIRECTIVE
+        msg_readme = run_hook("/asw Vylepši README a přidej SVG diagram")
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_readme)
+        self.assertNotIn("ASW TEST-GUI MODE ENABLED", msg_readme)
+        blk_readme = extract_skills_block(msg_readme)
+        self.assertIn("asw-ui-ux", blk_readme)
+        self.assertNotIn("asw-test-gui", blk_readme)
+
+        # M6 Negative: Backend prompts must NOT emit ASW TEST-GUI MODE ENABLED
+        msg_backend_plan = run_hook("/asw-plan navrhni backend PostgreSQL migraci")
+        self.assertIn("ASW PLAN MODE ENABLED!", msg_backend_plan)
+        self.assertNotIn("ASW TEST-GUI MODE ENABLED", msg_backend_plan)
+
+        # M6 Feature-flag isolation: ASW_DECISION_MODEL_ENABLED=0 skips router enrichment cleanly
+        msg_flag0_plan = run_hook(
+            "/asw-plan navrhni React UI formulář",
+            extra_env={"ASW_DECISION_MODEL_ENABLED": "0"},
+        )
+        self.assertIn("ASW PLAN MODE ENABLED!", msg_flag0_plan)
+        self.assertNotIn("ASW TEST-GUI MODE ENABLED", msg_flag0_plan)
+        self.assertNotIn("AUTO-ACTIVATED SUB-SKILLS", msg_flag0_plan)
+
+        # Explicit asw-test-gui modifier still works even with ASW_DECISION_MODEL_ENABLED=0
+        msg_flag0_explicit = run_hook(
+            "/asw asw-test-gui implementuj stránku",
+            extra_env={"ASW_DECISION_MODEL_ENABLED": "0"},
+        )
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_flag0_explicit)
+        self.assertIn("ASW TEST-GUI MODE ENABLED!", msg_flag0_explicit)
+        self.assertNotIn("AUTO-ACTIVATED SUB-SKILLS", msg_flag0_explicit)
+
+        # Patch-1 & Patch-2 hook regression checks
+        msg_bare_loop = run_hook("asw-loop Implement auth, add tests, and update docs")
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_bare_loop)
+        self.assertNotIn("ASW TEST-GUI MODE ENABLED", msg_bare_loop)
+
+        msg_bare_asw = run_hook("asw implement parser and ignore /asw-plan")
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_bare_asw)
+        self.assertNotIn("ASW PLAN MODE ENABLED", msg_bare_asw)
+
+        msg_consult = run_hook("/asw Jak funguje caching?")
+        self.assertIn("ASW CONSULTATION / MODE 1 ENABLED!", msg_consult)
+        blk_consult = extract_skills_block(msg_consult)
+        self.assertNotIn("implementation-developer", blk_consult)
+        self.assertNotIn("validator-build-test-agent", blk_consult)
+
+        msg_quoted_rev = run_hook("/asw don't use “asw-review” here, implement the parser")
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_quoted_rev)
+        blk_quoted_rev = extract_skills_block(msg_quoted_rev)
+        self.assertNotIn("compliance-maintainability-reviewer", blk_quoted_rev)
+
     def test_run_gui_test_web_localhost_happy_and_negative_edge(self):
         """run_gui_test.py starts a localhost web server, verifies DOM/text/selectors, and rejects missing UI elements."""
         self.assertTrue(self.script_path.is_file(), f"Missing {self.script_path}")

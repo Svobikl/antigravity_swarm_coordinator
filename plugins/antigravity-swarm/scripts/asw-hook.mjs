@@ -3,12 +3,12 @@
 import { readFileSync, existsSync, unlinkSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { redactSecrets, safeMode } from "./asw-redact.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SYNTHETIC_MODE_RE = /ASW\s+[A-Z0-9_-]+\s+MODE\s+ENABLED!/i;
+const SYNTHETIC_MODE_RE = /ASW\s+(?:[A-Z0-9_-]+\s+MODE|CONSULTATION\s*\/\s*MODE\s+1)\s+ENABLED!/i;
 
 function pythonBin() {
   return process.platform === "win32" ? "python" : "python3";
@@ -184,10 +184,11 @@ function queryAutoDecisionRouter(prompt, repoDir) {
   const routerPath = resolveDecisionRouter(repoDir);
   if (!routerPath) return null;
   try {
+    const safeCwd = repoDir && existsSync(repoDir) ? repoDir : undefined;
     const res = spawnSync(
       process.platform === "win32" ? "python" : "python3",
       [routerPath, "--mode", "route-prompt", "--compact", "--text", String(prompt)],
-      { timeout: 1500, encoding: "utf8", cwd: repoDir || undefined }
+      { timeout: 1500, encoding: "utf8", cwd: safeCwd }
     );
     if (res.status === 0 && res.stdout) {
       const parsed = JSON.parse(res.stdout);
@@ -208,9 +209,42 @@ const PLAN_RE = new RegExp(`${WORD}(?:asw-plan|swarmwork-plan|asw\\s+plan)${END}
 const GOAL_RE = new RegExp(`${WORD}(?:asw-goal|swarmwork-goal|asw\\s+goal)${END}`);
 const START_WORK_RE = new RegExp(`${WORD}(?:start-work|asw-start-work|swarmwork-start|asw\\s+start\\s+work)${END}`);
 const CLEANUP_RE = new RegExp(`${WORD}(?:asw-cleanup|asw-remove-ai-slops|swarmwork-cleanup|asw\\s+cleanup)${END}`);
-const LOOP_RE = new RegExp(`${WORD}(?:asw-loop|asw|swarmwork)${END}`);
+const EXPLICIT_LOOP_RE = new RegExp(`${WORD}(?:asw-loop|swarmwork)${END}`);
+const GENERIC_ASW_RE = new RegExp(`${WORD}asw${END}`);
 const REVIEW_RE = new RegExp(`${WORD}(?:asw-review|swarmwork-review|asw\\s+review)${END}`);
 const TEST_GUI_RE = new RegExp(`${WORD}(?:asw-test-gui|swarmwork-test-gui|asw\\s+test[-\\s]+gui)${END}`, "i");
+
+export function leadingCommandFor(stripped) {
+  const trimmed = String(stripped ?? "").trimStart();
+  if (!trimmed) return null;
+  const rules = [
+    ["PLAN", new RegExp(`^/?(?:asw-plan|swarmwork-plan|asw\\s+plan)${END}`)],
+    ["GOAL", new RegExp(`^/?(?:asw-goal|swarmwork-goal|asw\\s+goal)${END}`)],
+    ["START_WORK", new RegExp(`^/?(?:start-work|asw-start-work|swarmwork-start|asw\\s+start\\s+work)${END}`)],
+    ["CLEANUP", new RegExp(`^/?(?:asw-cleanup|asw-remove-ai-slops|swarmwork-cleanup|asw\\s+cleanup)${END}`)],
+    ["REVIEW", new RegExp(`^/?(?:asw-review|swarmwork-review|asw\\s+review)${END}`)],
+    ["TEST_GUI", new RegExp(`^/?(?:asw-test-gui|swarmwork-test-gui|asw\\s+test[-\\s]+gui)${END}`, "i")],
+    ["LOOP", new RegExp(`^/?(?:asw-loop|swarmwork)${END}`)],
+    ["ASW", new RegExp(`^/?asw${END}`)],
+  ];
+  for (const [cmd, re] of rules) {
+    if (re.test(trimmed)) return cmd;
+  }
+  return null;
+}
+
+function detectCommand(stripped) {
+  const leading = leadingCommandFor(stripped);
+  if (leading) return leading;
+  if (PLAN_RE.test(stripped)) return "PLAN";
+  if (GOAL_RE.test(stripped)) return "GOAL";
+  if (START_WORK_RE.test(stripped)) return "START_WORK";
+  if (CLEANUP_RE.test(stripped)) return "CLEANUP";
+  if (REVIEW_RE.test(stripped)) return "REVIEW";
+  if (EXPLICIT_LOOP_RE.test(stripped)) return "LOOP";
+  if (GENERIC_ASW_RE.test(stripped)) return "ASW";
+  return null;
+}
 
 function readPayload() {
   try {
@@ -264,12 +298,12 @@ function promptFromTranscript(transcriptPath) {
         if (/^(MODEL|SYSTEM)$/i.test(source)) continue;
         if (/assistant|system|tool|PLANNER_RESPONSE|GENERIC/i.test(role)) continue;
         const joined = stringsFrom(record).join("\n");
-        if (directiveFor(joined)) return joined;
+        if (directiveFor(joined, { skipRouter: true })) return joined;
         if (/USER_INPUT|USER_EXPLICIT|^user$/i.test(role) || /USER_EXPLICIT/i.test(source)) {
           return "";
         }
       } catch {
-        if (directiveFor(line)) return line;
+        if (directiveFor(line, { skipRouter: true })) return line;
       }
     }
   } catch {
@@ -373,6 +407,12 @@ You are Antigravity Swarm's adversarial reviewer running on Gemini 4 Neon (High)
 
 Log every verified finding in ## Review Triage Log and route to [intent_gap], [bad_plan] (extract KEEP notes, revert to baseline_revision, log dead-end in ## Plan Change Log), [patch] (re-engage step-03 subagent), or [defer]. Never modify <frozen-after-approval> or rewrite I/O & Edge-Case Matrix expectations to fit broken code.`;
 
+const CONSULTATION_DIRECTIVE = `ASW CONSULTATION / MODE 1 ENABLED! (Model Tier: Gemini 4 Carbon High | Read-Only Analysis)
+
+You are Antigravity Swarm's read-only architecture and codebase advisor (Mode 1).
+- Answer the user's question directly using verified repository context and clear explanations.
+- Stay strictly read-only: do not modify files, write plans, or trigger implementation or browser verification workflows unless the user explicitly asks for code changes.`;
+
 const TEST_GUI_DIRECTIVE = `ASW TEST-GUI MODE ENABLED! (Physical GUI & Localhost Verification: Gemini 4 Hydrogen High -> Audit: Claude Opus 5.5 / Neon High)
 
 You MUST perform physical GUI and runtime verification of the implemented application surface (never rely on unit tests or mocks alone):
@@ -381,36 +421,99 @@ You MUST perform physical GUI and runtime verification of the implemented applic
 - If Verdict: GUI_FAILED occurs, fix the underlying UI/runtime defect and re-run physical GUI verification until Verdict: GUI_VERIFIED passes.
 - Always terminate spawned dev servers, browsers, and GUI processes in cleanup before finishing.`;
 
-function directiveFor(prompt, payload = {}, repoDir = "") {
-  prompt = redactSecrets(stripIgnoredPromptRegions(prompt));
-  let base = "";
-  if (PLAN_RE.test(prompt)) base = PLAN_DIRECTIVE;
-  else if (GOAL_RE.test(prompt)) base = GOAL_DIRECTIVE;
-  else if (START_WORK_RE.test(prompt)) base = START_WORK_DIRECTIVE;
-  else if (CLEANUP_RE.test(prompt)) base = CLEANUP_DIRECTIVE;
-  else if (REVIEW_RE.test(prompt)) base = REVIEW_DIRECTIVE;
-  else if (LOOP_RE.test(prompt)) base = LOOP_DIRECTIVE;
+export function formatAutoSkillsDirective(route) {
+  if (!route || route.enabled === false) return "";
+  const autoSkills = Array.isArray(route.auto_subskills) ? route.auto_subskills : [];
+  const domainSkills = Array.isArray(route.selected_skills) ? route.selected_skills : [];
+  const combined = [];
+  for (const s of [...autoSkills, ...domainSkills]) {
+    const name = String(s ?? "").trim();
+    if (name && !combined.includes(name)) combined.push(name);
+    if (combined.length >= 8) break;
+  }
+  if (combined.length === 0) return "";
+  const autoShown = [];
+  const domainShown = [];
+  for (const name of combined) {
+    if (autoSkills.includes(name)) autoShown.push(name);
+    else domainShown.push(name);
+  }
+  const parts = [];
+  if (autoShown.length > 0) parts.push(`Sub-skills: ${autoShown.join(", ")}`);
+  if (domainShown.length > 0) parts.push(`Domain: ${domainShown.join(", ")}`);
+  return `AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:\n- ${parts.join(" | ")}\n- Load only these <= ${combined.length} relevant skills (strict <= 8 cap).`;
+}
 
-  if (TEST_GUI_RE.test(prompt)) {
-    return base ? `${base}\n\n${TEST_GUI_DIRECTIVE}` : TEST_GUI_DIRECTIVE;
+export function directiveFor(prompt, payload = {}, repoDir = "") {
+  const rawRedacted = redactSecrets(String(prompt ?? ""));
+  const stripped = stripIgnoredPromptRegions(rawRedacted);
+  const cmd = detectCommand(stripped);
+  const hasExplicitTestGui = TEST_GUI_RE.test(stripped);
+
+  let base = "";
+  let isGenericAsw = false;
+  let shouldQueryRouter = false;
+
+  if (cmd === "PLAN") {
+    base = PLAN_DIRECTIVE;
+    shouldQueryRouter = true;
+  } else if (cmd === "GOAL") {
+    base = GOAL_DIRECTIVE;
+    shouldQueryRouter = true;
+  } else if (cmd === "START_WORK") {
+    base = START_WORK_DIRECTIVE;
+    shouldQueryRouter = true;
+  } else if (cmd === "CLEANUP") {
+    base = CLEANUP_DIRECTIVE;
+  } else if (cmd === "REVIEW") {
+    base = REVIEW_DIRECTIVE;
+  } else if (cmd === "LOOP") {
+    base = LOOP_DIRECTIVE;
+    shouldQueryRouter = true;
+  } else if (cmd === "ASW") {
+    base = LOOP_DIRECTIVE;
+    isGenericAsw = true;
+    shouldQueryRouter = true;
   }
 
-  // System 1 Auto Decision Router evaluation when enabled
-  if (!base && (process.env.ASW_AUTO_DECISION_ROUTER === "1" || payload.autoDecisionRouter === true)) {
-    if (isDecisionModelEnabled(repoDir)) {
-      const decision = queryAutoDecisionRouter(prompt, repoDir);
-      if (decision) {
-        if (decision.requires_subagent_plan_wave) {
-          base = LOOP_DIRECTIVE;
-        }
-        if (decision.requires_gui_verification) {
-          base = base ? `${base}\n\n${TEST_GUI_DIRECTIVE}` : TEST_GUI_DIRECTIVE;
-        }
-      }
+  if (payload?.skipRouter === true) {
+    if (hasExplicitTestGui) {
+      return base ? `${base}\n\n${TEST_GUI_DIRECTIVE}` : TEST_GUI_DIRECTIVE;
+    }
+    return base;
+  }
+
+  const autoRouterOptIn =
+    !base && (process.env.ASW_AUTO_DECISION_ROUTER === "1" || payload?.autoDecisionRouter === true);
+
+  let route = null;
+  if (shouldQueryRouter || autoRouterOptIn) {
+    route = queryAutoDecisionRouter(rawRedacted, repoDir);
+  }
+
+  let isConsultation = false;
+  if (isGenericAsw && !hasExplicitTestGui && route && route.enabled !== false && route.is_consultation === true) {
+    base = CONSULTATION_DIRECTIVE;
+    isConsultation = true;
+  } else if (autoRouterOptIn && route && route.enabled !== false) {
+    if (route.requires_subagent_plan_wave) {
+      base = LOOP_DIRECTIVE;
     }
   }
 
-  return base;
+  const wantsAutoGui =
+    !isConsultation && Boolean(route && route.enabled !== false && route.requires_gui_verification === true);
+
+  const sections = [];
+  if (base) sections.push(base);
+  if (hasExplicitTestGui || wantsAutoGui) sections.push(TEST_GUI_DIRECTIVE);
+
+  const skillsBlock = formatAutoSkillsDirective(route);
+  if (skillsBlock && sections.length > 0) {
+    sections.push(skillsBlock);
+  }
+
+  return sections.join("\n\n");
 }
 
 function consumePendingLspDiagnostic(repoDir) {
@@ -440,42 +543,60 @@ function consumePendingLspDiagnostic(repoDir) {
   }
 }
 
-function stripIgnoredPromptRegions(prompt) {
+export function stripIgnoredPromptRegions(prompt) {
   return String(prompt ?? "")
     .replace(/```[\s\S]*?```/g, " ")
-    .replace(/`[^`]*`/g, " ");
+    .replace(/`[^`]*`/g, " ")
+    .replace(/"(?:\\.|[^"\\\r\n])*"/g, " ")
+    .replace(/\u201e[^\u201c\u201d\r\n]*[\u201c\u201d]/g, " ")
+    .replace(/\u201c[^\u201d\r\n]*\u201d/g, " ")
+    .replace(
+      /(?<![A-Za-z0-9_\u00c0-\u024f])'(?:\\.|(?<=[A-Za-z0-9_\u00c0-\u024f])'(?=[A-Za-z0-9_\u00c0-\u024f])|[^'\\\r\n])*?'(?![A-Za-z0-9_\u00c0-\u024f])/g,
+      " "
+    )
+    .replace(
+      /(?<![A-Za-z0-9_\u00c0-\u024f])\u2018(?:\\.|(?<=[A-Za-z0-9_\u00c0-\u024f])\u2019(?=[A-Za-z0-9_\u00c0-\u024f])|[^\u2019\\\r\n])*?\u2019(?![A-Za-z0-9_\u00c0-\u024f])/g,
+      " "
+    );
 }
 
-const payload = readPayload();
-const repoDir = resolveWorkspaceDir(payload);
+const isMain =
+  Boolean(process.argv[1]) &&
+  (resolve(process.argv[1]) === fileURLToPath(import.meta.url) ||
+    process.argv[1].endsWith("asw-hook.mjs"));
 
-if (isSessionStartEvent(payload)) {
-  const rendered = safeMode(payload) ? "" : querySessionStartEnvFacts(repoDir);
-  if (!rendered) {
-    process.stdout.write("{}");
+if (isMain) {
+  const payload = readPayload();
+  const repoDir = resolveWorkspaceDir(payload);
+
+  if (isSessionStartEvent(payload)) {
+    const rendered = safeMode(payload) ? "" : querySessionStartEnvFacts(repoDir);
+    if (!rendered) {
+      process.stdout.write("{}");
+    } else {
+      process.stdout.write(JSON.stringify({ injectSteps: [{ systemMessage: { systemMessage: rendered } }] }));
+    }
   } else {
-    process.stdout.write(JSON.stringify({ injectSteps: [{ systemMessage: { systemMessage: rendered } }] }));
-  }
-} else {
-  const rawPrompt = promptFrom(payload);
-  const isSyntheticCascade = SYNTHETIC_MODE_RE.test(rawPrompt);
-  const isSubsequentStep = Number(payload.invocationNum) > 1;
-  const directive =
-    safeMode(payload) || isSubsequentStep || isSyntheticCascade ? "" : directiveFor(rawPrompt, payload, repoDir);
-  const pendingLspMsg = safeMode(payload) ? "" : consumePendingLspDiagnostic(repoDir);
+    const rawPrompt = promptFrom(payload);
+    const isSyntheticCascade = SYNTHETIC_MODE_RE.test(rawPrompt);
+    const isSubsequentStep = Number(payload.invocationNum) > 1;
+    const directive =
+      safeMode(payload) || isSubsequentStep || isSyntheticCascade ? "" : directiveFor(rawPrompt, payload, repoDir);
+    const pendingLspMsg = safeMode(payload) ? "" : consumePendingLspDiagnostic(repoDir);
 
-  const injectSteps = [];
-  if (directive) {
-    injectSteps.push({ userMessage: directive });
+    const injectSteps = [];
+    if (directive) {
+      injectSteps.push({ userMessage: directive });
+    }
+    const ephParts = [];
+    if (pendingLspMsg) ephParts.push(pendingLspMsg);
+    if (!directive && !safeMode(payload) && Number(payload.invocationNum) >= 1 && payload.transcriptPath) {
+      const nudge = queryTurnGuardNudge(payload.transcriptPath, repoDir);
+      if (nudge) ephParts.push(nudge);
+    }
+    if (ephParts.length > 0) {
+      injectSteps.push({ ephemeralMessage: ephParts.join("\n\n") });
+    }
+    process.stdout.write(injectSteps.length > 0 ? JSON.stringify({ injectSteps }) : "{}");
   }
-  const ephParts = [];
-  if (pendingLspMsg) ephParts.push(pendingLspMsg);
-  if (!directive && !safeMode(payload) && Number(payload.invocationNum) >= 1 && payload.transcriptPath) {
-    const nudge = queryTurnGuardNudge(payload.transcriptPath, repoDir);
-    if (nudge) ephParts.push(nudge);
-  }
-  if (ephParts.length > 0) {
-    injectSteps.push({ ephemeralMessage: ephParts.join("\n\n") });
-  }
-  process.stdout.write(injectSteps.length > 0 ? JSON.stringify({ injectSteps }) : "{}");
 }

@@ -1174,6 +1174,111 @@ class TestSkillCatalogCuration(unittest.TestCase):
             )
             self.assertFalse(pending_file.exists(), "Non-canonical absolute path must still unlink .pending-lsp-diagnostic.json")
 
+    def test_asw_hook_quote_strip_leading_cmd_consultation_and_subskills_m1_m5(self):
+        """M1/M2/M5/M6: Quote-stripping keeping contractions, leading /cmd priority, Mode 1 consultation, and auto sub-skills <=8 / <=120 tok."""
+        import json
+        import os
+        import subprocess
+
+        repo_root = Path(__file__).resolve().parent.parent
+        hook_script = repo_root / "plugins" / "antigravity-swarm" / "scripts" / "asw-hook.mjs"
+
+        def run_hook(prompt: str, extra_env: dict[str, str] | None = None) -> str:
+            env = dict(os.environ)
+            env.pop("ASW_DECISION_MODEL_ENABLED", None)
+            if extra_env:
+                env.update(extra_env)
+            proc = subprocess.run(
+                ["node", str(hook_script)],
+                cwd=str(repo_root),
+                input=json.dumps({"invocationNum": 1, "lastUserInput": prompt, "cwd": str(repo_root)}),
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=15,
+                check=True,
+            )
+            data = json.loads(proc.stdout)
+            return data["injectSteps"][0]["userMessage"]
+
+        # Direct stripIgnoredPromptRegions check: contractions kept, quoted spans stripped
+        probe_js = f"""
+        import {{ stripIgnoredPromptRegions }} from {json.dumps(hook_script.as_uri())};
+        console.log(JSON.stringify({{
+          contractions: stripIgnoredPromptRegions("/asw don't use \\"asw-plan\\" and isn't 'asw-review' here"),
+          cz_curly: stripIgnoredPromptRegions("/asw don’t use „asw-plan“ or “asw-review” or ‘asw-goal’ here"),
+        }}));
+        """
+        probe_res = subprocess.run(
+            ["node", "--input-type=module", "-e", probe_js],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        stripped_out = json.loads(probe_res.stdout)
+        self.assertIn("don't", stripped_out["contractions"])
+        self.assertIn("isn't", stripped_out["contractions"])
+        self.assertNotIn("asw-plan", stripped_out["contractions"])
+        self.assertNotIn("asw-review", stripped_out["contractions"])
+        self.assertIn("don’t", stripped_out["cz_curly"])
+        self.assertNotIn("asw-plan", stripped_out["cz_curly"])
+        self.assertNotIn("asw-review", stripped_out["cz_curly"])
+        self.assertNotIn("asw-goal", stripped_out["cz_curly"])
+
+        # M1: Quoted "asw-plan" in Czech question must NOT hijack to PLAN mode; routes to Mode 1 consultation
+        msg_m1_q = run_hook('/asw dej mi příklady, já používám "asw" a občas "asw-plan", není to škoda?')
+        self.assertNotIn("ASW PLAN MODE ENABLED!", msg_m1_q)
+        self.assertIn("ASW CONSULTATION / MODE 1", msg_m1_q)
+        self.assertNotIn("ASW TEST-GUI MODE ENABLED", msg_m1_q)
+
+        # M1: Contraction + quoted "asw-plan" with implementation verb -> ASW LOOP MODE ENABLED!
+        msg_m1_act = run_hook('/asw don\'t use "asw-plan" here, implement the parser fix')
+        self.assertNotIn("ASW PLAN MODE ENABLED!", msg_m1_act)
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_m1_act)
+
+        # M1: Czech & curly quotes stripped cleanly
+        msg_m1_cz = run_hook("/asw don't use „asw-plan“ or “asw-review” or ‘asw-goal’ here, implement the fix")
+        self.assertNotIn("ASW PLAN MODE ENABLED!", msg_m1_cz)
+        self.assertNotIn("ASW REVIEW MODE ENABLED!", msg_m1_cz)
+        self.assertNotIn("ASW GOAL MODE ENABLED!", msg_m1_cz)
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_m1_cz)
+
+        # M1: Explicit modifier /asw asw-test-gui still activates LOOP + TEST-GUI
+        msg_m1_mod = run_hook("/asw asw-test-gui implementuj stránku")
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_m1_mod)
+        self.assertIn("ASW TEST-GUI MODE ENABLED!", msg_m1_mod)
+
+        # M2: Read-only /asw <question>? -> Mode 1 consultation without TDD/file-edit or GUI gate
+        msg_m2 = run_hook("/asw Jak funguje caching?")
+        self.assertIn("ASW CONSULTATION / MODE 1", msg_m2)
+        self.assertNotIn("ASW LOOP MODE ENABLED!", msg_m2)
+        self.assertNotIn("ASW TEST-GUI MODE ENABLED", msg_m2)
+        self.assertNotIn("RED-to-GREEN", msg_m2)
+
+        # M5: Auto-activated sub-skills for debug, refactor, cleanup (<=8 total, <=120 tokens)
+        for prompt, expected_subskill in (
+            ("/asw padá worker s Tracebackem", "asw-debug"),
+            ("/asw rozděl soubor a přejmenuj helper", "asw-refactor"),
+            ("/asw vyčisti mrtvý kód", "asw-cleanup"),
+        ):
+            msg = run_hook(prompt)
+            self.assertIn("ASW LOOP MODE ENABLED!", msg)
+            marker = "AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:"
+            self.assertIn(marker, msg)
+            block = msg[msg.index(marker):]
+            self.assertIn(expected_subskill, block)
+            self.assertLessEqual(len(block) / 4.0, 120.0)
+            skill_names = re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)+", block.split("\n- Load only")[0])
+            self.assertLessEqual(len(skill_names), 8)
+
+        # M6: ASW_DECISION_MODEL_ENABLED=0 skips router enrichment cleanly
+        msg_off = run_hook("/asw vytvoř moderní React dashboard s grafy", extra_env={"ASW_DECISION_MODEL_ENABLED": "0"})
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_off)
+        self.assertNotIn("AUTO-ACTIVATED SUB-SKILLS", msg_off)
+        self.assertNotIn("ASW TEST-GUI MODE ENABLED", msg_off)
+
 
 if __name__ == "__main__":
     unittest.main()

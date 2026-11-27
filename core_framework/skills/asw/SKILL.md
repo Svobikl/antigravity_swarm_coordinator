@@ -48,6 +48,11 @@ In Antigravity, the UI model selector only sets the model of the **main conversa
 
 The installed PreInvocation hook (`hooks.json` -> `asw-hook.mjs`) wakes this mode from `asw`, `asw-loop`, and `swarmwork`.
 
+## Automatic Sub-Skill Orchestration & Mode-1 Routing
+
+- **Automatic Sub-Skill & Domain Routing (`<= 8` Active Cap, `0.0` LLM Tokens):** `asw-hook.mjs` + `decision_router.py` automatically activate `asw-ui-ux` + `asw-test-gui` on action GUI tasks (`requires_gui_verification: true`), `asw-ui-ux` on visual README/SVG tasks, `asw-debug` on crashes/bugs/tracebacks, `asw-refactor` on structural refactoring, and `asw-cleanup` on dead-code/slop cleanup alongside top domain skills within the `<= 8` budget (`opt_tokens: 0.0`). Whenever `AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS` is injected, read and enforce those `SKILL.md` contracts.
+- **Mode-1 Read-Only Consultation & Quote-Safe Command Resolution:** Pure read-only `/asw <question>?` prompts (without action/fix/verify verbs) route to `ASW CONSULTATION / MODE 1` (read-only analysis, zero code edits or Playwright runs). Quoted or backticked mentions (`"asw-plan"`, `„...“`, `'...'`, keeping contractions like `don't`) never hijack the leading slash command.
+
 ## Loop Discipline
 
 - Keep a visible success contract near the top of the working notes.

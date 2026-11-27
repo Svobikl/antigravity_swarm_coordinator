@@ -452,6 +452,273 @@ CORE_FALLBACK_SKILLS = [
     "validator-build-test-agent",
 ]
 
+_FENCED_CODE_RE = re.compile(r"```[\s\S]*?```")
+_INLINE_CODE_RE = re.compile(r"`[^`]*`")
+_DOUBLE_QUOTE_RE = re.compile(r'"(?:\\.|[^"\\\r\n])*"')
+_CZ_QUOTE_RE = re.compile(r"\u201e[^\u201c\u201d\r\n]*[\u201c\u201d]")
+_CURLY_DOUBLE_QUOTE_RE = re.compile(r"\u201c[^\u201d\r\n]*\u201d")
+_SINGLE_QUOTE_RE = re.compile(
+    r"(?<![A-Za-z0-9_\u00c0-\u024f])'(?:\\.|(?<=[A-Za-z0-9_\u00c0-\u024f])'(?=[A-Za-z0-9_\u00c0-\u024f])|[^'\\\r\n])*?'(?![A-Za-z0-9_\u00c0-\u024f])"
+)
+_CURLY_SINGLE_QUOTE_RE = re.compile(
+    r"(?<![A-Za-z0-9_\u00c0-\u024f])\u2018(?:\\.|(?<=[A-Za-z0-9_\u00c0-\u024f])\u2019(?=[A-Za-z0-9_\u00c0-\u024f])|[^\u2019\\\r\n])*?\u2019(?![A-Za-z0-9_\u00c0-\u024f])"
+)
+
+_PATH_OR_FILE_RE = re.compile(
+    r"(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+|\b[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,6}\b)"
+)
+
+_LEADING_SLASH_CMD_RE = re.compile(
+    r"^\s*/?(asw-plan|asw-test-gui|asw-start-work|start-work|asw-review|asw-goal|asw-cleanup|asw-loop|asw)(?![A-Za-z0-9_/-])",
+    re.IGNORECASE,
+)
+_ANY_SLASH_CMD_RE = re.compile(
+    r"(?<![A-Za-z0-9_./-])/(asw-plan|asw-test-gui|asw-start-work|start-work|asw-review|asw-goal|asw-cleanup|asw-loop|asw)(?![A-Za-z0-9_/-])",
+    re.IGNORECASE,
+)
+_TEST_GUI_MODIFIER_RE = re.compile(
+    r"(?<![A-Za-z0-9_./-])/?(?:asw-test-gui|swarmwork-test-gui)(?![A-Za-z0-9_/-])",
+    re.IGNORECASE,
+)
+
+_QUESTION_START_PATTERNS = (
+    r"^\s*co\s+d[eě]l[aá]\b",
+    r"^\s*co\s+je\b",
+    r"^\s*co\s+znamen[aá]\b",
+    r"^\s*jak\s+funguj[eí]\b",
+    r"^\s*vysv[eě]tli\b",
+    r"^\s*kde\s+je\b",
+    r"^\s*pro[cč]\b",
+    r"^\s*nen[ií]\s+to\s+[sš]koda\b",
+    r"^\s*pou[zž][ií]v[aá]\b",
+    r"^\s*m[uů][zž]u\b",
+    r"^\s*je\s+lep[sš][ií]\b",
+    r"^\s*what\s+is\b",
+    r"^\s*what\s+are\b",
+    r"^\s*how\s+does\b",
+    r"^\s*how\s+do\b",
+    r"^\s*explain\b",
+    r"^\s*where\s+is\b",
+    r"^\s*tell\s+me\b",
+    r"^\s*why\b",
+    r"^\s*does\b",
+    r"^\s*is\s+it\b",
+    r"^\s*can\s+i\b",
+    r"^\s*should\s+i\b",
+)
+
+_STRONG_ACTION_VERBS = (
+    "implement", "build", "add", "create", "design", "refactor", "integrate",
+    "develop", "write", "fix", "repair", "patch", "modify", "update", "edit",
+    "verify", "split", "extract", "rename", "clean", "cleanup", "remove", "delete",
+    "improve", "enhance", "polish", "deploy", "setup", "configure", "migrate",
+    "port", "solve", "resolve", "generate", "scaffold", "animate", "convert",
+    "redraw", "render",
+    "uprav", "upravit", "přidej", "pridej", "přidat", "pridat",
+    "vytvoř", "vytvor", "vytvořit", "vytvorit", "implementuj", "implementovat",
+    "postav", "postavit", "oprav", "opravit", "integruj", "integrovat",
+    "změň", "zmen", "změnit", "zmenit", "otestuj", "otestovat",
+    "navrhni", "navrhnout", "ověř", "over", "ověřit", "overit",
+    "zkontroluj", "zkontrolovat", "vyladit", "vyřeš", "vyres", "vyřešit", "vyresit",
+    "rozděl", "rozdel", "rozdělit", "rozdelit", "přejmenuj", "prejmenuj",
+    "přejmenovat", "prejmenovat", "refaktoruj", "refaktorovat",
+    "vyčisti", "vycisti", "vyčistit", "vycistit", "ukliď", "uklid", "uklidit",
+    "smaž", "smaz", "smazat", "odstraň", "odstran", "odstranit",
+    "vylepši", "vylepsi", "vylepšit", "vylepsit", "nastav", "nastavit",
+    "nakonfiguruj", "migruj", "napiš", "napis", "napsat", "udělej", "udelej",
+    "přepiš", "prepis", "vygeneruj", "extrahuj",
+)
+
+_SOFT_ACTION_VERBS = ("test", "tests", "make", "change", "check", "debug", "diagnose", "ladit", "laď", "lad")
+
+_LIVE_GUI_KEYWORDS = (
+    "ui", "gui", "frontend", "frontendu", "react", "nextjs", "next.js",
+    "vue", "svelte", "tailwind", "flutter", "electron", "pyqt", "pyqt5",
+    "pyqt6", "pyside", "pyside6", "tkinter", "wpf", "tauri", "swiftui",
+    "playwright", "angular", "shadcn", "html", "css",
+    "dashboard", "dashboardu", "graf", "grafy", "grafů", "chart", "charts",
+    "browser", "prohlížeč", "prohlížeči", "prohlížeče",
+    "rozhraní", "obrazovka", "obrazovku", "obrazovky", "obrazovce",
+    "aplikace s okny", "aplikaci s okny", "okenní aplikace", "okenní aplikaci",
+    "webová aplikace", "webovou aplikaci", "webové aplikace", "webové aplikaci",
+    "webových aplikací", "web app", "webapp", "web page", "webpage", "website",
+    "webové stránky", "webovou stránku", "stránka", "stránku", "stránky",
+    "komponenta", "komponentu", "komponenty", "vzhled", "vzhledu", "screen", "view",
+)
+
+_VISUAL_DOC_KEYWORDS = (
+    "svg", "mermaid", "architecture diagram", "diagram", "diagramy",
+    "ilustrace", "illustration", "banner", "logo", "badge", "badges",
+    "infographic", "infografika", "wireframe",
+)
+
+_README_VISUAL_CUES = (
+    "vylepši", "vylepsi", "improve", "enhance", "polish", "visual", "vizuální",
+    "vzhled", "svg", "diagram", "mermaid", "badge", "banner", "logo",
+    "grafika", "grafiku", "ikony", "icons",
+)
+
+_DEBUG_TRIGGER_TERMS = (
+    "crash", "hang", "bug", "bugs", "traceback", "stacktrace", "stack trace",
+    "segfault", "deadlock", "debug", "debugging", "diagnose",
+    "padá", "pada", "spadne", "zamrzá", "zamrza", "zamrzne", "visí",
+    "chyba", "chybu", "chyby", "chyb", "pád", "pády", "nefunguje",
+    "ladit", "vyladit", "asw-debug",
+)
+
+_CRASH_SYMPTOM_TERMS = (
+    "crash", "hang", "traceback", "stacktrace", "stack trace", "segfault",
+    "deadlock", "padá", "pada", "spadne", "zamrzá", "zamrza", "zamrzne",
+    "nefunguje", "pád", "pády",
+)
+
+_REFACTOR_TRIGGER_TERMS = (
+    "refactor", "refaktor", "refaktoruj", "refaktorovat",
+    "split", "rozděl", "rozdel", "rozdělit", "rozdelit",
+    "rename", "přejmenuj", "prejmenuj", "přejmenovat", "prejmenovat",
+    "restructure", "reorganize", "extract helper", "extract function",
+    "rozčleň", "rozclen", "asw-refactor",
+)
+
+_CLEANUP_TRIGGER_TERMS = (
+    "cleanup", "clean up", "clean-up", "dead code", "dead-code",
+    "unused code", "unused imports", "ai slop", "slop",
+    "vyčisti", "vycisti", "vyčistit", "vycistit", "ukliď", "uklid", "uklidit",
+    "mrtvý kód", "mrtvy kod", "zbytečný kód", "zbytecny kod",
+    "nepoužívaný kód", "nepoužívané importy", "remove-ai-slops", "asw-cleanup",
+)
+
+
+def _strip_quoted_spans(text: str) -> str:
+    """Strip quoted spans (EN/CZ/curly) while preserving contractions (don't, isn't, can't) and backticks."""
+    if not text or not isinstance(text, str):
+        return ""
+    cleaned = _DOUBLE_QUOTE_RE.sub(" ", text)
+    cleaned = _CZ_QUOTE_RE.sub(" ", cleaned)
+    cleaned = _CURLY_DOUBLE_QUOTE_RE.sub(" ", cleaned)
+    cleaned = _SINGLE_QUOTE_RE.sub(" ", cleaned)
+    cleaned = _CURLY_SINGLE_QUOTE_RE.sub(" ", cleaned)
+    return cleaned
+
+
+def _strip_ignored_regions(text: str) -> str:
+    """Strip fenced code, backticks, and quoted spans while preserving contractions (don't, isn't, can't)."""
+    if not text or not isinstance(text, str):
+        return ""
+    cleaned = _FENCED_CODE_RE.sub(" ", text)
+    cleaned = _INLINE_CODE_RE.sub(" ", cleaned)
+    return _strip_quoted_spans(cleaned)
+
+
+def _is_question_framed(stripped_text: str) -> bool:
+    lower = stripped_text.strip().lower()
+    if not lower:
+        return False
+    return lower.endswith("?") or any(re.search(pat, lower) for pat in _QUESTION_START_PATTERNS)
+
+
+def _has_action_verb(stripped_text: str, *, include_soft: bool = True) -> bool:
+    masked = _PATH_OR_FILE_RE.sub(" ", stripped_text).lower()
+    if any(_matches_term(v, masked) for v in _STRONG_ACTION_VERBS):
+        return True
+    if include_soft and any(_matches_term(v, masked) for v in _SOFT_ACTION_VERBS):
+        return True
+    return False
+
+
+def _is_read_only_question(stripped_text: str) -> bool:
+    if not _is_question_framed(stripped_text):
+        return False
+    return not _has_action_verb(stripped_text, include_soft=False)
+
+
+def _detect_gui_intent(
+    text: str,
+    *,
+    has_action_verb: bool | None = None,
+    is_question_only: bool | None = None,
+    force_action_context: bool = False,
+) -> dict[str, object]:
+    """Detect bilingual UI/GUI app intent vs non-live visual docs (README/SVG), gated on action intent."""
+    stripped = _strip_ignored_regions(text)
+    lower = stripped.lower()
+    if is_question_only is None:
+        is_question_only = _is_read_only_question(stripped)
+    if has_action_verb is None:
+        has_action_verb = _has_action_verb(stripped, include_soft=not _is_question_framed(stripped))
+
+    has_test_gui_mod = _TEST_GUI_MODIFIER_RE.search(stripped) is not None
+    has_live_kw = any(_matches_term(kw, lower) for kw in _LIVE_GUI_KEYWORDS)
+    has_visual_kw = any(_matches_term(kw, lower) for kw in _VISUAL_DOC_KEYWORDS) or (
+        _matches_term("readme", lower) and any(_matches_term(cue, lower) for cue in _README_VISUAL_CUES)
+    )
+
+    if is_question_only and not has_test_gui_mod:
+        return {
+            "has_gui_keywords": has_live_kw,
+            "is_live_gui_app": False,
+            "is_visual_doc": False,
+            "requires_gui_verification": False,
+        }
+
+    can_trigger = bool(has_action_verb or force_action_context or has_test_gui_mod)
+    is_live_gui_app = bool((has_live_kw and can_trigger) or has_test_gui_mod)
+    is_visual_doc = bool(has_visual_kw and can_trigger and not is_live_gui_app)
+    return {
+        "has_gui_keywords": has_live_kw,
+        "is_live_gui_app": is_live_gui_app,
+        "is_visual_doc": is_visual_doc,
+        "requires_gui_verification": is_live_gui_app,
+    }
+
+
+def select_auto_subskills(prompt: str, *, force_action_context: bool = False) -> list[str]:
+    """Zero-LLM sub-skill selector for asw-ui-ux, asw-test-gui, asw-debug, asw-refactor, asw-cleanup."""
+    if not prompt or not isinstance(prompt, str):
+        return []
+    stripped = _strip_ignored_regions(prompt)
+    lower = stripped.lower()
+    is_q_framed = _is_question_framed(stripped)
+    is_q_only = _is_read_only_question(stripped)
+    has_action = _has_action_verb(stripped, include_soft=not is_q_framed)
+    has_test_gui_mod = _TEST_GUI_MODIFIER_RE.search(stripped) is not None
+
+    if is_q_only and not has_test_gui_mod:
+        return []
+
+    subskills: list[str] = []
+    gui_info = _detect_gui_intent(
+        stripped,
+        has_action_verb=has_action,
+        is_question_only=is_q_only,
+        force_action_context=force_action_context,
+    )
+    if gui_info["is_live_gui_app"]:
+        subskills.extend(["asw-ui-ux", "asw-test-gui"])
+    elif gui_info["is_visual_doc"]:
+        subskills.append("asw-ui-ux")
+
+    has_crash_symptom = (not is_q_framed) and any(_matches_term(t, lower) for t in _CRASH_SYMPTOM_TERMS)
+    has_debug_term = any(_matches_term(t, lower) for t in _DEBUG_TRIGGER_TERMS)
+    if has_debug_term and (has_action or force_action_context or has_crash_symptom):
+        subskills.append("asw-debug")
+
+    if any(_matches_term(t, lower) for t in _REFACTOR_TRIGGER_TERMS) and (
+        has_action or force_action_context or not is_q_framed
+    ):
+        subskills.append("asw-refactor")
+
+    if any(_matches_term(t, lower) for t in _CLEANUP_TRIGGER_TERMS) and (
+        has_action or force_action_context or not is_q_framed
+    ):
+        subskills.append("asw-cleanup")
+
+    deduped: list[str] = []
+    for s in subskills:
+        if s not in deduped:
+            deduped.append(s)
+    return deduped[:8]
+
 
 class DecisionRouter:
     """System 1 decision router evaluating developer prompts, diffs, and findings."""
@@ -581,6 +848,12 @@ class DecisionRouter:
             "active_backend": backend,
         }
 
+    def select_auto_subskills(self, prompt: str, *, force_action_context: bool = False) -> list[str]:
+        """Select zero-LLM auto sub-skills (asw-ui-ux, asw-test-gui, asw-debug, asw-refactor, asw-cleanup)."""
+        if not self.enabled:
+            return []
+        return select_auto_subskills(prompt, force_action_context=force_action_context)
+
     def route_prompt(self, prompt: str) -> dict[str, object]:
         """Route a user prompt into Mode 0-5, Quad-Model Tier, GUI gate, and subagent requirements."""
         if not self.enabled:
@@ -590,145 +863,210 @@ class DecisionRouter:
                 "backend": "disabled",
                 "requires_gui_verification": False,
                 "requires_subagent_plan_wave": False,
+                "auto_subskills": [],
                 "selected_skills": [],
+                "opt_tokens": 0.0,
                 "choice": "disabled",
                 "score": 0.0,
                 "noul": 0.0,
                 "probabilities": {},
                 "answer_confidence": 0.0,
                 "execution_mode": "disabled",
+                "recommended_mode": "disabled",
+                "recommended_command": "disabled",
+                "is_consultation": False,
                 "recommended_tier": "disabled",
                 "device_info": self.device_info,
             }
 
-        if not prompt or not isinstance(prompt, str):
+        if not prompt or not isinstance(prompt, str) or not prompt.strip():
             return self._build_decision(
                 choice="mode_1",
                 execution_mode="mode_1",
+                recommended_command="asw-consultation",
+                is_consultation=True,
                 recommended_tier="carbon_plan_research",
                 requires_gui_verification=False,
                 requires_subagent_plan_wave=False,
                 answer_confidence=0.5,
                 noul=0.1,
+                auto_subskills=[],
+                prompt_for_skills="",
             )
 
         trimmed = prompt.strip()
+        stripped = _strip_ignored_regions(trimmed)
 
-        # M1: Explicit slash command override (ignoring identifier/path substrings like foo/asw/bar)
-        slash_match = re.search(
-            r"(?<![A-Za-z0-9_./-])/(?:asw-plan|asw-test-gui|asw-start-work|start-work|asw-review|asw-goal|asw-cleanup|asw-loop|asw)(?![A-Za-z0-9_/-])",
-            trimmed,
-            re.IGNORECASE,
-        )
+        # M1: Leading command priority + quoted command immunity (ignoring path substrings like foo/asw/bar)
+        leading_match = _LEADING_SLASH_CMD_RE.match(stripped)
+        slash_match = leading_match or _ANY_SLASH_CMD_RE.search(stripped)
         if slash_match:
-            cmd = slash_match.group(0).lower().lstrip("/")
+            cmd = slash_match.group(1).lower()
+            body = stripped[slash_match.end():].strip() if leading_match else stripped
+            eval_text = body if body else stripped
+            has_test_gui_mod = _TEST_GUI_MODIFIER_RE.search(stripped) is not None
+            is_q_only = _is_read_only_question(eval_text)
+
             if "plan" in cmd:
+                gui_info = _detect_gui_intent(eval_text, force_action_context=not is_q_only)
+                auto_subskills = select_auto_subskills(eval_text, force_action_context=not is_q_only)
                 return self._build_decision(
                     choice="mode_3",
                     execution_mode="mode_3",
+                    recommended_command="asw-plan",
+                    is_consultation=False,
                     recommended_tier="carbon_plan_research",
-                    requires_gui_verification="gui" in trimmed.lower(),
+                    requires_gui_verification=bool(gui_info["requires_gui_verification"]) or has_test_gui_mod,
                     requires_subagent_plan_wave=True,
                     answer_confidence=1.0,
                     noul=0.2,
+                    auto_subskills=auto_subskills,
+                    prompt_for_skills=trimmed,
                 )
             elif "test-gui" in cmd:
+                auto_subskills = select_auto_subskills(eval_text, force_action_context=True)
+                for req_skill in ("asw-ui-ux", "asw-test-gui"):
+                    if req_skill not in auto_subskills:
+                        auto_subskills.append(req_skill)
                 return self._build_decision(
                     choice="mode_3",
                     execution_mode="mode_3",
+                    recommended_command="asw-test-gui",
+                    is_consultation=False,
                     recommended_tier="hydrogen_implement_tdd",
                     requires_gui_verification=True,
                     requires_subagent_plan_wave=True,
                     answer_confidence=1.0,
                     noul=0.9,
+                    auto_subskills=auto_subskills[:8],
+                    prompt_for_skills=trimmed,
                 )
             elif "start-work" in cmd:
+                gui_info = _detect_gui_intent(eval_text, force_action_context=True)
+                auto_subskills = select_auto_subskills(eval_text, force_action_context=True)
                 return self._build_decision(
                     choice="mode_3",
                     execution_mode="mode_3",
+                    recommended_command="asw-start-work",
+                    is_consultation=False,
                     recommended_tier="hydrogen_implement_tdd",
-                    requires_gui_verification="gui" in trimmed.lower(),
+                    requires_gui_verification=bool(gui_info["requires_gui_verification"]) or has_test_gui_mod,
                     requires_subagent_plan_wave=True,
                     answer_confidence=1.0,
                     noul=0.2,
+                    auto_subskills=auto_subskills,
+                    prompt_for_skills=trimmed,
                 )
             elif "review" in cmd:
                 return self._build_decision(
                     choice="mode_2",
                     execution_mode="mode_2",
+                    recommended_command="asw-review",
+                    is_consultation=False,
                     recommended_tier="neon_qa_review",
                     requires_gui_verification=False,
                     requires_subagent_plan_wave=False,
                     answer_confidence=1.0,
                     noul=0.1,
+                    auto_subskills=[],
+                    prompt_for_skills=trimmed,
                 )
             elif "goal" in cmd:
+                gui_info = _detect_gui_intent(eval_text, force_action_context=not is_q_only)
+                auto_subskills = select_auto_subskills(eval_text, force_action_context=not is_q_only)
                 return self._build_decision(
                     choice="mode_5",
                     execution_mode="mode_5",
+                    recommended_command="asw-goal",
+                    is_consultation=False,
                     recommended_tier="carbon_plan_research",
-                    requires_gui_verification="gui" in trimmed.lower(),
+                    requires_gui_verification=bool(gui_info["requires_gui_verification"]) or has_test_gui_mod,
                     requires_subagent_plan_wave=True,
                     answer_confidence=1.0,
                     noul=0.1,
+                    auto_subskills=auto_subskills,
+                    prompt_for_skills=trimmed,
                 )
             elif "cleanup" in cmd:
+                auto_subskills = select_auto_subskills(eval_text, force_action_context=True)
+                if "asw-cleanup" not in auto_subskills:
+                    auto_subskills = ["asw-cleanup", *auto_subskills]
                 return self._build_decision(
                     choice="mode_2",
                     execution_mode="mode_2",
+                    recommended_command="asw-cleanup",
+                    is_consultation=False,
                     recommended_tier="hydrogen_implement_tdd",
                     requires_gui_verification=False,
                     requires_subagent_plan_wave=False,
                     answer_confidence=1.0,
                     noul=0.1,
+                    auto_subskills=auto_subskills[:8],
+                    prompt_for_skills=trimmed,
                 )
             else:  # asw / asw-loop
+                if cmd == "asw" and is_q_only and not has_test_gui_mod:
+                    return self._build_decision(
+                        choice="mode_1",
+                        execution_mode="mode_1",
+                        recommended_command="asw-consultation",
+                        is_consultation=True,
+                        recommended_tier="carbon_plan_research",
+                        requires_gui_verification=False,
+                        requires_subagent_plan_wave=False,
+                        answer_confidence=1.0,
+                        noul=0.15,
+                        auto_subskills=[],
+                        prompt_for_skills=trimmed,
+                    )
+
+                gui_info = _detect_gui_intent(eval_text)
+                auto_subskills = select_auto_subskills(eval_text)
+                req_gui = bool(gui_info["requires_gui_verification"]) or has_test_gui_mod
+                if req_gui and "asw-test-gui" not in auto_subskills:
+                    auto_subskills = [*auto_subskills, "asw-test-gui"]
                 return self._build_decision(
                     choice="mode_3",
                     execution_mode="mode_3",
+                    recommended_command="asw-loop",
+                    is_consultation=False,
                     recommended_tier="carbon_plan_research",
-                    requires_gui_verification="gui" in trimmed.lower(),
+                    requires_gui_verification=req_gui,
                     requires_subagent_plan_wave=True,
                     answer_confidence=1.0,
-                    noul=0.3,
+                    noul=0.85 if req_gui else 0.3,
+                    auto_subskills=auto_subskills[:8],
+                    prompt_for_skills=trimmed,
                 )
 
-        # M2: Implicit multi-step / UI feature prompts (Bilingual CZ / EN)
-        lower = trimmed.lower()
+        # M2: Implicit multi-step / UI feature prompts & Mode 1 consultation (Bilingual CZ / EN)
+        lower = stripped.lower()
+        is_q_framed = _is_question_framed(stripped)
+        is_q_only = _is_read_only_question(stripped)
+        has_action = _has_action_verb(stripped, include_soft=not is_q_framed)
+        has_test_gui_mod = _TEST_GUI_MODIFIER_RE.search(stripped) is not None
 
-        # Check for UI / GUI keywords
-        gui_keywords = [
-            "ui", "gui", "dashboard", "graf", "prohlížeč", "obrazovka", "stránka",
-            "komponenta", "vzhled", "rozhraní", "browser", "chart", "playwright",
-            "view", "frontend", "screen",
-        ]
-        has_gui = any(re.search(rf"\b{kw}\b", lower) for kw in gui_keywords)
+        gui_info = _detect_gui_intent(
+            stripped,
+            has_action_verb=has_action,
+            is_question_only=is_q_only,
+        )
+        has_gui = bool(gui_info["requires_gui_verification"])
+        auto_subskills = select_auto_subskills(stripped)
 
-        # Read-only question patterns
-        question_patterns = [
-            r"^\s*co dělá\b",
-            r"^\s*jak funguje\b",
-            r"^\s*vysvětli\b",
-            r"^\s*kde je\b",
-            r"^\s*proč\b",
-            r"^\s*what is\b",
-            r"^\s*how does\b",
-            r"^\s*explain\b",
-            r"^\s*where is\b",
-            r"^\s*tell me\b",
-            r"^\s*why\b",
-        ]
-        is_question = any(re.search(pat, lower) for pat in question_patterns) or lower.endswith("?")
-
-        if is_question and not has_gui:
+        if is_q_only and not has_test_gui_mod:
             return self._build_decision(
                 choice="mode_1",
                 execution_mode="mode_1",
+                recommended_command="asw-consultation",
+                is_consultation=True,
                 recommended_tier="carbon_plan_research",
                 requires_gui_verification=False,
                 requires_subagent_plan_wave=False,
                 answer_confidence=0.90,
                 noul=0.15,
+                auto_subskills=[],
+                prompt_for_skills=trimmed,
             )
 
         # Mode 4: Emergency rollback / restore / revert prompts (unless paired with engineering/feature creation verbs)
@@ -736,7 +1074,7 @@ class DecisionRouter:
             "implement", "build", "add", "create", "design", "refactor", "integrate", "develop", "test", "write",
             "vytvoř", "přidej", "implementuj", "navrhni", "postav", "integruj", "uprav", "otestuj",
         ]
-        has_engineering_verb = any(re.search(rf"\b{v}\b", lower) for v in engineering_feature_verbs)
+        has_engineering_verb = any(_matches_term(v, lower) for v in engineering_feature_verbs)
         mode4_patterns = [
             r"\brollback\b",
             r"\bemergency\s+restore\b",
@@ -747,21 +1085,25 @@ class DecisionRouter:
             base_decision = self._build_decision(
                 choice="mode_4",
                 execution_mode="mode_4",
+                recommended_command="asw-loop",
+                is_consultation=False,
                 recommended_tier="hydrogen_implement_tdd",
                 requires_gui_verification=False,
                 requires_subagent_plan_wave=False,
                 answer_confidence=0.95,
                 noul=0.15,
+                auto_subskills=auto_subskills,
+                prompt_for_skills=trimmed,
             )
             return self._enrich_with_laya(trimmed, base_decision)
 
         # Mode 0: Fast operational build / test / run / lint commands (without code-change/fix/creation verbs or GUI design)
         code_change_verbs = [
             "fix", "repair", "patch", "modify", "update", "refactor",
-            "add", "implement", "create", "integrate", "develop", "design",
-            "oprav", "uprav", "změň", "přidej", "vytvoř", "implementuj", "postav", "integruj", "navrhni",
+            "add", "implement", "create", "integrate", "develop", "design", "verify",
+            "oprav", "uprav", "změň", "přidej", "vytvoř", "implementuj", "postav", "integruj", "navrhni", "ověř",
         ]
-        has_code_change_verb = any(re.search(rf"\b{v}\b", lower) for v in code_change_verbs)
+        has_code_change_verb = any(_matches_term(v, lower) for v in code_change_verbs)
         mode0_patterns = [
             r"\brun\s+(?:pytest|unit\s+tests|tests?|lint(?:er)?|build)\b",
             r"\bbuild\s+(?:debug|release|project|app)\b",
@@ -775,20 +1117,20 @@ class DecisionRouter:
             base_decision = self._build_decision(
                 choice="mode_0",
                 execution_mode="mode_0",
+                recommended_command="asw-loop",
+                is_consultation=False,
                 recommended_tier="hydrogen_implement_tdd",
                 requires_gui_verification=False,
                 requires_subagent_plan_wave=False,
                 answer_confidence=0.92,
                 noul=0.1,
+                auto_subskills=[],
+                prompt_for_skills=trimmed,
             )
             return self._enrich_with_laya(trimmed, base_decision)
 
-        # Feature verbs (CZ & EN)
-        feature_verbs = [
-            "uprav", "přidej", "vytvoř", "implementuj", "postav", "oprav", "integruj", "změň", "otestuj",
-            "implement", "build", "add", "create", "integrate", "refactor", "update", "develop", "fix", "repair", "patch", "modify",
-        ]
-        has_feature_verb = any(re.search(rf"\b{v}\b", lower) for v in feature_verbs)
+        # Feature / action verbs (CZ & EN)
+        has_feature_verb = _has_action_verb(stripped, include_soft=False)
 
         is_multi_step = has_feature_verb and (
             "," in lower or " a " in lower or " and " in lower or has_gui or len(lower.split()) > 7
@@ -799,35 +1141,47 @@ class DecisionRouter:
             base_decision = self._build_decision(
                 choice="mode_3",
                 execution_mode="mode_3",
+                recommended_command="asw-loop",
+                is_consultation=False,
                 recommended_tier="carbon_plan_research",
                 requires_gui_verification=has_gui,
                 requires_subagent_plan_wave=True,
                 answer_confidence=0.92,
                 noul=noul,
+                auto_subskills=auto_subskills,
+                prompt_for_skills=trimmed,
             )
             return self._enrich_with_laya(trimmed, base_decision)
 
         # Default fallback
-        if has_feature_verb:
+        if has_feature_verb or bool(auto_subskills):
             base_decision = self._build_decision(
                 choice="mode_2",
                 execution_mode="mode_2",
+                recommended_command="asw-loop",
+                is_consultation=False,
                 recommended_tier="hydrogen_implement_tdd",
                 requires_gui_verification=has_gui,
                 requires_subagent_plan_wave=False,
                 answer_confidence=0.80,
                 noul=0.4,
+                auto_subskills=auto_subskills,
+                prompt_for_skills=trimmed,
             )
             return self._enrich_with_laya(trimmed, base_decision)
 
         base_decision = self._build_decision(
             choice="mode_1",
             execution_mode="mode_1",
+            recommended_command="asw-consultation",
+            is_consultation=True,
             recommended_tier="carbon_plan_research",
-            requires_gui_verification=has_gui,
+            requires_gui_verification=False,
             requires_subagent_plan_wave=False,
             answer_confidence=0.75,
             noul=0.2,
+            auto_subskills=[],
+            prompt_for_skills=trimmed,
         )
         return self._enrich_with_laya(trimmed, base_decision)
 
@@ -914,13 +1268,24 @@ class DecisionRouter:
                 choice = str(mode_ans["choice"])
                 conf = float(mode_ans.get("answer_confidence", base_decision["answer_confidence"]))
                 probs = mode_ans.get("probabilities", base_decision["probabilities"])
-                gui_noul = float(gui_ans.get("noul", base_decision["noul"])) if isinstance(gui_ans, dict) else float(base_decision["noul"])
+                has_gui_noul = isinstance(gui_ans, dict) and "noul" in gui_ans and gui_ans["noul"] is not None
+                gui_noul = float(gui_ans["noul"]) if has_gui_noul else None
                 base_decision["backend"] = backend_name
                 base_decision["laya_routing"] = raw.get("routing")
                 override_threshold = 0.96 if base_decision["choice"] in ("mode_0", "mode_4") else 0.70
                 if conf >= override_threshold:
                     base_decision["choice"] = choice
                     base_decision["execution_mode"] = choice
+                    base_decision["recommended_mode"] = choice
+                    base_decision["is_consultation"] = choice == "mode_1"
+                    if choice == "mode_1":
+                        base_decision["recommended_command"] = "asw-consultation"
+                        if isinstance(base_decision.get("selected_skills"), list):
+                            base_decision["selected_skills"] = [
+                                s
+                                for s in base_decision["selected_skills"]
+                                if s not in ("implementation-developer", "validator-build-test-agent")
+                            ]
                     base_decision["recommended_tier"] = (
                         "carbon_plan_research"
                         if choice in ("mode_1", "mode_3", "mode_5")
@@ -929,8 +1294,10 @@ class DecisionRouter:
                     base_decision["score"] = round(conf, 4)
                     base_decision["answer_confidence"] = round(conf, 4)
                     base_decision["probabilities"] = probs
-                    base_decision["noul"] = round(gui_noul, 4)
-                    base_decision["requires_gui_verification"] = bool(base_decision["requires_gui_verification"]) or (gui_noul >= 0.5)
+                    if gui_noul is not None:
+                        base_decision["noul"] = round(gui_noul, 4)
+                        if not base_decision.get("is_consultation") and gui_noul >= 0.75:
+                            base_decision["requires_gui_verification"] = True
                     base_decision["requires_subagent_plan_wave"] = choice in ("mode_3", "mode_5")
         except Exception:
             pass
@@ -944,7 +1311,7 @@ class DecisionRouter:
         if not prompt or not isinstance(prompt, str) or not prompt.strip():
             return CORE_FALLBACK_SKILLS[: min(4, max_skills)]
 
-        lower = prompt.lower()
+        lower = _strip_quoted_spans(prompt).lower()
         scored: list[tuple[str, int]] = []
 
         for skill_name, keywords in CORE_SKILL_CATALOG_KEYWORDS.items():
@@ -1261,12 +1628,7 @@ class DecisionRouter:
 
     def predict(self, text: str, context: dict | None = None) -> dict[str, object]:
         """Unified entrypoint matching Laya's predict contract."""
-        route_res = self.route_prompt(text)
-        if not self.enabled:
-            return route_res
-        skills = self.select_skills(text, max_skills=8)
-        route_res["selected_skills"] = skills
-        return route_res
+        return self.route_prompt(text)
 
     def _build_decision(
         self,
@@ -1278,6 +1640,10 @@ class DecisionRouter:
         requires_subagent_plan_wave: bool,
         answer_confidence: float,
         noul: float,
+        recommended_command: str = "asw-loop",
+        is_consultation: bool = False,
+        auto_subskills: list[str] | None = None,
+        prompt_for_skills: str | None = None,
     ) -> dict[str, object]:
         all_modes = ["mode_0", "mode_1", "mode_2", "mode_3", "mode_4", "mode_5"]
         probs = {m: 0.05 for m in all_modes}
@@ -1286,6 +1652,26 @@ class DecisionRouter:
         for m in all_modes:
             if m != execution_mode:
                 probs[m] = round(remaining / 5.0, 3)
+
+        deduped_auto: list[str] = []
+        for s in auto_subskills or []:
+            if s and s not in deduped_auto:
+                deduped_auto.append(s)
+        deduped_auto = deduped_auto[:8]
+
+        remaining_slots = max(0, 8 - len(deduped_auto))
+        if remaining_slots > 0 and prompt_for_skills is not None:
+            domain_candidates = self.select_skills(prompt_for_skills, max_skills=8)
+            excluded = (
+                {"implementation-developer", "validator-build-test-agent"}
+                if (is_consultation or execution_mode == "mode_1")
+                else set()
+            )
+            selected_skills = [
+                s for s in domain_candidates if s not in deduped_auto and s not in excluded
+            ][:remaining_slots]
+        else:
+            selected_skills = []
 
         return {
             "enabled": True,
@@ -1296,9 +1682,15 @@ class DecisionRouter:
             "probabilities": probs,
             "answer_confidence": answer_confidence,
             "execution_mode": execution_mode,
+            "recommended_mode": execution_mode,
+            "recommended_command": recommended_command,
+            "is_consultation": is_consultation,
             "recommended_tier": recommended_tier,
             "requires_gui_verification": requires_gui_verification,
             "requires_subagent_plan_wave": requires_subagent_plan_wave,
+            "auto_subskills": deduped_auto,
+            "selected_skills": selected_skills,
+            "opt_tokens": 0.0,
             "device_info": self.device_info,
             "backend": "system1_calibrated_fallback",
         }
@@ -1682,7 +2074,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=["preflight", "predict", "route-prompt", "select-skills", "triage-finding", "classify-scope", "judge-loop"],
         default="route-prompt",
     )
-    parser.add_argument("--text", type=str, default="", help="Input prompt or finding text")
+    parser.add_argument("--text", "--prompt", dest="text", type=str, default="", help="Input prompt or finding text")
     parser.add_argument("--json", type=str, default=None, help="JSON input payload")
     parser.add_argument("--max-skills", type=int, default=8, help="Maximum skills to return")
     parser.add_argument("--format", choices=["json", "text"], default="json")
