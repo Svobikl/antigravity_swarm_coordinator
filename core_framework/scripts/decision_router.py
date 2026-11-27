@@ -469,11 +469,11 @@ _PATH_OR_FILE_RE = re.compile(
 )
 
 _LEADING_SLASH_CMD_RE = re.compile(
-    r"^\s*/?(asw-plan|asw-test-gui|asw-start-work|start-work|asw-review|asw-goal|asw-cleanup|asw-loop|asw)(?![A-Za-z0-9_/-])",
+    r"^\s*/?(asw-plan|asw-clarify|asw-test-gui|asw-start-work|start-work|asw-review|asw-goal|asw-cleanup|asw-loop|asw)(?![A-Za-z0-9_/-])",
     re.IGNORECASE,
 )
 _ANY_SLASH_CMD_RE = re.compile(
-    r"(?<![A-Za-z0-9_./-])/(asw-plan|asw-test-gui|asw-start-work|start-work|asw-review|asw-goal|asw-cleanup|asw-loop|asw)(?![A-Za-z0-9_/-])",
+    r"(?<![A-Za-z0-9_./-])/(asw-plan|asw-clarify|asw-test-gui|asw-start-work|start-work|asw-review|asw-goal|asw-cleanup|asw-loop|asw)(?![A-Za-z0-9_/-])",
     re.IGNORECASE,
 )
 _TEST_GUI_MODIFIER_RE = re.compile(
@@ -559,16 +559,16 @@ _README_VISUAL_CUES = (
 )
 
 _DEBUG_TRIGGER_TERMS = (
-    "crash", "hang", "bug", "bugs", "traceback", "stacktrace", "stack trace",
-    "segfault", "deadlock", "debug", "debugging", "diagnose",
+    "crash", "hang", "bug", "bugs", "traceback", "tracebackem", "tracebacku",
+    "stacktrace", "stack trace", "segfault", "deadlock", "debug", "debugging", "diagnose",
     "padá", "pada", "spadne", "zamrzá", "zamrza", "zamrzne", "visí",
     "chyba", "chybu", "chyby", "chyb", "pád", "pády", "nefunguje",
     "ladit", "vyladit", "asw-debug",
 )
 
 _CRASH_SYMPTOM_TERMS = (
-    "crash", "hang", "traceback", "stacktrace", "stack trace", "segfault",
-    "deadlock", "padá", "pada", "spadne", "zamrzá", "zamrza", "zamrzne",
+    "crash", "hang", "traceback", "tracebackem", "tracebacku", "stacktrace", "stack trace",
+    "segfault", "deadlock", "padá", "pada", "spadne", "zamrzá", "zamrza", "zamrzne",
     "nefunguje", "pád", "pády",
 )
 
@@ -608,6 +608,269 @@ def _strip_ignored_regions(text: str) -> str:
     cleaned = _FENCED_CODE_RE.sub(" ", text)
     cleaned = _INLINE_CODE_RE.sub(" ", cleaned)
     return _strip_quoted_spans(cleaned)
+
+
+_HYPOTHETICAL_CLAUSE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"(?:(?<=^)|(?<=[\s,;.(]))"
+        r"(?:když|kdyz|pokud|jestliže|jestlize|jestli|kdyby|jakmile|v\s+případě|v\s+pripade|pro\s+případ|pro\s+pripad)"
+        r"\s+(?:se\s+)?(?:oprav\w*|lad\w*|(?:řeš\w*|res(?:i[a-z]*|en[a-z]*|uj[a-z]*|te\b))\s+(?:chyb\w*|bug\w*|pád\w*|pad\w*|problém\w*|problem\w*)|debug\w*|bugfix\w*|jde\s+o\s+(?:oprav\w*|chyb\w*|bug\w*|pád\w*))(?:(?!\b(?:tak|pak|potom)\b)[^,;.!?\n])*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:(?<=^)|(?<=[\s,;.(]))"
+        r"(?:when|whenever|if|while|suppose|assuming|in\s+case(?:\s+of)?)"
+        r"\s+(?:(?:we(?:'re|\s+are)?|you(?:'re|\s+are)?|it(?:'s|\s+is))\s+)?"
+        r"(?:(?:fix(?:ing)?|debug(?:ging)?|repair(?:ing)?|resolv(?:e|ing)|handl(?:e|ing))\s+(?:a\s+|an\s+|the\s+)?(?:bug\w*|error\w*|crash\w*|issue\w*|traceback\w*|defect\w*|failure\w*)|(?:a\s+)?(?:bugfix\w*|bug\s+fix\w*|debugging|hotfix\w*))[^,;.!?\n]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:(?<=^)|(?<=[\s,;.(]))"
+        r"(?:nebo|anebo|případně|pripadne|například|naprikad|např\.?|třeba|treba)"
+        r"\s+(?:když\s+|pokud\s+)?(?:opravujeme|ladíme|řešíme|oprav\w*\s+chyb\w*|bugfix\w*|chyb\w*\s+v\s+kódu|při\s+oprav\w*)[^,;.!?\n]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:(?<=^)|(?<=[\s,;.(]))"
+        r"(?:or|for\s+example|e\.g\.|such\s+as)"
+        r"\s+(?:(?:when|if)\s+)?(?:fixing|debugging|repairing|solving|bugfix\w*|bug\s+fix\w*)[^,;.!?\n]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:(?<=^)|(?<=[\s,;.(]))"
+        r"(?:without|instead\s+of|rather\s+than|not\s+for|bypass(?:ing)?|skip(?:ping)?|mask(?:ing)?)"
+        r"\s+(?:when\s+)?(?:fixing|debugging|bugfix\w*|bug\s+fix\w*|bugs?|crashes?|tracebacks?)[^,;.!?\n]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:(?<=^)|(?<=[\s,;.(]))"
+        r"(?:bez|místo|misto|nikoli|nikoliv|ne\s+pro)"
+        r"\s+(?:oprav\w*|lad\w*|bugfix\w*|chyb\w*|pád\w*)[^,;.!?\n]*",
+        re.IGNORECASE,
+    ),
+)
+
+_NO_CLARIFY_RE = re.compile(
+    r"(?:(?<![A-Za-z0-9_-])--no[-_]clarify(?![A-Za-z0-9_-])"
+    r"|\b(?:skip[- ]clarify|no[- ]clarify|don't clarify|do not clarify|without clarification|decide yourself|your call)\b"
+    r"|\b(?:bez\s+dopt[aá]v[aá]n[ií]|bez\s+up[rř]es[nň]ov[aá]n[ií]|bez\s+ot[aá]zek|rozhodni\s+s[aá]m|vyber\s+s[aá]m)\b)",
+    re.IGNORECASE,
+)
+_FORCE_CLARIFY_RE = re.compile(
+    r"(?:(?<![A-Za-z0-9_-])--clarify(?![A-Za-z0-9_-])"
+    r"|(?<![A-Za-z0-9_./-])/?asw-clarify(?![A-Za-z0-9_/-])"
+    r"|\b(?:grill[- ]me|clarify\s+first|ask\s+me\s+questions|doptat\s+se|doptej\s+se|dopt[aá]vej\s+se)\b)",
+    re.IGNORECASE,
+)
+
+_SPEC_FILE_PATH_RE = re.compile(
+    r"(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+\.[A-Za-z0-9]{1,6}"
+    r"|\b[A-Za-z0-9_-]+\.(?:py|ts|tsx|js|jsx|mjs|go|rs|cpp|h|cs|java|rb|sql|json|yaml|yml|toml|md|html|css)\b)"
+)
+_SPEC_SYMBOL_RE = re.compile(
+    r"(?:\b[a-z]+_[a-z0-9_]+\b|\b[A-Z][a-z]+[A-Z][A-Za-z0-9]*\b|\b[A-Za-z_][A-Za-z0-9_]*\(\))"
+)
+_SPEC_ENDPOINT_SQL_CLI_RE = re.compile(
+    r"(?:\b(?:GET|POST|PUT|PATCH|DELETE)\s+/[A-Za-z0-9_./{}-]+"
+    r"|\b(?:SELECT|INSERT\s+INTO|ALTER\s+TABLE|CREATE\s+TABLE)\b"
+    r"|(?<![A-Za-z0-9_-])--(?!clarify\b|no[-_]clarify\b)[a-z][a-z0-9-]{2,}\b)"
+)
+_SPEC_STACK_DB_RE = re.compile(
+    r"\b(?:postgres|postgresql|mysql|sqlite|redis|mongodb|dynamodb|sqlalchemy|alembic|prisma|"
+    r"fastapi|django|flask|express|nextjs|react|vue|svelte|docker|kubernetes|terraform|"
+    r"kafka|graphql|grpc|playwright|pytest|pydantic|stripe)\b",
+    re.IGNORECASE,
+)
+_SPEC_AUTH_RE = re.compile(
+    r"\b(?:jwt|oauth2?|oidc|saml|rbac|abac|bearer|api[- ]key|hmac|mfa|totp|mtls|webauthn|passkey|csrf)\b",
+    re.IGNORECASE,
+)
+_SPEC_NUMERIC_SLA_RE = re.compile(
+    r"(?:\bp(?:50|95|99)\b|\b\d+(?:\.\d+)?\s*(?:ms|sec|min|req/s|req/min|rps|qps|mb|gb|kb|mib|gib|%|rows|retries)\b|[<>]=?\s*\d+)",
+    re.IGNORECASE,
+)
+_SPEC_BULLET_LINE_RE = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\S+", re.MULTILINE)
+
+_BUGFIX_BYPASS_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\b(?:failing\s+test|traceback|assertionerror|stack\s*trace|http\s*500|status\s*500|error\s*500)\b", re.IGNORECASE),
+    re.compile(r"\b(?:chyba\s*500|selh[aá]v[aá]\s+test|pad[aá]\s+(?:test|worker)|oprav\w*\s+chyb\w*|fix\s+(?:a\s+|the\s+)?bug)\b", re.IGNORECASE),
+)
+
+_CLARIFY_DIMENSIONS: tuple[tuple[str, float, re.Pattern[str], re.Pattern[str]], ...] = (
+    (
+        "scope_actors",
+        5.0,
+        re.compile(r"\b(?:portal|port[aá]l|platform|platforma|multi-region|billing|fakturac|p[rř]edplatn|admin|tenant)\w*", re.IGNORECASE),
+        re.compile(r"\b(?:roles?|tenant|admin|non-goal|out of scope|single-user|b2b|b2c)\b", re.IGNORECASE),
+    ),
+    (
+        "data_persistence",
+        4.2,
+        re.compile(r"\b(?:billing|fakturac|p[rř]edplatn|sync|synchroniza|export|cache|database|datab[aá]z|data|storage|portal|port[aá]l)\w*", re.IGNORECASE),
+        _SPEC_STACK_DB_RE,
+    ),
+    (
+        "auth_security",
+        4.0,
+        re.compile(r"\b(?:portal|port[aá]l|billing|fakturac|pay|auth|admin|api|user|customer|z[aá]kazn|multi-region)\w*", re.IGNORECASE),
+        _SPEC_AUTH_RE,
+    ),
+    (
+        "external_integration",
+        3.5,
+        re.compile(r"\b(?:billing|fakturac|p[rř]edplatn|pay|webhook|notif|email|sync|synchroniza|stripe|external|api|integrat)\w*", re.IGNORECASE),
+        re.compile(r"\b(?:stripe|twilio|sendgrid|webhook|oauth2?|grpc|graphql)\b", re.IGNORECASE),
+    ),
+    (
+        "ux_state_flow",
+        3.2,
+        re.compile(r"\b(?:portal|port[aá]l|ui|ux|dashboard|screen|form|flow|notif|react|frontend|page|str[aá]n)\w*", re.IGNORECASE),
+        re.compile(r"\b(?:loading|empty state|error state|modal|redirect|state machine|wireframe)\b", re.IGNORECASE),
+    ),
+)
+
+
+def _strip_hypothetical_clauses(text: str) -> str:
+    """Mask hypothetical, example, or negated bugfix/debug clauses before debug detection."""
+    if not text or not isinstance(text, str):
+        return ""
+    if not text.strip():
+        return text
+    cleaned = text
+    for pat in _HYPOTHETICAL_CLAUSE_PATTERNS:
+        cleaned = pat.sub(" ", cleaned)
+    return cleaned
+
+
+def _compute_specificity_score(prompt: str) -> int:
+    """Compute a deterministic 0..7 technical specificity score for a prompt."""
+    if not prompt or not isinstance(prompt, str) or not prompt.strip():
+        return 0
+    body = _LEADING_SLASH_CMD_RE.sub(" ", prompt.strip(), count=1)
+    score = 0
+    for pat in (
+        _SPEC_FILE_PATH_RE,
+        _SPEC_SYMBOL_RE,
+        _SPEC_ENDPOINT_SQL_CLI_RE,
+        _SPEC_STACK_DB_RE,
+        _SPEC_AUTH_RE,
+        _SPEC_NUMERIC_SLA_RE,
+    ):
+        if pat.search(body):
+            score += 1
+    if len(_SPEC_BULLET_LINE_RE.findall(body)) >= 2:
+        score += 1
+    return score
+
+
+def _rank_missing_dimensions(prompt: str) -> list[str]:
+    """Rank top 1..3 missing specification dimensions by Impact * Uncertainty."""
+    scored: list[tuple[float, int, str, float]] = []
+    for idx, (dim, base_impact, domain_re, resolved_re) in enumerate(_CLARIFY_DIMENSIONS):
+        impact = base_impact + (1.0 if domain_re.search(prompt) else 0.0)
+        uncertainty = 0.15 if resolved_re.search(prompt) else 1.0
+        scored.append((-(impact * uncertainty), idx, dim, uncertainty))
+    scored.sort(key=lambda item: (item[0], item[1]))
+    dims = [dim for _, _, dim, unc in scored if unc > 0.2][:3]
+    if not dims:
+        dims = [dim for _, _, dim, _ in scored[:3]]
+    return dims
+
+
+def assess_clarification_need(
+    prompt: str,
+    *,
+    execution_mode: str = "mode_3",
+    recommended_command: str = "asw-loop",
+    is_consultation: bool = False,
+    auto_subskills: list[str] | None = None,
+    enabled: bool = True,
+) -> dict[str, object]:
+    """Zero-LLM (<5ms) selective Spec-Kit clarify gate with Impact * Uncertainty ranking."""
+    if not enabled:
+        return {
+            "needs_clarification": False,
+            "bypass_reason": "disabled",
+            "specificity_score": 0,
+            "ambiguity_score": 0.0,
+            "missing_dimensions": [],
+            "max_questions": 0,
+        }
+
+    raw = prompt if isinstance(prompt, str) else ""
+    trimmed = raw.strip()
+    if not trimmed:
+        return {
+            "needs_clarification": False,
+            "bypass_reason": "read_only" if (is_consultation or execution_mode == "mode_1") else "operational_or_restore",
+            "specificity_score": 0,
+            "ambiguity_score": 0.0,
+            "missing_dimensions": [],
+            "max_questions": 0,
+        }
+
+    stripped = _strip_ignored_regions(trimmed)
+    hyp_stripped = _strip_hypothetical_clauses(stripped)
+    lower_hyp = hyp_stripped.lower()
+    specificity_score = _compute_specificity_score(trimmed)
+    ambiguity_score = round(max(0.0, min(1.0, (3 - min(3, specificity_score)) / 3.0)), 4)
+
+    def _bypass(reason: str) -> dict[str, object]:
+        return {
+            "needs_clarification": False,
+            "bypass_reason": reason,
+            "specificity_score": specificity_score,
+            "ambiguity_score": ambiguity_score,
+            "missing_dimensions": [],
+            "max_questions": 0,
+        }
+
+    if _NO_CLARIFY_RE.search(stripped):
+        return _bypass("user_skip")
+
+    if recommended_command == "asw-clarify" or _FORCE_CLARIFY_RE.search(stripped):
+        return {
+            "needs_clarification": True,
+            "bypass_reason": "user_forced",
+            "specificity_score": specificity_score,
+            "ambiguity_score": round(max(0.2, ambiguity_score), 4),
+            "missing_dimensions": _rank_missing_dimensions(trimmed),
+            "max_questions": 3,
+        }
+
+    if is_consultation or execution_mode == "mode_1":
+        return _bypass("read_only")
+
+    if execution_mode in ("mode_0", "mode_4"):
+        return _bypass("operational_or_restore")
+
+    if recommended_command == "asw-start-work":
+        return _bypass("executing_approved_plan")
+
+    if recommended_command == "asw-review":
+        return _bypass("review_only")
+
+    auto_set = set(auto_subskills or [])
+    if recommended_command == "asw-cleanup" or "asw-refactor" in auto_set or "asw-cleanup" in auto_set:
+        return _bypass("behavior_preserving")
+
+    if "asw-debug" in auto_set or any(pat.search(lower_hyp) for pat in _BUGFIX_BYPASS_PATTERNS):
+        return _bypass("bugfix_or_debug")
+
+    if execution_mode == "mode_2":
+        return _bypass("small_clear_change")
+
+    if specificity_score >= 3:
+        return _bypass("sufficient_detail")
+
+    return {
+        "needs_clarification": True,
+        "bypass_reason": None,
+        "specificity_score": specificity_score,
+        "ambiguity_score": ambiguity_score,
+        "missing_dimensions": _rank_missing_dimensions(trimmed),
+        "max_questions": 3,
+    }
 
 
 def _is_question_framed(stripped_text: str) -> bool:
@@ -698,8 +961,11 @@ def select_auto_subskills(prompt: str, *, force_action_context: bool = False) ->
     elif gui_info["is_visual_doc"]:
         subskills.append("asw-ui-ux")
 
-    has_crash_symptom = (not is_q_framed) and any(_matches_term(t, lower) for t in _CRASH_SYMPTOM_TERMS)
-    has_debug_term = any(_matches_term(t, lower) for t in _DEBUG_TRIGGER_TERMS)
+    debug_stripped = _strip_hypothetical_clauses(stripped)
+    debug_lower = debug_stripped.lower()
+    debug_is_q_framed = _is_question_framed(debug_stripped)
+    has_crash_symptom = (not debug_is_q_framed) and any(_matches_term(t, debug_lower) for t in _CRASH_SYMPTOM_TERMS)
+    has_debug_term = any(_matches_term(t, debug_lower) for t in _DEBUG_TRIGGER_TERMS)
     if has_debug_term and (has_action or force_action_context or has_crash_symptom):
         subskills.append("asw-debug")
 
@@ -854,6 +1120,25 @@ class DecisionRouter:
             return []
         return select_auto_subskills(prompt, force_action_context=force_action_context)
 
+    def assess_clarification_need(
+        self,
+        prompt: str,
+        *,
+        execution_mode: str = "mode_3",
+        recommended_command: str = "asw-loop",
+        is_consultation: bool = False,
+        auto_subskills: list[str] | None = None,
+    ) -> dict[str, object]:
+        """Assess whether a prompt requires a selective Spec-Kit clarification gate."""
+        return assess_clarification_need(
+            prompt,
+            execution_mode=execution_mode,
+            recommended_command=recommended_command,
+            is_consultation=is_consultation,
+            auto_subskills=auto_subskills,
+            enabled=self.enabled,
+        )
+
     def route_prompt(self, prompt: str) -> dict[str, object]:
         """Route a user prompt into Mode 0-5, Quad-Model Tier, GUI gate, and subagent requirements."""
         if not self.enabled:
@@ -876,6 +1161,7 @@ class DecisionRouter:
                 "recommended_command": "disabled",
                 "is_consultation": False,
                 "recommended_tier": "disabled",
+                "clarification_gate": assess_clarification_need(prompt, enabled=False),
                 "device_info": self.device_info,
             }
 
@@ -920,6 +1206,23 @@ class DecisionRouter:
                     requires_subagent_plan_wave=True,
                     answer_confidence=1.0,
                     noul=0.2,
+                    auto_subskills=auto_subskills,
+                    prompt_for_skills=trimmed,
+                )
+            elif "clarify" in cmd:
+                gui_info = _detect_gui_intent(eval_text, force_action_context=not is_q_only)
+                auto_subskills = select_auto_subskills(eval_text, force_action_context=not is_q_only)
+                req_gui = bool(gui_info["requires_gui_verification"]) or has_test_gui_mod
+                return self._build_decision(
+                    choice="mode_3",
+                    execution_mode="mode_3",
+                    recommended_command="asw-clarify",
+                    is_consultation=False,
+                    recommended_tier="carbon_plan_research",
+                    requires_gui_verification=req_gui,
+                    requires_subagent_plan_wave=True,
+                    answer_confidence=1.0,
+                    noul=0.85 if req_gui else 0.2,
                     auto_subskills=auto_subskills,
                     prompt_for_skills=trimmed,
                 )
@@ -1299,6 +1602,13 @@ class DecisionRouter:
                         if not base_decision.get("is_consultation") and gui_noul >= 0.75:
                             base_decision["requires_gui_verification"] = True
                     base_decision["requires_subagent_plan_wave"] = choice in ("mode_3", "mode_5")
+                    base_decision["clarification_gate"] = self.assess_clarification_need(
+                        prompt,
+                        execution_mode=choice,
+                        recommended_command=str(base_decision.get("recommended_command", "asw-loop")),
+                        is_consultation=bool(base_decision.get("is_consultation", False)),
+                        auto_subskills=base_decision.get("auto_subskills") if isinstance(base_decision.get("auto_subskills"), list) else [],
+                    )
         except Exception:
             pass
         return base_decision
@@ -1673,6 +1983,14 @@ class DecisionRouter:
         else:
             selected_skills = []
 
+        clarification_gate = self.assess_clarification_need(
+            prompt_for_skills or "",
+            execution_mode=execution_mode,
+            recommended_command=recommended_command,
+            is_consultation=is_consultation,
+            auto_subskills=deduped_auto,
+        )
+
         return {
             "enabled": True,
             "status": "enabled",
@@ -1690,6 +2008,7 @@ class DecisionRouter:
             "requires_subagent_plan_wave": requires_subagent_plan_wave,
             "auto_subskills": deduped_auto,
             "selected_skills": selected_skills,
+            "clarification_gate": clarification_gate,
             "opt_tokens": 0.0,
             "device_info": self.device_info,
             "backend": "system1_calibrated_fallback",

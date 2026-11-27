@@ -1211,6 +1211,362 @@ class TestDecisionRouter(unittest.TestCase):
                     res_b = daemon_inst._enrich_with_laya("implement auth", dict(base_non_gui))
                 self.assertEqual(res_b["requires_gui_verification"], expected_gui)
 
+    # --- Adaptive Spec-Kit Clarify Gate (M1-M5, M7) ---
+    def test_clarify_m1_underspecified_complex_prompts(self):
+        """M1: Underspecified Mode 3/5 prompts trigger clarify gate with 1..3 missing dimensions and opt_tokens == 0.0."""
+        allowed_dims = {
+            "scope_actors",
+            "data_persistence",
+            "auth_security",
+            "external_integration",
+            "ux_state_flow",
+        }
+        prompts = (
+            ("/asw-plan Build customer billing portal", "mode_3"),
+            ("/asw vytvoř zákaznický portál s předplatným a fakturací", "mode_3"),
+            ("/asw-goal vybuduj multi-region synchronizační platformu", "mode_5"),
+        )
+        for prompt, expected_mode in prompts:
+            with self.subTest(prompt=prompt):
+                res = self.router.route_prompt(prompt)
+                self.assertEqual(res["execution_mode"], expected_mode)
+                self.assertEqual(res["opt_tokens"], 0.0)
+                gate = res["clarification_gate"]
+                self.assertIs(gate["needs_clarification"], True)
+                self.assertIsNone(gate["bypass_reason"])
+                self.assertLess(gate["specificity_score"], 3)
+                self.assertGreater(gate["ambiguity_score"], 0.0)
+                self.assertLessEqual(gate["ambiguity_score"], 1.0)
+                dims = gate["missing_dimensions"]
+                self.assertGreaterEqual(len(dims), 1)
+                self.assertLessEqual(len(dims), 3)
+                self.assertEqual(len(set(dims)), len(dims))
+                self.assertTrue(set(dims).issubset(allowed_dims))
+                self.assertEqual(gate["max_questions"], 3)
+
+    def test_clarify_m2_well_specified_complex_prompts(self):
+        """M2: Well-specified Mode 3 prompts bypass with 'sufficient_detail' and specificity_score >= 3."""
+        prompts = (
+            "/asw-plan Add POST /v1/pay in api.py with JWT, Postgres, p95 < 40ms",
+            "/asw Přidej endpoint POST /api/v1/exports v routers/exports.py s PostgreSQL, JWT auth a limitem 10 req/min",
+        )
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                res = self.router.route_prompt(prompt)
+                self.assertEqual(res["execution_mode"], "mode_3")
+                self.assertEqual(res["opt_tokens"], 0.0)
+                gate = res["clarification_gate"]
+                self.assertIs(gate["needs_clarification"], False)
+                self.assertEqual(gate["bypass_reason"], "sufficient_detail")
+                self.assertGreaterEqual(gate["specificity_score"], 3)
+                self.assertEqual(gate["missing_dimensions"], [])
+                self.assertEqual(gate["max_questions"], 0)
+
+    def test_clarify_m3_hard_bypasses(self):
+        """M3: Bugfix, refactor/cleanup, Mode 1, start-work, review, Mode 0, Mode 4, and small Mode 2 bypass."""
+        for bug_prompt in ("/asw oprav chybu 500 v /api/orders", "/asw padá worker s Tracebackem"):
+            with self.subTest(bug_prompt=bug_prompt):
+                res = self.router.route_prompt(bug_prompt)
+                self.assertIn("asw-debug", res["auto_subskills"])
+                gate = res["clarification_gate"]
+                self.assertIs(gate["needs_clarification"], False)
+                self.assertEqual(gate["bypass_reason"], "bugfix_or_debug")
+                self.assertEqual(gate["missing_dimensions"], [])
+                self.assertEqual(gate["max_questions"], 0)
+
+        for beh_prompt in ("/asw-refactor rozděl modul", "/asw vyčisti mrtvý kód"):
+            with self.subTest(beh_prompt=beh_prompt):
+                res = self.router.route_prompt(beh_prompt)
+                gate = res["clarification_gate"]
+                self.assertIs(gate["needs_clarification"], False)
+                self.assertEqual(gate["bypass_reason"], "behavior_preserving")
+                self.assertEqual(gate["missing_dimensions"], [])
+                self.assertEqual(gate["max_questions"], 0)
+
+        res_ro = self.router.route_prompt("/asw jak funguje caching?")
+        self.assertEqual(res_ro["execution_mode"], "mode_1")
+        self.assertIs(res_ro["clarification_gate"]["needs_clarification"], False)
+        self.assertEqual(res_ro["clarification_gate"]["bypass_reason"], "read_only")
+
+        res_sw = self.router.route_prompt("/asw-start-work my-plan")
+        self.assertIs(res_sw["clarification_gate"]["needs_clarification"], False)
+        self.assertEqual(res_sw["clarification_gate"]["bypass_reason"], "executing_approved_plan")
+
+        res_rev = self.router.route_prompt("/asw-review")
+        self.assertIs(res_rev["clarification_gate"]["needs_clarification"], False)
+        self.assertEqual(res_rev["clarification_gate"]["bypass_reason"], "review_only")
+
+        res_m0 = self.router.route_prompt("spusť testy")
+        self.assertEqual(res_m0["execution_mode"], "mode_0")
+        self.assertIs(res_m0["clarification_gate"]["needs_clarification"], False)
+        self.assertEqual(res_m0["clarification_gate"]["bypass_reason"], "operational_or_restore")
+
+        res_m4 = self.router.route_prompt("emergency restore production")
+        self.assertEqual(res_m4["execution_mode"], "mode_4")
+        self.assertIs(res_m4["clarification_gate"]["needs_clarification"], False)
+        self.assertEqual(res_m4["clarification_gate"]["bypass_reason"], "operational_or_restore")
+
+        offline_router = decision_router.DecisionRouter(
+            config={"enabled": True, "use_daemon": False},
+            enable_inproc=False,
+        )
+        res_m2 = offline_router.route_prompt("Update timeout constant in config.py")
+        self.assertEqual(res_m2["execution_mode"], "mode_2")
+        self.assertIs(res_m2["clarification_gate"]["needs_clarification"], False)
+        self.assertEqual(res_m2["clarification_gate"]["bypass_reason"], "small_clear_change")
+
+    def test_clarify_m4_hypothetical_clause_masking(self):
+        """M4: Hypothetical/example bugfix clauses never trigger asw-debug or bugfix bypass; direct bugfix still does."""
+        hypothetical_prompts = (
+            "/asw-plan Navrhni clarify gate nebo opravujeme chybu v kódu",
+            "/asw-plan Design clarify gate or when fixing a bug in code",
+            "/asw-plan Když opravujeme chybu, neptej se, ale u složitých věcí se doptej",
+        )
+        for prompt in hypothetical_prompts:
+            with self.subTest(prompt=prompt):
+                res = self.router.route_prompt(prompt)
+                self.assertNotIn("asw-debug", res["auto_subskills"])
+                self.assertNotIn("asw-debug", self.router.select_auto_subskills(prompt))
+                gate = res["clarification_gate"]
+                self.assertIs(gate["needs_clarification"], True)
+                self.assertIsNone(gate["bypass_reason"])
+
+        direct_bug = self.router.route_prompt("/asw oprav chybu v kódu")
+        self.assertIn("asw-debug", direct_bug["auto_subskills"])
+        self.assertIs(direct_bug["clarification_gate"]["needs_clarification"], False)
+        self.assertEqual(direct_bug["clarification_gate"]["bypass_reason"], "bugfix_or_debug")
+
+        # Regression: 'response' / 'restartujeme' after 'když' must NOT be swallowed by hypothetical res- masking
+        for real_cz_bug in (
+            "/asw když response vrací HTTP 500 tak padá worker",
+            "/asw když restartujeme službu padá s Tracebackem",
+        ):
+            with self.subTest(real_cz_bug=real_cz_bug):
+                res_bug = self.router.route_prompt(real_cz_bug)
+                self.assertIn("asw-debug", res_bug["auto_subskills"])
+                self.assertIs(res_bug["clarification_gate"]["needs_clarification"], False)
+                self.assertEqual(res_bug["clarification_gate"]["bypass_reason"], "bugfix_or_debug")
+
+        res_hyp_unaccented = self.router.route_prompt("/asw-plan Když resime chybu nebo opravujeme chybu, neptej se")
+        self.assertNotIn("asw-debug", res_hyp_unaccented["auto_subskills"])
+
+    def test_clarify_m5_explicit_skip_vs_force_overrides(self):
+        """M5: --no-clarify/bez doptávání/rozhodni sám bypass; /asw-clarify/--clarify/grill-me force; --no-clarify wins."""
+        for skip_prompt in (
+            "/asw-plan Build customer billing portal --no-clarify",
+            "/asw vytvoř portál bez doptávání",
+            "/asw vytvoř portál, rozhodni sám",
+        ):
+            with self.subTest(skip_prompt=skip_prompt):
+                res = self.router.route_prompt(skip_prompt)
+                gate = res["clarification_gate"]
+                self.assertIs(gate["needs_clarification"], False)
+                self.assertEqual(gate["bypass_reason"], "user_skip")
+                self.assertEqual(gate["missing_dimensions"], [])
+                self.assertEqual(gate["max_questions"], 0)
+
+        res_cmd = self.router.route_prompt("/asw-clarify přidej notifikace")
+        self.assertEqual(res_cmd["recommended_command"], "asw-clarify")
+        self.assertEqual(res_cmd["execution_mode"], "mode_3")
+        self.assertIs(res_cmd["clarification_gate"]["needs_clarification"], True)
+        self.assertEqual(res_cmd["clarification_gate"]["bypass_reason"], "user_forced")
+        self.assertEqual(res_cmd["clarification_gate"]["max_questions"], 3)
+        self.assertGreaterEqual(len(res_cmd["clarification_gate"]["missing_dimensions"]), 1)
+        self.assertLessEqual(len(res_cmd["clarification_gate"]["missing_dimensions"]), 3)
+
+        for force_prompt in (
+            "/asw --clarify přidej pole",
+            "/asw grill-me navrhni cache",
+            "/asw-clarify Add POST /v1/pay in api.py with JWT, Postgres, p95 < 40ms",
+        ):
+            with self.subTest(force_prompt=force_prompt):
+                res = self.router.route_prompt(force_prompt)
+                gate = res["clarification_gate"]
+                self.assertIs(gate["needs_clarification"], True)
+                self.assertEqual(gate["bypass_reason"], "user_forced")
+                self.assertEqual(gate["max_questions"], 3)
+                self.assertGreaterEqual(len(gate["missing_dimensions"]), 1)
+                self.assertLessEqual(len(gate["missing_dimensions"]), 3)
+
+        # Precedence guard: --no-clarify beats /asw-clarify
+        res_prec = self.router.route_prompt("/asw-clarify přidej notifikace --no-clarify")
+        self.assertEqual(res_prec["recommended_command"], "asw-clarify")
+        self.assertIs(res_prec["clarification_gate"]["needs_clarification"], False)
+        self.assertEqual(res_prec["clarification_gate"]["bypass_reason"], "user_skip")
+        self.assertEqual(res_prec["clarification_gate"]["missing_dimensions"], [])
+        self.assertEqual(res_prec["clarification_gate"]["max_questions"], 0)
+
+    def test_clarify_m7_disabled_and_laya_override_refresh_and_cli(self):
+        """M7: Disabled router emits zeroed clarification_gate; _enrich_with_laya refreshes gate; CLI & benchmark intact."""
+        import hashlib
+        import os
+
+        expected_disabled = {
+            "needs_clarification": False,
+            "bypass_reason": "disabled",
+            "specificity_score": 0,
+            "ambiguity_score": 0.0,
+            "missing_dimensions": [],
+            "max_questions": 0,
+        }
+        with mock.patch.dict(os.environ, {"ASW_DECISION_MODEL_ENABLED": "0"}):
+            dis_env = decision_router.DecisionRouter()
+            r_env = dis_env.route_prompt("/asw-plan Build customer billing portal")
+            self.assertEqual(r_env["clarification_gate"], expected_disabled)
+            self.assertEqual(dis_env.assess_clarification_need("Build portal"), expected_disabled)
+
+        dis_cfg = decision_router.DecisionRouter(config={"enabled": False})
+        r_cfg = dis_cfg.route_prompt("/asw-clarify přidej notifikace")
+        self.assertEqual(r_cfg["clarification_gate"], expected_disabled)
+
+        # _enrich_with_laya mode override refresh (mode_3 -> mode_1 and mode_2 -> mode_3)
+        daemon_inst = decision_router.DecisionRouter(
+            server_url="http://127.0.0.1:18765",
+            enable_inproc=False,
+            config={"enabled": True, "use_daemon": True, "compact_question_schema": True},
+        )
+        base_m3 = self.router.route_prompt("/asw-plan Build customer billing portal")
+        self.assertIs(base_m3["clarification_gate"]["needs_clarification"], True)
+
+        fake_m1_body = json.dumps({
+            "answers": {
+                "execution_mode": {"choice": "mode_1", "answer_confidence": 0.95, "probabilities": {"mode_1": 0.95}},
+            },
+        }).encode("utf-8")
+
+        class _FakeRespM1:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return fake_m1_body
+
+        with mock.patch("urllib.request.urlopen", return_value=_FakeRespM1()):
+            refreshed_m1 = daemon_inst._enrich_with_laya("Build customer billing portal", dict(base_m3))
+        self.assertEqual(refreshed_m1["execution_mode"], "mode_1")
+        self.assertIs(refreshed_m1["clarification_gate"]["needs_clarification"], False)
+        self.assertEqual(refreshed_m1["clarification_gate"]["bypass_reason"], "read_only")
+        self.assertEqual(refreshed_m1["clarification_gate"]["missing_dimensions"], [])
+
+        base_m2 = self.router.route_prompt("implement caching layer")
+        fake_m3_body = json.dumps({
+            "answers": {
+                "execution_mode": {"choice": "mode_3", "answer_confidence": 0.95, "probabilities": {"mode_3": 0.95}},
+            },
+        }).encode("utf-8")
+
+        class _FakeRespM3:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return fake_m3_body
+
+        with mock.patch("urllib.request.urlopen", return_value=_FakeRespM3()):
+            refreshed_m3 = daemon_inst._enrich_with_laya("implement caching layer", dict(base_m2))
+        self.assertEqual(refreshed_m3["execution_mode"], "mode_3")
+        self.assertIs(refreshed_m3["clarification_gate"]["needs_clarification"], True)
+        self.assertIsNone(refreshed_m3["clarification_gate"]["bypass_reason"])
+        self.assertEqual(refreshed_m3["clarification_gate"]["max_questions"], 3)
+
+        # CLI --compact SHA-256 parity + opt_tokens == 0.0
+        script_path = CORE_SCRIPTS / "decision_router.py"
+        cli_args = [sys.executable, str(script_path), "--mode", "route-prompt", "--compact", "--text", "/asw-plan Build customer billing portal"]
+        p1 = subprocess.run(cli_args, capture_output=True, text=True, check=True)
+        p2 = subprocess.run(cli_args, capture_output=True, text=True, check=True)
+        self.assertEqual(
+            hashlib.sha256(p1.stdout.strip().encode("utf-8")).hexdigest(),
+            hashlib.sha256(p2.stdout.strip().encode("utf-8")).hexdigest(),
+        )
+        cli_json = json.loads(p1.stdout.strip())
+        self.assertIs(cli_json["clarification_gate"]["needs_clarification"], True)
+        self.assertEqual(cli_json["opt_tokens"], 0.0)
+
+        bench = decision_router.benchmark_skill_routing(self.router)
+        self.assertEqual(bench["upgraded"]["precision_at_k"], 1.0)
+        self.assertEqual(bench["upgraded"]["recall_at_k"], 1.0)
+        self.assertEqual(bench["opt_tokens"], 0.0)
+
+    def test_clarify_dual_mirror_ast_mutation_boundaries(self):
+        """Boundary and mirror parity tests across .antigravity and core_framework decision_router.py."""
+        import importlib.util
+
+        modules = []
+        for idx, path in enumerate((AG_SCRIPTS / "decision_router.py", CORE_SCRIPTS / "decision_router.py")):
+            spec = importlib.util.spec_from_file_location(f"mirror_decision_router_{idx}", str(path))
+            self.assertIsNotNone(spec)
+            assert spec is not None and spec.loader is not None
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            modules.append(mod)
+
+        for mod in modules:
+            self.assertEqual(mod._strip_hypothetical_clauses(""), "")
+            self.assertEqual(mod._strip_hypothetical_clauses("   "), "   ")
+            self.assertEqual(mod._strip_hypothetical_clauses(None), "")  # type: ignore[arg-type]
+            self.assertEqual(mod._strip_hypothetical_clauses(123), "")  # type: ignore[arg-type]
+            self.assertIn("oprav chybu", mod._strip_hypothetical_clauses("oprav chybu v kódu").lower())
+            self.assertNotIn("opravujeme", mod._strip_hypothetical_clauses("Navrhni gate nebo opravujeme chybu v kódu").lower())
+
+            self.assertEqual(mod._compute_specificity_score(""), 0)
+            self.assertEqual(mod._compute_specificity_score(None), 0)  # type: ignore[arg-type]
+            self.assertEqual(mod._compute_specificity_score("- one bullet item"), 0)
+            self.assertEqual(mod._compute_specificity_score("- first item\n- second item"), 1)
+
+            score2_prompt = "/asw-plan Add billing endpoint in api.py using Postgres"
+            score3_prompt = "/asw-plan Add POST /v1/pay in api.py using Postgres"
+            self.assertEqual(mod._compute_specificity_score(score2_prompt), 2)
+            self.assertEqual(mod._compute_specificity_score(score3_prompt), 3)
+
+            g_s2 = mod.assess_clarification_need(score2_prompt, execution_mode="mode_3")
+            self.assertIs(g_s2["needs_clarification"], True)
+            self.assertIsNone(g_s2["bypass_reason"])
+            self.assertEqual(g_s2["specificity_score"], 2)
+            self.assertGreater(g_s2["ambiguity_score"], 0.0)
+
+            g_s3 = mod.assess_clarification_need(score3_prompt, execution_mode="mode_3")
+            self.assertIs(g_s3["needs_clarification"], False)
+            self.assertEqual(g_s3["bypass_reason"], "sufficient_detail")
+            self.assertEqual(g_s3["specificity_score"], 3)
+            self.assertEqual(g_s3["missing_dimensions"], [])
+            self.assertEqual(g_s3["max_questions"], 0)
+
+            # Empty / None prompt
+            g_empty = mod.assess_clarification_need("", execution_mode="mode_1", is_consultation=False)
+            self.assertIs(g_empty["needs_clarification"], False)
+            self.assertEqual(g_empty["bypass_reason"], "read_only")
+
+            g_none = mod.assess_clarification_need(None, execution_mode="mode_2", is_consultation=False)  # type: ignore[arg-type]
+            self.assertIs(g_none["needs_clarification"], False)
+            self.assertEqual(g_none["bypass_reason"], "operational_or_restore")
+
+            # Mode 5 underspecified vs Mode 2 vs Mode 0 vs Mode 4
+            g_m5 = mod.assess_clarification_need("/asw-goal build platform", execution_mode="mode_5")
+            self.assertIs(g_m5["needs_clarification"], True)
+            self.assertEqual(g_m5["max_questions"], 3)
+
+            g_m2 = mod.assess_clarification_need("update helper", execution_mode="mode_2")
+            self.assertIs(g_m2["needs_clarification"], False)
+            self.assertEqual(g_m2["bypass_reason"], "small_clear_change")
+
+            g_m0 = mod.assess_clarification_need("run pytest", execution_mode="mode_0")
+            self.assertIs(g_m0["needs_clarification"], False)
+            self.assertEqual(g_m0["bypass_reason"], "operational_or_restore")
+
+            g_m4 = mod.assess_clarification_need("rollback", execution_mode="mode_4")
+            self.assertIs(g_m4["needs_clarification"], False)
+            self.assertEqual(g_m4["bypass_reason"], "operational_or_restore")
+
+            # Forced detailed prompt still has 1..3 missing_dimensions
+            g_forced = mod.assess_clarification_need(
+                "/asw-clarify Add POST /v1/pay in api.py with JWT, Postgres, p95 < 40ms",
+                execution_mode="mode_3",
+                recommended_command="asw-clarify",
+            )
+            self.assertIs(g_forced["needs_clarification"], True)
+            self.assertEqual(g_forced["bypass_reason"], "user_forced")
+            self.assertGreaterEqual(len(g_forced["missing_dimensions"]), 1)
+            self.assertLessEqual(len(g_forced["missing_dimensions"]), 3)
+            self.assertEqual(g_forced["max_questions"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()

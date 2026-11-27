@@ -7,6 +7,7 @@ Use this canonical template when creating `.asw/plans/<slug>.md`.
 2. **Human-Owned `<frozen-after-approval>` Contract:** Everything inside `<!-- <frozen-after-approval> --> ... <!-- </frozen-after-approval> -->` (`Intent`, `Boundaries & Constraints`, and `I/O & Edge-Case Matrix`) is frozen once the plan reaches `status: ready-for-dev` or `in-progress`. Agents must NEVER edit `<frozen-after-approval>` during implementation or review without setting `human_reapproved: true` after explicit human sign-off.
 3. **`baseline_revision` Git SHA:** Record the Git HEAD commit SHA (`git rev-parse --short HEAD`) in frontmatter before the first code edit in `step-03-implement`.
 4. **Context-Free `## Code Map`:** List the exact files, classes/functions, and caller-to-callee relationships so `Gemini 4 Hydrogen (High)` implementation subagents can execute with zero prior conversation context and zero blind repository searching.
+5. **Draft vs. Ready Clarification Gate (`[NEEDS CLARIFICATION]`):** `status: draft` plans may carry up to `3` `[NEEDS CLARIFICATION: ...]` markers (`4+` rejected), whereas `status: ready-for-dev` and `in-progress` plans require `0` unresolved markers (`bmad_lint_spine.py` & `invoke_opus_reviewer.py` Vector 1). Ground reversible defaults in `### Assumptions` and resolved `ask_question` forks in `### Clarifications` inside `<!-- <frozen-after-approval> -->`.
 
 ---
 
@@ -39,6 +40,12 @@ slug: "<plan_slug>"
 
 ### Intent
 <Verbatim user intent and authoritative source of truth.>
+
+### Assumptions *(optional — reversible repo-grounded defaults)*
+- <Default technical choice grounded in repository and Obsidian inspection.>
+
+### Clarifications *(optional — resolved `ask_question` decision forks)*
+- Q: <question> -> A: <selected answer>
 
 ### Boundaries & Constraints
 - **Always:**

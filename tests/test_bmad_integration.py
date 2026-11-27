@@ -407,6 +407,93 @@ class TestBMADMethodIntegration(unittest.TestCase):
         ):
             self.assertIn(vec, opp_txt, f"asw-opposition-reviewer.md missing Attack Vector: {vec}")
 
+    def test_m6_unresolved_clarification_contract_and_mirrors(self):
+        """M6: lint_plan_contract rejects [NEEDS CLARIFICATION on non-draft or >3 on draft, ignores fences/backticks, across both mirrors."""
+        cf_spine_script = REPO_ROOT / "core_framework" / "scripts" / "bmad_lint_spine.py"
+        linters = [
+            _load_module("bmad_lint_spine_ag", SPINE_SCRIPT),
+            _load_module("bmad_lint_spine_cf", cf_spine_script),
+        ]
+
+        def _make_plan(status_line: str, extra_body: str) -> str:
+            fm = f"---\ntitle: Clarify Test\n{status_line}baseline_revision: 6bb2ec1\n---\n" if status_line is not None else ""
+            return (
+                fm
+                + "<!-- <frozen-after-approval> -->\n"
+                + "### Intent\nTest clarification gate.\n"
+                + "## I/O & Edge-Case Matrix\n"
+                + "| Case | Input | Expected |\n"
+                + "| --- | --- | --- |\n"
+                + "| M1 | x | y |\n"
+                + "<!-- </frozen-after-approval> -->\n\n"
+                + "## Code Map\n- `app.py`\n\n"
+                + extra_body
+            )
+
+        for linter in linters:
+            self.assertTrue(hasattr(linter, "NEEDS_CLARIFICATION_RE"))
+            self.assertTrue(hasattr(linter, "find_unresolved_clarifications"))
+
+            # Non-draft statuses must reject even a single [NEEDS CLARIFICATION marker
+            for status_val in ("ready-for-dev", "in-progress", "in-review", "completed", ""):
+                status_line = f"status: {status_val}\n" if status_val else ""
+                plan_bad = _make_plan(status_line, "Open question: [NEEDS CLARIFICATION: auth method?]\n")
+                res_bad = linter.lint_plan_contract(plan_bad, name="non_draft.md")
+                self.assertFalse(res_bad["ok"], f"Expected status={status_val!r} with marker to fail: {res_bad}")
+                clar_findings = [f for f in res_bad["findings"] if f["category"] == "unresolved_clarification"]
+                self.assertEqual(len(clar_findings), 1, f"Expected 1 finding for status={status_val!r}: {res_bad}")
+                self.assertEqual(clar_findings[0]["severity"], "high")
+                expected_line = plan_bad.splitlines().index("Open question: [NEEDS CLARIFICATION: auth method?]") + 1
+                self.assertIn(f"(line {expected_line})", clar_findings[0]["location"])
+
+            # No frontmatter at all (empty status) with marker -> also rejected
+            plan_no_fm = _make_plan(None, "Open question: [NEEDS CLARIFICATION: storage?]\n")
+            res_no_fm = linter.lint_plan_contract(plan_no_fm, name="no_fm.md")
+            self.assertFalse(res_no_fm["ok"])
+            self.assertTrue(any(f["category"] == "unresolved_clarification" and f["severity"] == "high" for f in res_no_fm["findings"]))
+
+            # Draft plan allows 0, 1, 2, 3 markers
+            for count in (0, 1, 2, 3):
+                markers = "\n".join(f"- [NEEDS CLARIFICATION: q{i}?]" for i in range(1, count + 1))
+                plan_draft_ok = _make_plan("status: draft\n", markers + "\n")
+                res_draft_ok = linter.lint_plan_contract(plan_draft_ok, name=f"draft_{count}.md")
+                self.assertTrue(res_draft_ok["ok"], f"Expected draft with {count} markers to pass: {res_draft_ok}")
+                self.assertEqual(
+                    [f for f in res_draft_ok["findings"] if f["category"] == "unresolved_clarification"],
+                    [],
+                )
+
+            # Draft plan with 4 markers -> rejected (exceeds Spec-Kit max-3 cap)
+            markers_4 = "\n".join(f"- [NEEDS CLARIFICATION: q{i}?]" for i in range(1, 5))
+            plan_draft_bad = _make_plan("status: draft\n", markers_4 + "\n")
+            res_draft_bad = linter.lint_plan_contract(plan_draft_bad, name="draft_4.md")
+            self.assertFalse(res_draft_bad["ok"], f"Expected draft with 4 markers to fail: {res_draft_bad}")
+            clar_4 = [f for f in res_draft_bad["findings"] if f["category"] == "unresolved_clarification"]
+            self.assertGreaterEqual(len(clar_4), 1)
+            self.assertEqual(clar_4[0]["severity"], "high")
+            expected_line_4 = plan_draft_bad.splitlines().index("- [NEEDS CLARIFICATION: q4?]") + 1
+            self.assertIn(f"(line {expected_line_4})", clar_4[0]["location"])
+
+            # Inline backticks and fenced code blocks must be ignored even on ready-for-dev
+            quoted_plan = _make_plan(
+                "status: ready-for-dev\n",
+                "Documented syntax `[NEEDS CLARIFICATION: inline example]`.\n"
+                "```markdown\n[NEEDS CLARIFICATION: fenced example]\n```\n",
+            )
+            res_quoted = linter.lint_plan_contract(quoted_plan, name="quoted.md")
+            self.assertTrue(res_quoted["ok"], f"Expected quoted markers to pass: {res_quoted}")
+            self.assertEqual(res_quoted["total_findings"], 0)
+
+            # Actual plan adaptive-speckit-clarify-gate.md (when .asw is present outside isolated mutation sandbox)
+            real_plan_path = REPO_ROOT / ".asw" / "plans" / "adaptive-speckit-clarify-gate.md"
+            if real_plan_path.is_file():
+                real_plan_text = real_plan_path.read_text(encoding="utf-8")
+                res_real = linter.lint_plan_contract(real_plan_text, name="adaptive-speckit-clarify-gate.md")
+                self.assertTrue(res_real["ok"], f"Expected adaptive-speckit-clarify-gate.md to pass: {res_real}")
+                self.assertEqual(res_real["total_findings"], 0)
+
+        self.assertEqual(SPINE_SCRIPT.read_bytes(), cf_spine_script.read_bytes())
+
 
 if __name__ == "__main__":
     unittest.main()

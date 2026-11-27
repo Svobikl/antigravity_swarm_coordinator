@@ -718,6 +718,25 @@ def _infer_plan_repo_root(plan_path: Path, candidate_files: list[str], workdir: 
     return plan_root
 
 
+_NEEDS_CLARIFICATION_RE = re.compile(r"\[NEEDS\s+CLARIFICATION\b[^\n\]]*\]?", re.IGNORECASE)
+_FENCED_CODE_RE = re.compile(r"```.*?```", re.DOTALL)
+_INLINE_BACKTICK_RE = re.compile(r"`[^`\r\n]+`")
+
+
+def _extract_plan_status_and_body(raw: str) -> tuple[str, str]:
+    """Return (lowercased_status_from_frontmatter, body_without_frontmatter)."""
+    lines = raw.split("\n")
+    if lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                fm = "\n".join(lines[1:i])
+                body = "\n".join(lines[i + 1 :])
+                m = re.search(r"^\s*status\s*:\s*[\"']?([^\"'\r\n#]+)", fm, re.MULTILINE | re.IGNORECASE)
+                status = m.group(1).strip().lower() if m else ""
+                return status, body
+    return "", raw
+
+
 def audit_plan(
     plan_path: Path,
     fallback_reason: str | None = None,
@@ -746,6 +765,30 @@ def audit_plan(
             "level": "CRITICAL",
             "message": "Missing executable task breakdown or checklist."
         })
+    plan_status, plan_body = _extract_plan_status_and_body(raw)
+    clean_plan_body = _INLINE_BACKTICK_RE.sub("", _FENCED_CODE_RE.sub("", plan_body))
+    clarification_matches = _NEEDS_CLARIFICATION_RE.findall(clean_plan_body)
+    if clarification_matches:
+        is_draft = plan_status == "draft"
+        if not is_draft:
+            findings.append({
+                "vector": "Vector 1: Requirement & Scope Fidelity",
+                "level": "HIGH",
+                "message": (
+                    f"UNRESOLVED_CLARIFICATION_MARKER: Non-draft plan (status={plan_status or 'unspecified'!r}) "
+                    f"contains {len(clarification_matches)} unresolved [NEEDS CLARIFICATION] marker(s): "
+                    f"{clarification_matches[0]}"
+                ),
+            })
+        elif len(clarification_matches) > 3:
+            findings.append({
+                "vector": "Vector 1: Requirement & Scope Fidelity",
+                "level": "HIGH",
+                "message": (
+                    f"UNRESOLVED_CLARIFICATION_MARKER: Draft plan contains {len(clarification_matches)} "
+                    f"[NEEDS CLARIFICATION] markers (maximum 3 allowed)."
+                ),
+            })
 
     # Vector 2: 4-Axis Semantic & Governance Invariant Safety (including Zero Heuristic Substitution Law)
     governance_refs = ["GLOBAL_DEVELOPMENT_RULES", "PROGRAM_INVARIANTS", "METRIC_REGISTRY", "governance", "invariants"]

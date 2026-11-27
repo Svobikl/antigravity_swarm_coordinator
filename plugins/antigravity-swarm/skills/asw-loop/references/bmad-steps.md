@@ -7,6 +7,10 @@ To prevent context rot and mid-execution instruction amnesia, `asw-loop`, `asw-s
 ## Step 1: `step-01-clarify-and-route` (Clarify, Bound & Route)
 - **Model Tier:** `Gemini 4 Carbon (High)` (`Model="pro"`)
 - **Entry Gate:** Recall project memory (`memory_manager.py --recall`) and classify the request into Mode 0–5.
+- **Adaptive Spec-Kit Clarify Gate (`< 5 ms`, `opt_tokens: 0.0`):**
+  1. Evaluate `assess_clarification_need` (`decision_router.py`): `specificity_score >= 3` (`"sufficient_detail"`), bugfixes/tracebacks (with hypothetical clauses masked), refactors/cleanups, Mode 0/1/4/small Mode 2, `asw-start-work`, `asw-review`, `--no-clarify` / `bez doptávání` (`"user_skip"`), and `ASW_DECISION_MODEL_ENABLED=0` fast-pass with zero questions.
+  2. When triggered on broad underspecified `Mode 3`/`Mode 5` requests or explicit `/asw-clarify` (`grill-me`), inspect the repository and Obsidian memory first (never ask discoverable facts) and record reversible defaults in `### Assumptions`.
+  3. Ask at most `3` high-impact decision forks (`scope_actors`, `data_persistence`, `auth_security`, `external_integration`, `ux_state_flow`) in a single `ask_question` batch (`(Recommended) <Best> — <trade-off>` first), then record answers in `### Clarifications` (`- Q: <question> -> A: <selected answer>`) and `### I/O & Edge-Case Matrix`.
 - **Single-Goal Scope Gate:** If the user request bundles multiple independent goals, keep the primary goal in the active plan and split secondary goals into `.asw/plans/deferred-work.md`.
 - **Early Exit:** If Mode 0 (direct build/test/run) or Mode 1 (investigation only), execute directly without generating a multi-wave implementation plan.
 
@@ -16,8 +20,8 @@ To prevent context rot and mid-execution instruction amnesia, `asw-loop`, `asw-s
 - **Model Tier:** `Gemini 4 Carbon (High)` (`Model="pro"`) + `Claude Opus 5.5` (`--mode plan-review`)
 - **Action:**
   1. Scout the exact files and callers to build `## Code Map`.
-  2. Draft `.asw/plans/<slug>.md` (900–1600 tokens) enclosing `### Intent`, `### Boundaries & Constraints` (`Always:` / `Never:`), and `### I/O & Edge-Case Matrix` (`M1..Mn`) inside `<!-- <frozen-after-approval> --> ... <!-- </frozen-after-approval> -->`.
-  3. Validate mechanical plan contract via `python .antigravity/scripts/bmad_lint_spine.py --file .asw/plans/<slug>.md --mode plan-contract`.
+  2. Draft `.asw/plans/<slug>.md` (900–1600 tokens) enclosing `### Intent`, optional `### Assumptions` / `### Clarifications`, `### Boundaries & Constraints` (`Always:` / `Never:`), and `### I/O & Edge-Case Matrix` (`M1..Mn`) inside `<!-- <frozen-after-approval> --> ... <!-- </frozen-after-approval> -->`.
+  3. Validate mechanical plan contract via `python .antigravity/scripts/bmad_lint_spine.py --file .asw/plans/<slug>.md --mode plan-contract`. Both `bmad_lint_spine.py` (`unresolved_clarification`/`high`) and `invoke_opus_reviewer.py` (Vector 1) allow `<= 3` `[NEEDS CLARIFICATION: ...]` markers only on `status: draft` plans and enforce **zero** unresolved markers before `status: ready-for-dev` / `in-progress`.
   4. Run the Pre-Execution Plan Opposition Gate: `python .antigravity/scripts/invoke_opus_reviewer.py --mode plan-review --plan .asw/plans/<slug>.md` until `Verdict: PLAN_APPROVED`.
 
 ---

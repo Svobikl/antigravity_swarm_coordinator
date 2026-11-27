@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { redactSecrets, safeMode } from "./asw-redact.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SYNTHETIC_MODE_RE = /ASW\s+(?:[A-Z0-9_-]+\s+MODE|CONSULTATION\s*\/\s*MODE\s+1)\s+ENABLED!/i;
+const SYNTHETIC_MODE_RE = /ASW\s+(?:[A-Z0-9_-]+\s+MODE|CONSULTATION\s*\/\s*MODE\s+1)\s+ENABLED!|ASW\s+SPEC-KIT\s+CLARIFY\s+GATE/i;
 
 function pythonBin() {
   return process.platform === "win32" ? "python" : "python3";
@@ -205,6 +205,8 @@ function queryAutoDecisionRouter(prompt, repoDir) {
 
 const WORD = "(?<![A-Za-z0-9_./-])/?";
 const END = "(?![A-Za-z0-9_/-])";
+const CLARIFY_RE = new RegExp(`${WORD}(?:asw-clarify|swarmwork-clarify|asw\\s+clarify)${END}`, "i");
+const NO_CLARIFY_RE = /(?:--no-clarify|(?<![A-Za-z0-9_\u00c0-\u024f])(?:no-clarify|bez\s+dopt[aá]v[aá]n[ií]|neptej\s+se|rozhodni\s+s[aá]m|skip\s+clarify)(?![A-Za-z0-9_\u00c0-\u024f]))/i;
 const PLAN_RE = new RegExp(`${WORD}(?:asw-plan|swarmwork-plan|asw\\s+plan)${END}`);
 const GOAL_RE = new RegExp(`${WORD}(?:asw-goal|swarmwork-goal|asw\\s+goal)${END}`);
 const START_WORK_RE = new RegExp(`${WORD}(?:start-work|asw-start-work|swarmwork-start|asw\\s+start\\s+work)${END}`);
@@ -218,6 +220,7 @@ export function leadingCommandFor(stripped) {
   const trimmed = String(stripped ?? "").trimStart();
   if (!trimmed) return null;
   const rules = [
+    ["CLARIFY", new RegExp(`^/?(?:asw-clarify|swarmwork-clarify|asw\\s+clarify)${END}`, "i")],
     ["PLAN", new RegExp(`^/?(?:asw-plan|swarmwork-plan|asw\\s+plan)${END}`)],
     ["GOAL", new RegExp(`^/?(?:asw-goal|swarmwork-goal|asw\\s+goal)${END}`)],
     ["START_WORK", new RegExp(`^/?(?:start-work|asw-start-work|swarmwork-start|asw\\s+start\\s+work)${END}`)],
@@ -236,6 +239,7 @@ export function leadingCommandFor(stripped) {
 function detectCommand(stripped) {
   const leading = leadingCommandFor(stripped);
   if (leading) return leading;
+  if (CLARIFY_RE.test(stripped)) return "CLARIFY";
   if (PLAN_RE.test(stripped)) return "PLAN";
   if (GOAL_RE.test(stripped)) return "GOAL";
   if (START_WORK_RE.test(stripped)) return "START_WORK";
@@ -421,6 +425,25 @@ You MUST perform physical GUI and runtime verification of the implemented applic
 - If Verdict: GUI_FAILED occurs, fix the underlying UI/runtime defect and re-run physical GUI verification until Verdict: GUI_VERIFIED passes.
 - Always terminate spawned dev servers, browsers, and GUI processes in cleanup before finishing.`;
 
+export function buildClarifyGateDirective(route) {
+  const gate = route && typeof route === "object" ? route.clarification_gate : null;
+  const rawDims = Array.isArray(gate?.missing_dimensions) ? gate.missing_dimensions : [];
+  const dims = rawDims
+    .map((d) => String(d ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const dimsLabel = dims.length > 0 ? dims.join(", ") : "scope_actors, data_persistence, auth_security";
+  const maxQ =
+    Number.isFinite(Number(gate?.max_questions)) && Number(gate.max_questions) > 0
+      ? Math.min(3, Math.trunc(Number(gate.max_questions)))
+      : 3;
+  return [
+    `ASW SPEC-KIT CLARIFY GATE (Unresolved: ${dimsLabel} | Max ${maxQ}):`,
+    `1. Repo/Obsidian First: Check codebase/memory; skip discoverable facts; defaults in \`### Assumptions\`.`,
+    `2. Single \`ask_question\` (\`<= ${maxQ}\`, 1 round): Ask forks (\`(Recommended) <Best> — <trade-off>\` first), write \`### Clarifications\` (\`- Q -> A\`) + \`I/O & Edge-Case Matrix\` (0 if resolved).`,
+  ].join("\n");
+}
+
 export function formatAutoSkillsDirective(route) {
   if (!route || route.enabled === false) return "";
   const autoSkills = Array.isArray(route.auto_subskills) ? route.auto_subskills : [];
@@ -454,7 +477,10 @@ export function directiveFor(prompt, payload = {}, repoDir = "") {
   let isGenericAsw = false;
   let shouldQueryRouter = false;
 
-  if (cmd === "PLAN") {
+  if (cmd === "CLARIFY") {
+    base = PLAN_DIRECTIVE;
+    shouldQueryRouter = true;
+  } else if (cmd === "PLAN") {
     base = PLAN_DIRECTIVE;
     shouldQueryRouter = true;
   } else if (cmd === "GOAL") {
@@ -504,8 +530,21 @@ export function directiveFor(prompt, payload = {}, repoDir = "") {
   const wantsAutoGui =
     !isConsultation && Boolean(route && route.enabled !== false && route.requires_gui_verification === true);
 
+  const isClarifyEligibleCmd =
+    cmd === "ASW" || cmd === "LOOP" || cmd === "PLAN" || cmd === "GOAL" || cmd === "CLARIFY";
+  const wantsClarifyGate =
+    !isConsultation &&
+    isClarifyEligibleCmd &&
+    !NO_CLARIFY_RE.test(stripped) &&
+    (cmd === "CLARIFY"
+      ? route
+        ? route.clarification_gate?.needs_clarification === true
+        : isDecisionModelEnabled(repoDir)
+      : route?.clarification_gate?.needs_clarification === true);
+
   const sections = [];
   if (base) sections.push(base);
+  if (wantsClarifyGate) sections.push(buildClarifyGateDirective(route));
   if (hasExplicitTestGui || wantsAutoGui) sections.push(TEST_GUI_DIRECTIVE);
 
   const skillsBlock = formatAutoSkillsDirective(route);

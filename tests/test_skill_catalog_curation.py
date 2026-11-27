@@ -1199,7 +1199,8 @@ class TestSkillCatalogCuration(unittest.TestCase):
                 check=True,
             )
             data = json.loads(proc.stdout)
-            return data["injectSteps"][0]["userMessage"]
+            steps = data.get("injectSteps", [])
+            return steps[0].get("userMessage", "") if steps else ""
 
         # Direct stripIgnoredPromptRegions check: contractions kept, quoted spans stripped
         probe_js = f"""
@@ -1278,6 +1279,135 @@ class TestSkillCatalogCuration(unittest.TestCase):
         self.assertIn("ASW LOOP MODE ENABLED!", msg_off)
         self.assertNotIn("AUTO-ACTIVATED SUB-SKILLS", msg_off)
         self.assertNotIn("ASW TEST-GUI MODE ENABLED", msg_off)
+
+    def test_asw_hook_clarify_gate_m1_to_m5_and_m7(self):
+        """M1-M5, M7: Selective Spec-Kit Clarify Gate, /asw-clarify command routing, --no-clarify bypass, and flag=0 isolation."""
+        import json
+        import os
+        import subprocess
+
+        repo_root = Path(__file__).resolve().parent.parent
+        hook_script = repo_root / "plugins" / "antigravity-swarm" / "scripts" / "asw-hook.mjs"
+
+        def run_hook(prompt: str, extra_env: dict[str, str] | None = None) -> str:
+            env = dict(os.environ)
+            env.pop("ASW_DECISION_MODEL_ENABLED", None)
+            if extra_env:
+                env.update(extra_env)
+            proc = subprocess.run(
+                ["node", str(hook_script)],
+                cwd=str(repo_root),
+                input=json.dumps({"invocationNum": 1, "lastUserInput": prompt, "cwd": str(repo_root)}),
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=15,
+                check=True,
+            )
+            data = json.loads(proc.stdout)
+            steps = data.get("injectSteps", [])
+            return steps[0].get("userMessage", "") if steps else ""
+
+        def extract_clarify_gate(msg: str) -> str:
+            marker = "ASW SPEC-KIT CLARIFY GATE"
+            self.assertIn(marker, msg)
+            start = msg.index(marker)
+            rest = msg[start:]
+            end = rest.find("\n\n")
+            return rest if end == -1 else rest[:end]
+
+        # M1: Broad underspecified Mode 3 & Mode 5 prompts emit Clarify Gate (<= 100 tokens) BEFORE auto-skills
+        for prompt, expected_header in (
+            ("/asw-plan Build customer billing portal", "ASW PLAN MODE ENABLED!"),
+            ("/asw vytvoř zákaznický portál s předplatným a fakturací", "ASW LOOP MODE ENABLED!"),
+            ("/asw-goal vybuduj multi-region synchronizační platformu", "ASW GOAL MODE ENABLED!"),
+        ):
+            msg = run_hook(prompt)
+            self.assertIn(expected_header, msg)
+            gate = extract_clarify_gate(msg)
+            self.assertLessEqual(len(gate.split()), 100, f"Clarify gate exceeded 100 words: {gate}")
+            self.assertIn("repo", gate.lower())
+            self.assertIn("obsidian", gate.lower())
+            self.assertIn("### Assumptions", gate)
+            self.assertIn("ask_question", gate)
+            self.assertIn("<= 3", gate)
+            self.assertIn("(Recommended)", gate)
+            self.assertIn("### Clarifications", gate)
+            self.assertIn("I/O & Edge-Case Matrix", gate)
+            self.assertIn("AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:", msg)
+            self.assertLess(
+                msg.index("ASW SPEC-KIT CLARIFY GATE"),
+                msg.index("AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:"),
+            )
+
+        # M2: Detailed spec bypasses Clarify Gate
+        msg_m2 = run_hook("/asw-plan Add POST /v1/pay in api.py with JWT, Postgres, p95 < 40ms")
+        self.assertIn("ASW PLAN MODE ENABLED!", msg_m2)
+        self.assertNotIn("ASW SPEC-KIT CLARIFY GATE", msg_m2)
+
+        # M3: Bugfix, refactor, Mode 1 consultation, start-work, review bypass Clarify Gate
+        for prompt, expected_header in (
+            ("/asw padá worker s Tracebackem", "ASW LOOP MODE ENABLED!"),
+            ("/asw rozděl soubor a přejmenuj helper", "ASW LOOP MODE ENABLED!"),
+            ("/asw jak funguje caching?", "ASW CONSULTATION / MODE 1 ENABLED!"),
+            ("/asw-start-work my-plan", "ASW START-WORK MODE ENABLED!"),
+            ("/asw-review", "ASW REVIEW MODE ENABLED!"),
+        ):
+            msg_m3 = run_hook(prompt)
+            self.assertIn(expected_header, msg_m3)
+            self.assertNotIn("ASW SPEC-KIT CLARIFY GATE", msg_m3)
+        self.assertNotIn("ASW SPEC-KIT CLARIFY GATE", run_hook("/asw-refactor rozděl modul"))
+
+        # M4: Hypothetical bugfix clause triggers Clarify Gate and does NOT activate asw-debug
+        msg_m4 = run_hook("/asw-plan Navrhni clarify gate nebo opravujeme chybu v kódu")
+        self.assertIn("ASW PLAN MODE ENABLED!", msg_m4)
+        self.assertIn("ASW SPEC-KIT CLARIFY GATE", msg_m4)
+        self.assertIn("AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:", msg_m4)
+        skills_m4 = msg_m4[msg_m4.index("AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:"):]
+        self.assertNotIn("asw-debug", skills_m4)
+
+        # M5: --no-clarify / bez doptávání suppresses gate; /asw-clarify routes to PLAN + gate unless --no-clarify
+        for skip_prompt in (
+            "/asw-plan Build customer billing portal --no-clarify",
+            "/asw vytvoř portál bez doptávání",
+        ):
+            msg_skip = run_hook(skip_prompt)
+            self.assertNotIn("ASW SPEC-KIT CLARIFY GATE", msg_skip)
+
+        msg_clarify = run_hook("/asw-clarify přidej notifikace")
+        self.assertIn("ASW PLAN MODE ENABLED!", msg_clarify)
+        self.assertNotIn("ASW LOOP MODE ENABLED!", msg_clarify)
+        self.assertIn("ASW SPEC-KIT CLARIFY GATE", msg_clarify)
+        self.assertIn("AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:", msg_clarify)
+        self.assertLess(
+            msg_clarify.index("ASW SPEC-KIT CLARIFY GATE"),
+            msg_clarify.index("AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:"),
+        )
+
+        msg_clarify_override = run_hook("/asw-clarify přidej notifikace --no-clarify")
+        self.assertIn("ASW PLAN MODE ENABLED!", msg_clarify_override)
+        self.assertNotIn("ASW SPEC-KIT CLARIFY GATE", msg_clarify_override)
+
+        msg_quoted_clarify = run_hook('/asw oprav chybu 500 a nepoužívej "asw-clarify"')
+        self.assertIn("ASW LOOP MODE ENABLED!", msg_quoted_clarify)
+        self.assertNotIn("ASW PLAN MODE ENABLED!", msg_quoted_clarify)
+        self.assertNotIn("ASW SPEC-KIT CLARIFY GATE", msg_quoted_clarify)
+
+        # M7: ASW_DECISION_MODEL_ENABLED=0 skips router and emits no Clarify Gate
+        msg_m7_plan = run_hook(
+            "/asw-plan Build customer billing portal",
+            extra_env={"ASW_DECISION_MODEL_ENABLED": "0"},
+        )
+        self.assertIn("ASW PLAN MODE ENABLED!", msg_m7_plan)
+        self.assertNotIn("ASW SPEC-KIT CLARIFY GATE", msg_m7_plan)
+        self.assertNotIn("AUTO-ACTIVATED SUB-SKILLS", msg_m7_plan)
+
+        msg_m7_clarify = run_hook(
+            "/asw-clarify přidej notifikace",
+            extra_env={"ASW_DECISION_MODEL_ENABLED": "0"},
+        )
+        self.assertIn("ASW PLAN MODE ENABLED!", msg_m7_clarify)
+        self.assertNotIn("ASW SPEC-KIT CLARIFY GATE", msg_m7_clarify)
 
 
 if __name__ == "__main__":

@@ -33,6 +33,7 @@ INLINE_CODE = re.compile(r"`[^`\n]+`")
 PLACEHOLDER_WORD = re.compile(r"\b(TBD|TODO|FIXME|XXX)\b")
 SIMILAR_TO = re.compile(r"similar to AD-\d+", re.IGNORECASE)
 TEMPLATE_TOKEN = re.compile(r"\{[a-z_][a-z0-9_ /.-]*\}")
+NEEDS_CLARIFICATION_RE = re.compile(r"\[NEEDS\s+CLARIFICATION\b[^\n\]]*\]?", re.IGNORECASE)
 FROZEN_BLOCK_RE = re.compile(
     r"<!--\s*<frozen-after-approval>.*?-->\s*(.*?)\s*<!--\s*</frozen-after-approval>\s*-->",
     re.DOTALL | re.IGNORECASE,
@@ -234,6 +235,40 @@ def extract_frozen_block(text: str) -> str | None:
     return m.group(1).strip() if m else None
 
 
+def find_unresolved_clarifications(
+    body: str,
+    offset: int,
+    name: str,
+    status: str = "",
+) -> list[dict]:
+    """Reject [NEEDS CLARIFICATION] markers outside fences/backticks on non-draft plans or >3 on draft."""
+    scan = blank_fences(body, include_inline_code=True)
+    matches = list(NEEDS_CLARIFICATION_RE.finditer(scan))
+    if not matches:
+        return []
+    is_draft = status.strip().lower() == "draft"
+    if is_draft and len(matches) <= 3:
+        return []
+    if is_draft:
+        return [
+            {
+                "category": "unresolved_clarification",
+                "severity": "high",
+                "detail": f"Draft plan has {len(matches)} [NEEDS CLARIFICATION] markers (max 3 allowed)",
+                "location": f"{name} (line {offset + line_of(scan, matches[3].start())})",
+            }
+        ]
+    return [
+        {
+            "category": "unresolved_clarification",
+            "severity": "high",
+            "detail": f"Unresolved clarification marker in {status or 'non-draft'!r} plan: {m.group(0)!r}",
+            "location": f"{name} (line {offset + line_of(scan, m.start())})",
+        }
+        for m in matches
+    ]
+
+
 def lint_plan_contract(text: str, name: str = "plan") -> dict:
     frontmatter, body, offset = split_frontmatter(text)
     meta = parse_frontmatter_dict(frontmatter)
@@ -323,8 +358,9 @@ def lint_plan_contract(text: str, name: str = "plan") -> dict:
                 }
             )
 
-    # Also lint any AD-n blocks present in the plan
+    # Also lint any AD-n blocks present in the plan and reject unresolved clarification markers
     findings += find_ad_issues(body, offset, name)
+    findings += find_unresolved_clarifications(body, offset, name, status=status)
 
     counts: dict[str, int] = {}
     for f in findings:

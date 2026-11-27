@@ -14,6 +14,7 @@
 
 """Unit tests for Antigravity-native Claude Opus 5.5 subagents and reviewer bridge."""
 
+import importlib.util
 import json
 import os
 import re
@@ -831,6 +832,153 @@ class TestOpusReviewer(unittest.TestCase):
             )
             self.assertEqual(proc_strong.returncode, 0, proc_strong.stdout + proc_strong.stderr)
             self.assertIn("Verdict: ASW APPROVED", out_strong.read_text(encoding="utf-8"))
+
+    def test_plan_review_clarification_markers_draft_vs_ready(self):
+        """M6: Vector 1 rejects [NEEDS CLARIFICATION on non-draft or >3 on draft, allows <=3 on draft and quoted code, across mirrors."""
+        cf_script_path = self.repo_root / "core_framework" / "scripts" / "invoke_opus_reviewer.py"
+
+        def _load_rev(name: str, path: Path):
+            spec = importlib.util.spec_from_file_location(name, path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+
+        reviewers = [
+            _load_rev("invoke_opus_reviewer_ag", self.script_path),
+            _load_rev("invoke_opus_reviewer_cf", cf_script_path),
+        ]
+
+        def _build_plan(status_line: str | None, extra_section: str) -> str:
+            fm = f"---\ntitle: Clarify Plan\n{status_line}---\n\n" if status_line is not None else ""
+            return (
+                fm
+                + "## Objective\nImplement clarify gate.\n\n"
+                + "## Governance & Invariants\nComplies with GLOBAL_DEVELOPMENT_RULES and PROGRAM_INVARIANTS.\n\n"
+                + "## Execution Tasks\n"
+                + "- [ ] Task 1: Build module\n"
+                + "  - Files: `src/clarify_mod.py`\n"
+                + "  - RED: Write failing test.\n"
+                + "  - GREEN: Implement logic.\n"
+                + "  - QA: Run real CLI.\n"
+                + "  - Evidence: `.asw/evidence/t1.txt`\n"
+                + "  - Cleanup: finally cleanup on POSIX/Windows.\n\n"
+                + extra_section
+            )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            real_plan_path = self.repo_root / ".asw" / "plans" / "adaptive-speckit-clarify-gate.md"
+
+            for idx, rev in enumerate(reviewers):
+                # 1. Non-draft plans with [NEEDS CLARIFICATION] must be rejected in Vector 1
+                for status_val in ("ready-for-dev", "in-progress", "in-review", "completed", ""):
+                    status_line = f"status: {status_val}\n" if status_val else ""
+                    p_bad = tmp_path / f"bad_{idx}_{status_val or 'empty'}.md"
+                    p_bad.write_text(
+                        _build_plan(status_line, "## Open Questions\n- [NEEDS CLARIFICATION: auth method?]\n"),
+                        encoding="utf-8",
+                    )
+                    verdict, findings, _ = rev.audit_plan(p_bad, workdir=tmp_path)
+                    self.assertEqual(verdict, "PLAN_REVISION_REQUIRED", f"status={status_val!r} should fail")
+                    v1_hits = [
+                        f for f in findings
+                        if "Vector 1" in f["vector"]
+                        and f["level"] in ("HIGH", "CRITICAL")
+                        and "UNRESOLVED_CLARIFICATION_MARKER" in f["message"]
+                        and "[NEEDS CLARIFICATION" in f["message"]
+                    ]
+                    self.assertTrue(v1_hits, f"Expected Vector 1 UNRESOLVED_CLARIFICATION_MARKER finding, got: {findings}")
+
+                # No frontmatter at all with marker -> also rejected
+                p_nofm = tmp_path / f"nofm_{idx}.md"
+                p_nofm.write_text(
+                    _build_plan(None, "## Open Questions\n- [NEEDS CLARIFICATION: storage engine?]\n"),
+                    encoding="utf-8",
+                )
+                v_nofm, f_nofm, _ = rev.audit_plan(p_nofm, workdir=tmp_path)
+                self.assertEqual(v_nofm, "PLAN_REVISION_REQUIRED")
+                self.assertTrue(any("UNRESOLVED_CLARIFICATION_MARKER" in f["message"] for f in f_nofm))
+
+                # 2. Draft plan allows 0, 1, 3 markers
+                for count in (0, 1, 3):
+                    qs = "\n".join(f"- [NEEDS CLARIFICATION: q{i}?]" for i in range(1, count + 1))
+                    p_draft_ok = tmp_path / f"draft_{idx}_{count}.md"
+                    p_draft_ok.write_text(_build_plan("status: draft\n", qs + "\n"), encoding="utf-8")
+                    v_ok, f_ok, rep_ok = rev.audit_plan(p_draft_ok, workdir=tmp_path)
+                    self.assertEqual(v_ok, "PLAN_APPROVED", f"draft with {count} markers should pass: {rep_ok}")
+                    self.assertFalse(any("UNRESOLVED_CLARIFICATION_MARKER" in f["message"] for f in f_ok))
+
+                # 3. Draft plan with 4 markers -> rejected
+                qs4 = "\n".join(f"- [NEEDS CLARIFICATION: q{i}?]" for i in range(1, 5))
+                p_draft_bad = tmp_path / f"draft_{idx}_4.md"
+                p_draft_bad.write_text(_build_plan("status: draft\n", qs4 + "\n"), encoding="utf-8")
+                v_4, f_4, _ = rev.audit_plan(p_draft_bad, workdir=tmp_path)
+                self.assertEqual(v_4, "PLAN_REVISION_REQUIRED")
+                self.assertTrue(
+                    any(
+                        "Vector 1" in f["vector"]
+                        and f["level"] == "HIGH"
+                        and "UNRESOLVED_CLARIFICATION_MARKER" in f["message"]
+                        and "[NEEDS CLARIFICATION" in f["message"]
+                        for f in f_4
+                    ),
+                    f"Expected Vector 1 rejection for 4 markers on draft: {f_4}",
+                )
+
+                # 4. Inline backticks and fenced code blocks must be ignored on ready-for-dev
+                p_quoted = tmp_path / f"quoted_{idx}.md"
+                p_quoted.write_text(
+                    _build_plan(
+                        "status: ready-for-dev\n",
+                        "Example: `[NEEDS CLARIFICATION: inline]`\n"
+                        "```markdown\n[NEEDS CLARIFICATION: fenced]\n```\n",
+                    ),
+                    encoding="utf-8",
+                )
+                v_q, f_q, rep_q = rev.audit_plan(p_quoted, workdir=tmp_path)
+                self.assertEqual(v_q, "PLAN_APPROVED", rep_q)
+                self.assertFalse(any("UNRESOLVED_CLARIFICATION_MARKER" in f["message"] for f in f_q))
+
+                # 5. Actual adaptive-speckit-clarify-gate.md (when .asw is present outside isolated mutation sandbox)
+                if real_plan_path.is_file():
+                    v_real, f_real, rep_real = rev.audit_plan(real_plan_path, workdir=self.repo_root)
+                    self.assertEqual(v_real, "PLAN_APPROVED", rep_real)
+                    self.assertFalse(any("UNRESOLVED_CLARIFICATION_MARKER" in f["message"] for f in f_real))
+
+            # 6. CLI --mode plan-review real-surface verification
+            cli_bad = tmp_path / "cli_bad.md"
+            cli_bad.write_text(
+                _build_plan("status: ready-for-dev\n", "- [NEEDS CLARIFICATION: queue backend?]\n"),
+                encoding="utf-8",
+            )
+            out_bad = tmp_path / "cli_bad_review.md"
+            proc_bad = subprocess.run(
+                [sys.executable, str(self.script_path), "--mode", "plan-review", "--plan", str(cli_bad), "--output", str(out_bad)],
+                capture_output=True,
+                text=True,
+                cwd=str(self.repo_root),
+            )
+            self.assertNotEqual(proc_bad.returncode, 0)
+            bad_txt = out_bad.read_text(encoding="utf-8")
+            self.assertIn("Verdict: PLAN_REVISION_REQUIRED", bad_txt)
+            self.assertIn("UNRESOLVED_CLARIFICATION_MARKER", bad_txt)
+
+            cli_draft = tmp_path / "cli_draft.md"
+            cli_draft.write_text(
+                _build_plan("status: draft\n", "- [NEEDS CLARIFICATION: a?]\n- [NEEDS CLARIFICATION: b?]\n- [NEEDS CLARIFICATION: c?]\n"),
+                encoding="utf-8",
+            )
+            out_draft = tmp_path / "cli_draft_review.md"
+            proc_draft = subprocess.run(
+                [sys.executable, str(self.script_path), "--mode", "plan-review", "--plan", str(cli_draft), "--output", str(out_draft)],
+                capture_output=True,
+                text=True,
+                cwd=str(self.repo_root),
+            )
+            self.assertEqual(proc_draft.returncode, 0, proc_draft.stderr)
+            self.assertIn("Verdict: PLAN_APPROVED", out_draft.read_text(encoding="utf-8"))
+
+        self.assertEqual(self.script_path.read_bytes(), cf_script_path.read_bytes())
 
 
 if __name__ == "__main__":
