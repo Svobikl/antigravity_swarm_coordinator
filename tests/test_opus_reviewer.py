@@ -978,7 +978,10 @@ class TestOpusReviewer(unittest.TestCase):
             self.assertEqual(proc_draft.returncode, 0, proc_draft.stderr)
             self.assertIn("Verdict: PLAN_APPROVED", out_draft.read_text(encoding="utf-8"))
 
-        self.assertEqual(self.script_path.read_bytes(), cf_script_path.read_bytes())
+        self.assertEqual(
+            self.script_path.read_bytes().replace(b"\r\n", b"\n"),
+            cf_script_path.read_bytes().replace(b"\r\n", b"\n"),
+        )
 
     def test_m4_prepare_blind_review_identical_mirrors_collapse_and_json_flag(self):
         """M4: Identical mirrors collapse into collapsed_mirrors TOON+stub, ASTs use dumps_smart TOON (>=3), and --json omits packet_text unless --include-packet-text."""

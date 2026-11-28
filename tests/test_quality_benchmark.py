@@ -662,8 +662,8 @@ class TestQualityBenchmark(unittest.TestCase):
         core_mirror = REPO_ROOT / "core_framework" / "scripts" / "quality_benchmark.py"
         if core_mirror.exists():
             self.assertEqual(
-                QB_SCRIPT.read_bytes(),
-                core_mirror.read_bytes(),
+                QB_SCRIPT.read_bytes().replace(b"\r\n", b"\n"),
+                core_mirror.read_bytes().replace(b"\r\n", b"\n"),
                 "core_framework/scripts/quality_benchmark.py drifted from .antigravity/scripts/quality_benchmark.py",
             )
 
@@ -689,15 +689,18 @@ class TestQualityBenchmark(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         installed_qb = tmp_home / ".gemini" / "scripts" / "quality_benchmark.py"
         self.assertTrue(installed_qb.is_file(), "install.py did not deploy quality_benchmark.py")
-        self.assertEqual(installed_qb.read_bytes(), QB_SCRIPT.read_bytes())
+        self.assertEqual(
+            installed_qb.read_bytes().replace(b"\r\n", b"\n"),
+            QB_SCRIPT.read_bytes().replace(b"\r\n", b"\n"),
+        )
 
-        # Verify 200/201-skill Golden Catalog in ~/.gemini/config/skills remains intact
+        # Verify 200/201/202-skill Golden Catalog in ~/.gemini/config/skills remains intact
         home_skills_dir = Path.home() / ".gemini" / "config" / "skills"
         if home_skills_dir.is_dir():
             skill_count = len(
                 [d for d in home_skills_dir.iterdir() if d.is_dir() and (d / "SKILL.md").is_file()]
             )
-            self.assertIn(skill_count, (200, 201))
+            self.assertIn(skill_count, (200, 201, 202))
 
         # Public-repo PII/secret scan on new benchmark files
         scan_proc = subprocess.run(

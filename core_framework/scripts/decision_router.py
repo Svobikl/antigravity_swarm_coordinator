@@ -283,6 +283,7 @@ CORE_SKILL_CATALOG_KEYWORDS: dict[str, list[str]] = {
     "polars": ["polars", "lazyframe", "parquet", "scan_parquet", "pl.dataframe", "dataframe", "dataframes"],
     "pptx-official": ["pptx", "powerpoint", "powerpointu", "pitch deck", "slide deck", "slide", "slides", "prezentace", "prezentaci", "slidy", "slidů"],
     "gdpr-data-handling": ["gdpr", "pii", "anonymization", "anonymize", "anonymizaci", "anonymizace", "osobní údaje", "osobních údajů", "data retention", "dsr", "subject access", "consent", "privacy", "soukromí", "ochrana dat"],
+    "rea-reference-recon": ["rea-reference-recon", "rea-agents", "morluto/rea", "reverse-engineer-anything", "app.asar"],
 }
 
 SKILL_NEGATIVE_EXAMPLES: dict[str, dict[str, list[str]]] = {
@@ -873,6 +874,320 @@ def assess_clarification_need(
     }
 
 
+_NO_REA_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:--no-rea|no-rea|bez\s+rea|skip\s+rea)(?![A-Za-z0-9_-])",
+    re.IGNORECASE,
+)
+
+_REA_EXPLICIT_RE = re.compile(
+    r"(?:\brea-agents\b|\bmorluto/rea\b|\brea\b"
+    r"|\breverse[- ]engineer\w*"
+    r"|\breverzn[íi]\w*\s+in[zž]en\w*"
+    r"|\bdekompil\w*)",
+    re.IGNORECASE,
+)
+
+_HTTPS_URL_RE = re.compile(r"https?://[^\s\"'<>`]+")
+
+_REA_ARTIFACT_PATH_RE = re.compile(
+    r"(?:/Applications/[A-Za-z0-9_ .-]+\.app\b"
+    r"|(?:[A-Za-z0-9_.-]+[/\\])+[A-Za-z0-9_ .-]+\.app(?![A-Za-z0-9_/-])"
+    r"|(?:[A-Za-z0-9_.-]+[/\\])*[A-Za-z0-9_ .-]+\.asar\b"
+    r"|(?<![:/\\A-Za-z0-9_.-])[A-Z][A-Za-z0-9_-]*\.app(?![A-Za-z0-9_/-]))"
+)
+
+_TARGET_CAPTURE = (
+    r"(?P<target>(?:https?://[^\s\"'<>`]+"
+    r"|/Applications/[A-Za-z0-9_ .-]+\.app"
+    r"|(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_ .-]+\.asar"
+    r"|[A-Za-z0-9_\u00c0-\u024f./-]+(?:\s+[A-Za-z0-9_\u00c0-\u024f./-]+){0,3}))"
+)
+
+_REA_ANALOGY_PATTERNS: tuple[tuple[re.Pattern[str], bool], ...] = (
+    # Czech patterns
+    (
+        re.compile(
+            rf"\b(?:fungoval[aoiy]?|fungovat|funguje|vypadal[aoiy]?|vypadat|vypad[aá]|choval[aoiy]?|chovat|chov[aá]|p[uů]sobil[aoiy]?|pracoval[aoiy]?)\s+(?:podobn[eě]\s+|stejn[eě]\s+|p[rř]esn[eě]\s+)?jako\s+(?:(?:v|ve|u|m[aá])\s+)?{_TARGET_CAPTURE}",
+            re.IGNORECASE,
+        ),
+        False,
+    ),
+    (
+        re.compile(
+            rf"\b(?:funkcionalit\w*|funkc\w*|ui|ux|rozhran\w*|aplikac\w*|syst[eé]m\w*|modul\w*|editor\w*|dashboard\w*|vyhled[aá]v[aá]n\w*|onboarding\w*|palette|menu|workflow)\s+(?:by\s+m[eě]l[aoiy]?\s+b[yý]t\s+|m[aá]\s+b[yý]t\s+|je\s+)?podobn(?:[áéýěo]|ou)\s+(?:jako\s+(?:(?:v|ve|u|m[aá])\s+)?)?{_TARGET_CAPTURE}",
+            re.IGNORECASE,
+        ),
+        False,
+    ),
+    (
+        re.compile(
+            rf"\b(?:ve\s+stylu|inspirovan[éýááo]|klon|kopie|podle\s+vzoru)\s+{_TARGET_CAPTURE}",
+            re.IGNORECASE,
+        ),
+        False,
+    ),
+    (
+        re.compile(
+            rf"\b(?:chci|ud[eě]lej|vytvo[rř]|postav|navrhni|implementuj)\s+[^.!?\n]{{0,45}}?\bjako\s+(?:(?:v|ve|u|m[aá])\s+)?{_TARGET_CAPTURE}",
+            re.IGNORECASE,
+        ),
+        True,
+    ),
+    # English patterns
+    (
+        re.compile(
+            rf"\b(?:work|works|working|look|looks|looking|behave|behaves|behaving|feel|feels|act|acts)\s+(?:just\s+|very\s+|similar\s+)?like\s+(?:in\s+)?{_TARGET_CAPTURE}",
+            re.IGNORECASE,
+        ),
+        False,
+    ),
+    (
+        re.compile(
+            rf"\b(?:similar\s+to|inspired\s+by|modeled\s+(?:on|after)|clone\s+of|in\s+the\s+style\s+of|just\s+like\s+in)\s+{_TARGET_CAPTURE}",
+            re.IGNORECASE,
+        ),
+        False,
+    ),
+    (
+        re.compile(
+            rf"\b(?:palette|ui|ux|layout|editor|dashboard|menu|workflow|search|onboarding|sidebar|modal|shortcut|shortcuts|command\s+palette|feature|app|interface)\s+like\s+(?:in\s+)?{_TARGET_CAPTURE}",
+            re.IGNORECASE,
+        ),
+        True,
+    ),
+)
+
+_REA_EXPLICIT_VERB_TARGET_RE = re.compile(
+    rf"\b(?:analyzuj|analyze|inspect|prozkoumej|reverse[- ]engineer\w*|dekompil\w*)\s+{_TARGET_CAPTURE}",
+    re.IGNORECASE,
+)
+
+_REJECT_VERB_PREFIX_RE = re.compile(
+    r"(?:\b(?:ulo[zž]|exportuj|form[aá]tuj|vra[tť]|vrac[ií]|spus[tť]|p[rř]ihlas|serializuj)\w*(?:\s+[A-Za-z\u00c0-\u024f0-9_.-]+){0,2}\s+jako"
+    r"|\b(?:save|export|format|run|return|serialize)\w*(?:\s+[A-Za-z0-9_.-]+){0,2}\s+as"
+    r"|\bas\s+well\s+as)\s*$",
+    re.IGNORECASE,
+)
+
+_TARGET_CLAUSE_BREAKS = frozenset({
+    "a", "and", "or", "nebo", "ale", "but", "s", "se", "with", "pro", "for",
+    "na", "in", "on", "at", "to", "do", "z", "ze", "od", "aby", "že", "kde",
+    "kdy", "který", "která", "které", "ktery", "ktera", "ktere", "which",
+    "that", "where", "when", "while", "before", "after", "because", "protože",
+    "protoze", "tak", "pak", "jako", "like", "using", "přes", "pres", "via",
+    "without", "bez", "ne", "not", "instead", "místo", "misto",
+})
+
+_CZ_STOP_TARGETS = frozenset({
+    "například", "naprikad", "např", "napr", "třeba", "treba",
+    "jsou", "je", "byl", "byla", "bylo", "bude", "budou", "být", "byt",
+    "včera", "vcera", "dříve", "drive", "předtím", "predtim",
+    "obvykle", "vždy", "vzdy", "ted", "teď", "tady", "zde",
+    "tohle", "toto", "ten", "ta", "to", "ty", "ti", "ostatní", "ostatni",
+    "minulý", "minuly", "minulém", "minulem", "minulá", "minula", "minulé", "minule",
+    "předchozí", "predchozi", "předchozím", "predchozim",
+    "soubor", "souboru", "soubory", "modul", "modulu", "moduly",
+    "funkce", "funkci", "metoda", "metodu", "třída", "trida", "třídu", "tridu",
+    "parametr", "parametru", "argument", "argumentu",
+    "proměnná", "promenna", "proměnné", "promenne",
+    "hodnota", "hodnoty", "hodnotu", "typ", "typu", "pole",
+    "seznam", "seznamu", "slovník", "slovnik", "slovníku", "slovniku",
+    "tabulka", "tabulky", "tabulku", "sloupec", "sloupce",
+    "chyba", "chybu", "chyby", "bug", "pád", "pad", "pádu", "padu",
+    "test", "testy", "testů", "testu",
+    "root", "admin", "uživatel", "uzivatel", "uživatele", "uzivatele",
+    "klient", "klienta", "server", "serveru", "daemon", "worker",
+    "commitu", "commit", "verzi", "verze", "kódu", "kodu", "kód", "kod",
+})
+
+_EN_STOP_TARGETS = frozenset({
+    "this", "that", "it", "these", "those", "usual", "before", "yesterday",
+    "expected", "intended", "normal", "always", "example", "such", "well",
+    "a", "an", "the",
+    "bug", "error", "crash", "issue", "leak", "race", "problem", "timeout",
+    "charm", "pro", "boss", "user", "admin", "root", "daemon", "service",
+    "function", "method", "class", "file", "module", "table", "column",
+    "dict", "list", "array", "string", "integer", "boolean", "number",
+    "null", "none", "true", "false",
+    "commit", "branch", "code", "output", "input", "result", "config",
+    "src", "tests", "lib", "dist", "build",
+})
+
+_FORMAT_AND_TYPE_STOP_TARGETS = frozenset({
+    "int", "str", "string", "float", "bool", "boolean", "dict", "list",
+    "json", "jsonl", "yaml", "yml", "toml", "xml", "csv", "tsv", "sql",
+    "html", "css", "svg", "png", "jpg", "jpeg", "webp", "pdf", "docx",
+    "xlsx", "pptx", "md", "txt", "py", "ts", "tsx", "js", "jsx", "mjs",
+    "rs", "go", "cpp", "null", "none", "true", "false", "utf-8", "utf8", "ascii",
+})
+
+_ALL_STOP_TARGETS = _CZ_STOP_TARGETS | _EN_STOP_TARGETS | _FORMAT_AND_TYPE_STOP_TARGETS
+
+
+def _clean_reference_target(raw: str, *, require_cap: bool = False) -> str | None:
+    """Clean and validate an extracted reference-product target, rejecting grammatical/code false positives."""
+    cand = raw.strip().strip(".,!?;:()[]\"'`")
+    if not cand:
+        return None
+    if cand.startswith(("http://", "https://", "/Applications/")) or cand.lower().endswith((".app", ".asar")):
+        return cand
+
+    raw_tokens = cand.split()
+    if not raw_tokens:
+        return None
+
+    first_low = raw_tokens[0].strip(".,!?;:()[]\"'`").lower().rstrip(".")
+    if first_low in ("a", "an", "the"):
+        if len(raw_tokens) < 2:
+            return None
+        second_clean = raw_tokens[1].strip(".,!?;:()[]\"'`")
+        if not second_clean:
+            return None
+        second_low = second_clean.lower().rstrip(".")
+        if (
+            second_low in _ALL_STOP_TARGETS
+            or second_low in _TARGET_CLAUSE_BREAKS
+            or (not second_clean[0].isupper() and not second_low.endswith((".app", ".asar")))
+        ):
+            return None
+        raw_tokens = raw_tokens[1:]
+
+    kept: list[str] = []
+    first_is_upper = raw_tokens[0].strip(".,!?;:()[]\"'`")[:1].isupper()
+    for idx, tok in enumerate(raw_tokens):
+        t_clean = tok.strip(".,!?;:()[]\"'`")
+        if not t_clean:
+            break
+        t_low = t_clean.lower().rstrip(".")
+        if idx == 0:
+            if t_low in _ALL_STOP_TARGETS or t_low in _TARGET_CLAUSE_BREAKS:
+                return None
+            if require_cap and not t_clean[0].isupper():
+                return None
+            kept.append(t_clean)
+        else:
+            if t_low in _TARGET_CLAUSE_BREAKS or t_low in _FORMAT_AND_TYPE_STOP_TARGETS:
+                break
+            if not t_clean[0].isupper():
+                break
+            if not first_is_upper:
+                break
+            kept.append(t_clean)
+
+    joined = " ".join(kept)
+    if not joined:
+        return None
+    if "/" in joined and not joined.startswith("/Applications/"):
+        return None
+    if "." in joined:
+        ext = joined.rsplit(".", 1)[-1].lower()
+        if ext in _FORMAT_AND_TYPE_STOP_TARGETS and ext not in ("app", "asar"):
+            return None
+    if joined.lower().rstrip(".") in _ALL_STOP_TARGETS:
+        return None
+    return joined
+
+
+def detect_reference_product_intent(
+    prompt: str,
+    *,
+    execution_mode: str = "mode_3",
+    recommended_command: str = "asw-loop",
+    is_consultation: bool = False,
+    auto_subskills: list[str] | None = None,
+    enabled: bool = True,
+) -> dict[str, object]:
+    """Zero-LLM (<2ms) detector for explicit REA cues and bilingual reference-product analogies."""
+    if not enabled:
+        return {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": "disabled"}
+
+    raw = prompt if isinstance(prompt, str) else ""
+    trimmed = raw.strip()
+    if not trimmed:
+        if is_consultation or execution_mode in ("mode_0", "mode_1", "mode_4"):
+            return {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": "non_implementation_mode"}
+        return {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": None}
+
+    no_fenced = _FENCED_CODE_RE.sub(" ", trimmed)
+    stripped = _strip_ignored_regions(trimmed)
+
+    if _NO_REA_RE.search(stripped):
+        return {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": "user_skip"}
+
+    if is_consultation or execution_mode in ("mode_0", "mode_1", "mode_4"):
+        return {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": "non_implementation_mode"}
+
+    auto_set = set(auto_subskills or [])
+    if (
+        recommended_command in ("asw-cleanup", "asw-refactor", "asw-review", "asw-start-work")
+        or "asw-cleanup" in auto_set
+        or "asw-refactor" in auto_set
+    ):
+        return {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": "maintenance_or_review"}
+
+    no_code = _INLINE_CODE_RE.sub(" ", no_fenced)
+    url_masked_no_code = _HTTPS_URL_RE.sub(" ", no_code)
+    url_masked_stripped = _HTTPS_URL_RE.sub(" ", stripped)
+    has_explicit_rea = _REA_EXPLICIT_RE.search(stripped) is not None
+    if has_explicit_rea:
+        artifact_matches = [m.strip() for m in _REA_ARTIFACT_PATH_RE.findall(url_masked_no_code) if m.strip()]
+    else:
+        artifact_matches = []
+        for m in _REA_ARTIFACT_PATH_RE.findall(url_masked_no_code):
+            item = m.strip()
+            if item and not item.lower().endswith(".asar"):
+                artifact_matches.append(item)
+        for m in _REA_ARTIFACT_PATH_RE.findall(url_masked_stripped):
+            item = m.strip()
+            if item and item.lower().endswith(".asar") and item not in artifact_matches:
+                artifact_matches.append(item)
+
+    analogy_targets: list[str] = []
+    for pat, require_cap in _REA_ANALOGY_PATTERNS:
+        for match in pat.finditer(stripped):
+            prefix_ctx = stripped[max(0, match.start() - 32) : match.start("target")]
+            if _REJECT_VERB_PREFIX_RE.search(prefix_ctx):
+                continue
+            cleaned_target = _clean_reference_target(match.group("target"), require_cap=require_cap)
+            if cleaned_target and cleaned_target not in analogy_targets:
+                analogy_targets.append(cleaned_target)
+
+    if has_explicit_rea or artifact_matches:
+        targets: list[str] = []
+        for item in artifact_matches:
+            if item not in targets:
+                targets.append(item)
+        if has_explicit_rea:
+            for url in _HTTPS_URL_RE.findall(no_fenced):
+                u_clean = url.rstrip(".,!?;:)")
+                if u_clean not in targets:
+                    targets.append(u_clean)
+        for item in analogy_targets:
+            if item not in targets:
+                targets.append(item)
+        if not targets and has_explicit_rea:
+            for match in _REA_EXPLICIT_VERB_TARGET_RE.finditer(stripped):
+                cleaned_target = _clean_reference_target(match.group("target"), require_cap=True)
+                if cleaned_target and cleaned_target.lower() not in ("rea", "rea-agents") and cleaned_target not in targets:
+                    targets.append(cleaned_target)
+        return {
+            "needs_recon": True,
+            "ask_confirmation": False,
+            "targets": targets,
+            "reason": "explicit_rea_or_artifact",
+        }
+
+    if analogy_targets:
+        return {
+            "needs_recon": True,
+            "ask_confirmation": True,
+            "targets": analogy_targets,
+            "reason": "reference_product_analogy",
+        }
+
+    return {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": None}
+
+
 def _is_question_framed(stripped_text: str) -> bool:
     lower = stripped_text.strip().lower()
     if not lower:
@@ -978,6 +1293,14 @@ def select_auto_subskills(prompt: str, *, force_action_context: bool = False) ->
         has_action or force_action_context or not is_q_framed
     ):
         subskills.append("asw-cleanup")
+
+    rea_info = detect_reference_product_intent(
+        prompt,
+        is_consultation=(is_q_only and not force_action_context),
+        auto_subskills=subskills,
+    )
+    if rea_info["needs_recon"]:
+        subskills.append("rea-reference-recon")
 
     deduped: list[str] = []
     for s in subskills:
@@ -1139,6 +1462,25 @@ class DecisionRouter:
             enabled=self.enabled,
         )
 
+    def detect_reference_product_intent(
+        self,
+        prompt: str,
+        *,
+        execution_mode: str = "mode_3",
+        recommended_command: str = "asw-loop",
+        is_consultation: bool = False,
+        auto_subskills: list[str] | None = None,
+    ) -> dict[str, object]:
+        """Detect explicit REA cues or reference-product analogies for recon gating."""
+        return detect_reference_product_intent(
+            prompt,
+            execution_mode=execution_mode,
+            recommended_command=recommended_command,
+            is_consultation=is_consultation,
+            auto_subskills=auto_subskills,
+            enabled=self.enabled,
+        )
+
     def route_prompt(self, prompt: str) -> dict[str, object]:
         """Route a user prompt into Mode 0-5, Quad-Model Tier, GUI gate, and subagent requirements."""
         if not self.enabled:
@@ -1162,6 +1504,7 @@ class DecisionRouter:
                 "is_consultation": False,
                 "recommended_tier": "disabled",
                 "clarification_gate": assess_clarification_need(prompt, enabled=False),
+                "reference_recon": detect_reference_product_intent(prompt, enabled=False),
                 "device_info": self.device_info,
             }
 
@@ -1434,9 +1777,10 @@ class DecisionRouter:
 
         # Feature / action verbs (CZ & EN)
         has_feature_verb = _has_action_verb(stripped, include_soft=False)
+        has_reference_recon = "rea-reference-recon" in auto_subskills
 
         is_multi_step = has_feature_verb and (
-            "," in lower or " a " in lower or " and " in lower or has_gui or len(lower.split()) > 7
+            "," in lower or " a " in lower or " and " in lower or has_gui or has_reference_recon or len(lower.split()) > 7
         )
 
         if is_multi_step or (has_gui and has_feature_verb):
@@ -1587,7 +1931,7 @@ class DecisionRouter:
                             base_decision["selected_skills"] = [
                                 s
                                 for s in base_decision["selected_skills"]
-                                if s not in ("implementation-developer", "validator-build-test-agent")
+                                if s not in ("implementation-developer", "validator-build-test-agent", "rea-reference-recon")
                             ]
                     base_decision["recommended_tier"] = (
                         "carbon_plan_research"
@@ -1602,6 +1946,10 @@ class DecisionRouter:
                         if not base_decision.get("is_consultation") and gui_noul >= 0.75:
                             base_decision["requires_gui_verification"] = True
                     base_decision["requires_subagent_plan_wave"] = choice in ("mode_3", "mode_5")
+                    if choice == "mode_1" and isinstance(base_decision.get("auto_subskills"), list):
+                        base_decision["auto_subskills"] = [
+                            s for s in base_decision["auto_subskills"] if s != "rea-reference-recon"
+                        ]
                     base_decision["clarification_gate"] = self.assess_clarification_need(
                         prompt,
                         execution_mode=choice,
@@ -1609,6 +1957,22 @@ class DecisionRouter:
                         is_consultation=bool(base_decision.get("is_consultation", False)),
                         auto_subskills=base_decision.get("auto_subskills") if isinstance(base_decision.get("auto_subskills"), list) else [],
                     )
+                    base_decision["reference_recon"] = self.detect_reference_product_intent(
+                        prompt,
+                        execution_mode=choice,
+                        recommended_command=str(base_decision.get("recommended_command", "asw-loop")),
+                        is_consultation=bool(base_decision.get("is_consultation", False)),
+                        auto_subskills=base_decision.get("auto_subskills") if isinstance(base_decision.get("auto_subskills"), list) else [],
+                    )
+                    if not bool(base_decision["reference_recon"].get("needs_recon")):
+                        if isinstance(base_decision.get("auto_subskills"), list):
+                            base_decision["auto_subskills"] = [
+                                s for s in base_decision["auto_subskills"] if s != "rea-reference-recon"
+                            ]
+                        if isinstance(base_decision.get("selected_skills"), list):
+                            base_decision["selected_skills"] = [
+                                s for s in base_decision["selected_skills"] if s != "rea-reference-recon"
+                            ]
         except Exception:
             pass
         return base_decision
@@ -1969,6 +2333,16 @@ class DecisionRouter:
                 deduped_auto.append(s)
         deduped_auto = deduped_auto[:8]
 
+        reference_recon = self.detect_reference_product_intent(
+            prompt_for_skills or "",
+            execution_mode=execution_mode,
+            recommended_command=recommended_command,
+            is_consultation=is_consultation,
+            auto_subskills=deduped_auto,
+        )
+        if not reference_recon["needs_recon"] and "rea-reference-recon" in deduped_auto:
+            deduped_auto = [s for s in deduped_auto if s != "rea-reference-recon"]
+
         remaining_slots = max(0, 8 - len(deduped_auto))
         if remaining_slots > 0 and prompt_for_skills is not None:
             domain_candidates = self.select_skills(prompt_for_skills, max_skills=8)
@@ -1977,6 +2351,8 @@ class DecisionRouter:
                 if (is_consultation or execution_mode == "mode_1")
                 else set()
             )
+            if not bool(reference_recon.get("needs_recon")):
+                excluded = excluded | {"rea-reference-recon"}
             selected_skills = [
                 s for s in domain_candidates if s not in deduped_auto and s not in excluded
             ][:remaining_slots]
@@ -2009,6 +2385,7 @@ class DecisionRouter:
             "auto_subskills": deduped_auto,
             "selected_skills": selected_skills,
             "clarification_gate": clarification_gate,
+            "reference_recon": reference_recon,
             "opt_tokens": 0.0,
             "device_info": self.device_info,
             "backend": "system1_calibrated_fallback",
@@ -2387,6 +2764,11 @@ def benchmark_skill_routing(router: DecisionRouter | None = None, max_skills: in
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
     parser = argparse.ArgumentParser(description="System 1 Decision Router (Laya + Calibrated Fallback)")
     parser.add_argument(
         "--mode",

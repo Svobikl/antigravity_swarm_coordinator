@@ -685,6 +685,11 @@ def run_benchmark() -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
     parser = argparse.ArgumentParser(description="TOON codec & ASD-STE100 directive linter.")
     parser.add_argument("--benchmark", action="store_true", help="Run 10-payload TOON benchmark.")
     parser.add_argument("--lint-ste100", metavar="FILE", help="Lint a text or .mjs directive file.")
@@ -735,7 +740,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.output:
         out_path = Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(rendered + "\n", encoding="utf-8")
+        out_path.write_text(rendered + "\n", encoding="utf-8", newline="\n")
     print(rendered)
     return 0 if ok else 1
 

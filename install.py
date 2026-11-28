@@ -3,7 +3,7 @@
 
 Installs:
   1. Global entry point prompt (~/.gemini/GEMINI.md and ~/.agents/AGENTS.md)
-  2. All 201 curated Multi-Domain Golden Catalog skills (~/.gemini/config/skills,
+  2. All 202 curated Multi-Domain Golden Catalog skills (~/.gemini/config/skills,
      ~/.gemini/antigravity-ide/skills, and ~/.agents/skills)
   3. Antigravity Swarm (ASW) plugin and Claude Opus 5.5 subagent TOMLs
      (~/.gemini/config/plugins/antigravity-swarm)
@@ -14,6 +14,7 @@ Installs:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import io
 import json
@@ -26,7 +27,8 @@ import subprocess
 import sys
 import tarfile
 import urllib.request
-from pathlib import Path
+import zipfile
+from pathlib import Path, PurePosixPath
 from xml.sax.saxutils import escape as _xml_escape
 
 
@@ -201,7 +203,7 @@ def _seed_chub_config(active_home: Path) -> bool:
     if chub_cfg.exists():
         return False
     chub_cfg.parent.mkdir(parents=True, exist_ok=True)
-    chub_cfg.write_text("telemetry: false\nfeedback: false\n", encoding="utf-8")
+    chub_cfg.write_text("telemetry: false\nfeedback: false\n", encoding="utf-8", newline="\n")
     return True
 
 
@@ -252,6 +254,292 @@ def ensure_chub_installed(
                 return {"installed": True, "version": ver, "path": chub_bin, "config_seeded": seeded}
 
     return {"installed": False, "version": None, "path": None, "config_seeded": seeded}
+
+
+def _load_rea_bridge(repo_root: Path):
+    """Dynamically load rea_bridge.py from .antigravity/scripts or core_framework/scripts."""
+    script_path = repo_root / ".antigravity" / "scripts" / "rea_bridge.py"
+    if not script_path.is_file():
+        script_path = repo_root / "core_framework" / "scripts" / "rea_bridge.py"
+    if not script_path.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("rea_bridge", script_path)
+    if spec is None or spec.loader is None:
+        return None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _write_rea_wrappers(
+    runtime_root: Path,
+    local_bin_dir: Path,
+    node_exe: Path,
+    rea_mjs: Path,
+    *,
+    is_win: bool,
+) -> Path:
+    """Write POSIX or Windows launcher wrappers in runtime_root/bin and ~/.local/bin."""
+    runtime_bin = runtime_root / "bin"
+    runtime_bin.mkdir(parents=True, exist_ok=True)
+    local_bin_dir.mkdir(parents=True, exist_ok=True)
+
+    if is_win:
+        launcher_name = "rea.cmd"
+        body = f'@echo off\r\n"{node_exe}" "{rea_mjs}" %*\r\n'
+    else:
+        launcher_name = "rea"
+        body = f'#!/bin/sh\nexec "{node_exe}" "{rea_mjs}" "$@"\n'
+
+    runtime_launcher = runtime_bin / launcher_name
+    local_launcher = local_bin_dir / launcher_name
+    encoded = body.encode("utf-8")
+    for dest in (runtime_launcher, local_launcher):
+        dest.write_bytes(encoded)
+        if not is_win:
+            os.chmod(dest, 0o755)
+    return runtime_launcher
+
+
+def _resolve_node24_archive_suffix(sys_name: str, machine: str) -> str:
+    """Map OS and CPU architecture to official Node.js 24.x archive suffix."""
+    arch = machine.lower()
+    if sys_name == "Windows":
+        return "win-x64.zip"
+    if sys_name == "Darwin":
+        return "darwin-arm64.tar.gz" if arch in ("arm64", "aarch64") else "darwin-x64.tar.gz"
+    return "linux-arm64.tar.gz" if arch in ("arm64", "aarch64") else "linux-x64.tar.gz"
+
+
+def _safe_strip_archive_parts(raw_name: str) -> list[str]:
+    """Validate an archive member path and strip the single top-level Node directory."""
+    if raw_name.startswith(("/", "\\")):
+        raise ValueError(f"Unsafe absolute archive member path: {raw_name}")
+    parts = [p for p in PurePosixPath(raw_name.replace("\\", "/")).parts if p not in ("", ".")]
+    if any(p == ".." or ":" in p for p in parts):
+        raise ValueError(f"Unsafe archive member traversal: {raw_name}")
+    if len(parts) <= 1:
+        return []
+    return parts[1:]
+
+
+def _extract_node24_archive(raw: bytes, archive_name: str, node_dir: Path) -> None:
+    """Safely extract a SHA256-verified Node 24.x .tar.gz or .zip into node_dir."""
+    resolved_root = node_dir.resolve() if node_dir.exists() else node_dir.parent.resolve() / node_dir.name
+
+    if archive_name.endswith(".zip"):
+        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            infos = zf.infolist()
+            stripped_entries: list[tuple[zipfile.ZipInfo, list[str]]] = []
+            for info in infos:
+                rel_parts = _safe_strip_archive_parts(info.filename)
+                if rel_parts:
+                    target = (node_dir / Path(*rel_parts)).resolve()
+                    if resolved_root != target and resolved_root not in target.parents:
+                        raise ValueError(f"Archive member escapes node_dir: {info.filename}")
+                    stripped_entries.append((info, rel_parts))
+
+            if node_dir.exists():
+                shutil.rmtree(node_dir, onerror=_remove_readonly)
+            node_dir.mkdir(parents=True, exist_ok=True)
+            for info, rel_parts in stripped_entries:
+                dest = node_dir / Path(*rel_parts)
+                if info.is_dir():
+                    dest.mkdir(parents=True, exist_ok=True)
+                else:
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(zf.read(info.filename))
+        return
+
+    with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tf:
+        members = tf.getmembers()
+        validated: list[tuple[tarfile.TarInfo, list[str]]] = []
+        for member in members:
+            rel_parts = _safe_strip_archive_parts(member.name)
+            if not rel_parts:
+                continue
+            target = (node_dir / Path(*rel_parts)).resolve()
+            if resolved_root != target and resolved_root not in target.parents:
+                raise ValueError(f"Tar member escapes node_dir: {member.name}")
+            if member.issym():
+                if member.linkname.startswith(("/", "\\")) or ":" in member.linkname:
+                    raise ValueError(f"Unsafe symlink target: {member.linkname}")
+                link_resolved = (target.parent / member.linkname).resolve()
+                if resolved_root != link_resolved and resolved_root not in link_resolved.parents:
+                    raise ValueError(f"Symlink escapes node_dir: {member.name} -> {member.linkname}")
+            elif member.islnk():
+                link_parts = _safe_strip_archive_parts(member.linkname)
+                if not link_parts:
+                    raise ValueError(f"Unsafe hardlink target: {member.linkname}")
+                link_resolved = (node_dir / Path(*link_parts)).resolve()
+                if resolved_root != link_resolved and resolved_root not in link_resolved.parents:
+                    raise ValueError(f"Hardlink escapes node_dir: {member.name} -> {member.linkname}")
+            validated.append((member, rel_parts))
+
+        if node_dir.exists():
+            shutil.rmtree(node_dir, onerror=_remove_readonly)
+        node_dir.mkdir(parents=True, exist_ok=True)
+
+        deferred_links: list[tuple[tarfile.TarInfo, Path]] = []
+        for member, rel_parts in validated:
+            dest = node_dir / Path(*rel_parts)
+            if member.isdir():
+                dest.mkdir(parents=True, exist_ok=True)
+            elif member.issym() or member.islnk():
+                deferred_links.append((member, dest))
+            elif member.isfile():
+                extracted = tf.extractfile(member)
+                if extracted is None:
+                    continue
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(extracted.read())
+                mode = (member.mode & 0o777) or 0o644
+                if rel_parts[0] == "bin":
+                    mode |= 0o755
+                os.chmod(dest, mode)
+
+        for member, dest in deferred_links:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if dest.exists() or dest.is_symlink():
+                dest.unlink()
+            if member.issym():
+                os.symlink(member.linkname, dest)
+            elif member.islnk():
+                link_parts = _safe_strip_archive_parts(member.linkname)
+                link_target = node_dir / Path(*link_parts)
+                if link_target.exists():
+                    shutil.copy2(link_target, dest)
+
+
+def ensure_rea_installed(
+    *,
+    repo_root: Path | None = None,
+    home_dir: Path | None = None,
+    attempt_install: bool = True,
+) -> dict[str, object]:
+    """Discover or install morluto/rea (`rea-agents`) with SHA256-verified Node 24.x fallback."""
+    active_home = home_dir if home_dir is not None else Path.home()
+    isolated_home = home_dir is not None and home_dir.resolve() != Path.home().resolve()
+    resolved_repo = repo_root if repo_root is not None else Path(__file__).resolve().parent
+    rb = _load_rea_bridge(resolved_repo)
+
+    if rb is not None:
+        rt = rb.discover_rea_runtime(home_dir=active_home)
+        if rt.get("available") and rt.get("command"):
+            return {
+                "installed": True,
+                "version": rt.get("rea_version"),
+                "path": rt["command"][0],
+                "isolated_node": rt.get("source") == "managed_runtime",
+            }
+
+    if not attempt_install:
+        return {"installed": False, "version": None, "path": None, "isolated_node": False}
+
+    sys_name = platform.system()
+    is_win = sys_name == "Windows"
+    runtime_root = active_home / ".gemini" / "rea-runtime"
+
+    try:
+        host_node = shutil.which("node")
+        host_npm = shutil.which("npm")
+        use_host_node = False
+        if not isolated_home and host_node and host_npm and rb is not None:
+            host_ver, host_ok = rb._probe_host_node()
+            if host_ver and host_ok:
+                use_host_node = True
+
+        if use_host_node and host_node and host_npm:
+            isolated_node = False
+            node_exe = Path(host_node)
+            npm_bin = Path(host_npm)
+        else:
+            isolated_node = True
+            node_dir = runtime_root / "node"
+            node_exe = node_dir / ("node.exe" if is_win else "bin/node")
+            npm_bin = node_dir / ("npm.cmd" if is_win else "bin/npm")
+
+            if not (node_exe.is_file() and npm_bin.is_file()):
+                suffix = _resolve_node24_archive_suffix(sys_name, platform.machine())
+                base_url = "https://nodejs.org/dist/latest-v24.x"
+                with urllib.request.urlopen(f"{base_url}/SHASUMS256.txt", timeout=30) as resp:
+                    shasums_text = resp.read().decode("utf-8", errors="replace")
+
+                pattern = re.compile(
+                    rf"^([0-9a-fA-F]{{64}})\s+(?:\./)?(node-v24\.\d+\.\d+-{re.escape(suffix)})$"
+                )
+                expected_sha256: str | None = None
+                archive_name: str | None = None
+                for line in shasums_text.splitlines():
+                    m = pattern.match(line.strip())
+                    if m:
+                        expected_sha256 = m.group(1).lower()
+                        archive_name = m.group(2)
+                        break
+
+                if not expected_sha256 or not archive_name:
+                    raise ValueError(f"Could not find Node 24.x archive for {suffix} in SHASUMS256.txt")
+
+                with urllib.request.urlopen(f"{base_url}/{archive_name}", timeout=120) as resp:
+                    raw_archive = resp.read()
+
+                actual_sha256 = hashlib.sha256(raw_archive).hexdigest().lower()
+                if actual_sha256 != expected_sha256:
+                    raise ValueError(f"SHA256 mismatch for {archive_name}: {actual_sha256} != {expected_sha256}")
+
+                _extract_node24_archive(raw_archive, archive_name, node_dir)
+
+            if not node_exe.is_file() or not npm_bin.is_file():
+                raise FileNotFoundError(f"Missing extracted Node/npm binaries in {node_dir}")
+
+        pkg_prefix = runtime_root / "pkg"
+        pkg_prefix.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ)
+        env["PATH"] = f"{node_exe.parent}{os.pathsep}{env.get('PATH', '')}"
+
+        npm_res = subprocess.run(
+            [str(npm_bin), "install", "--prefix", str(pkg_prefix), "--no-audit", "--no-fund", "rea-agents"],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=240,
+        )
+        if npm_res.returncode != 0:
+            raise RuntimeError(f"npm install rea-agents failed: {npm_res.stderr or npm_res.stdout}")
+
+        rea_mjs = pkg_prefix / "node_modules" / "rea-agents" / "scripts" / "rea.mjs"
+        if not rea_mjs.is_file():
+            raise FileNotFoundError(f"Missing rea.mjs after install: {rea_mjs}")
+
+        launcher = _write_rea_wrappers(
+            runtime_root,
+            active_home / ".local" / "bin",
+            node_exe,
+            rea_mjs,
+            is_win=is_win,
+        )
+
+        ver_res = subprocess.run(
+            [str(launcher), "--version"],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=15,
+        )
+        if ver_res.returncode != 0:
+            raise RuntimeError(f"rea --version failed: {ver_res.stderr or ver_res.stdout}")
+        ver_raw = (ver_res.stdout or ver_res.stderr or "").strip()
+        ver_match = re.search(r"\b\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.]+)?\b", ver_raw)
+        ver = ver_match.group(0) if ver_match else (ver_raw or "unknown")
+
+        return {
+            "installed": True,
+            "version": ver,
+            "path": str(launcher),
+            "isolated_node": isolated_node,
+        }
+    except Exception:
+        return {"installed": False, "version": None, "path": None, "isolated_node": False}
 
 
 _LAYA_SITECUSTOMIZE_PY = '''"""Compatibility shim for torch 2.2.x on Python 3.12+ (e.g., Intel macOS x86_64)."""
@@ -482,11 +770,11 @@ def ensure_laya_installed(
 
             site_pkgs = _resolve_venv_site_packages(venv_dir, laya_venv_py, is_win)
             site_pkgs.mkdir(parents=True, exist_ok=True)
-            (site_pkgs / "sitecustomize.py").write_text(_LAYA_SITECUSTOMIZE_PY, encoding="utf-8")
+            (site_pkgs / "sitecustomize.py").write_text(_LAYA_SITECUSTOMIZE_PY, encoding="utf-8", newline="\n")
             sitecustomize_written = True
 
         venv_dir.mkdir(parents=True, exist_ok=True)
-        daemon_py.write_text(_LAYA_DAEMON_PY, encoding="utf-8")
+        daemon_py.write_text(_LAYA_DAEMON_PY, encoding="utf-8", newline="\n")
 
     host_laya_ok = False
     try:
@@ -548,7 +836,7 @@ def ensure_laya_installed(
             "</dict>\n"
             "</plist>\n"
         )
-        plist_path.write_text(plist_xml, encoding="utf-8")
+        plist_path.write_text(plist_xml, encoding="utf-8", newline="\n")
         wrote_plist = str(plist_path)
 
         if home_dir.resolve() == Path.home().resolve() and not os.environ.get("PYTEST_CURRENT_TEST"):
@@ -611,6 +899,7 @@ def run_install(
     install_obsidian_app: bool = False,
     skip_rtk: bool = False,
     skip_chub: bool = False,
+    skip_rea: bool = False,
     install_laya: bool = False,
     disable_decision_model: bool = False,
 ) -> dict[str, object]:
@@ -637,6 +926,10 @@ def run_install(
         "chub_installed": False,
         "chub_version": None,
         "chub_config_seeded": False,
+        "rea_bridge_installed": False,
+        "rea_installed": False,
+        "rea_version": None,
+        "rea_isolated_node": False,
         "decision_router_installed": False,
         "decision_router_device": None,
         "decision_model_enabled": not disable_decision_model,
@@ -660,7 +953,7 @@ def run_install(
             shutil.copy2(src_prompt, agents_home_dir / "AGENTS.md")
             summary["prompt_installed"] = True
 
-    # 2. Global Skills Catalog (201 curated skills)
+    # 2. Global Skills Catalog (202 curated skills)
     if not skip_skills:
         skills_src = repo_root / "core_framework" / "skills"
         using_core_framework = skills_src.is_dir()
@@ -739,7 +1032,7 @@ def run_install(
                     try:
                         manifest_data = json.loads(deployed_manifest.read_text(encoding="utf-8"))
                         manifest_data.pop("skills", None)
-                        deployed_manifest.write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8")
+                        deployed_manifest.write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8", newline="\n")
                     except Exception:
                         pass
             summary["plugin_installed"] = True
@@ -857,12 +1150,12 @@ def run_install(
 
     home_rules_dir = agents_home_dir / "rules"
     home_rules_dir.mkdir(parents=True, exist_ok=True)
-    (home_rules_dir / "antigravity-rtk-rules.md").write_text(rules_content, encoding="utf-8")
+    (home_rules_dir / "antigravity-rtk-rules.md").write_text(rules_content, encoding="utf-8", newline="\n")
 
     if resolved_target is not None:
         target_rules_dir = resolved_target / ".agents" / "rules"
         target_rules_dir.mkdir(parents=True, exist_ok=True)
-        (target_rules_dir / "antigravity-rtk-rules.md").write_text(rules_content, encoding="utf-8")
+        (target_rules_dir / "antigravity-rtk-rules.md").write_text(rules_content, encoding="utf-8", newline="\n")
 
     # 6B. Context Hub (@aisuite/chub) CLI Discovery & Privacy Config Seeding
     if not skip_chub:
@@ -872,6 +1165,28 @@ def run_install(
         summary["chub_config_seeded"] = bool(chub_status.get("config_seeded"))
     else:
         summary["chub_config_seeded"] = _seed_chub_config(home_dir)
+
+    # 6C. REA (morluto/rea) CLI Bridge & Isolated Node 24.x Provisioning
+    rb_dest = gemini_dir / "scripts" / "rea_bridge.py"
+    rb_src = repo_root / ".antigravity" / "scripts" / "rea_bridge.py"
+    if not rb_src.is_file():
+        rb_src = repo_root / "core_framework" / "scripts" / "rea_bridge.py"
+    if rb_src.is_file():
+        (gemini_dir / "scripts").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(rb_src, rb_dest)
+        summary["rea_bridge_installed"] = True
+    elif rb_dest.is_file():
+        summary["rea_bridge_installed"] = True
+
+    attempt_rea = (not skip_rea) and (not bool(os.environ.get("PYTEST_CURRENT_TEST")))
+    rea_status = ensure_rea_installed(
+        repo_root=repo_root,
+        home_dir=home_dir,
+        attempt_install=attempt_rea,
+    )
+    summary["rea_installed"] = bool(rea_status.get("installed"))
+    summary["rea_version"] = rea_status.get("version")
+    summary["rea_isolated_node"] = bool(rea_status.get("isolated_node"))
 
     # 7. System 1 Decision Router & Laya Status (preserve existing tuned keys)
     laya_status = ensure_laya_installed(
@@ -909,10 +1224,10 @@ def run_install(
         base_decision_cfg["server_url"] = "http://127.0.0.1:8765"
     cfg_json = json.dumps(base_decision_cfg, indent=2) + "\n"
     gemini_dir.mkdir(parents=True, exist_ok=True)
-    (gemini_dir / "decision_config.json").write_text(cfg_json, encoding="utf-8")
+    (gemini_dir / "decision_config.json").write_text(cfg_json, encoding="utf-8", newline="\n")
     if resolved_target is not None and resolved_target.resolve() != repo_root.resolve():
         (resolved_target / ".antigravity").mkdir(parents=True, exist_ok=True)
-        (resolved_target / ".antigravity" / "decision_config.json").write_text(cfg_json, encoding="utf-8")
+        (resolved_target / ".antigravity" / "decision_config.json").write_text(cfg_json, encoding="utf-8", newline="\n")
     summary["decision_model_enabled"] = not disable_decision_model
 
     dr_dest = gemini_dir / "scripts" / "decision_router.py"
@@ -956,6 +1271,11 @@ def run_install(
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
     parser = argparse.ArgumentParser(
         description="Cross-Platform Installer for Antigravity Swarm Coordinator (macOS, Windows, Linux)."
     )
@@ -963,13 +1283,14 @@ def main() -> int:
     parser.add_argument("--home-dir", type=Path, default=None, help="Override home directory (for isolated testing)")
     parser.add_argument("--vault-dir", type=Path, default=None, help="Override Obsidian Knowledge Vault directory")
     parser.add_argument("--skip-prompt", action="store_true", help="Skip installing ~/.gemini/GEMINI.md and ~/.agents/AGENTS.md")
-    parser.add_argument("--skip-skills", action="store_true", help="Skip installing the 201 curated skills")
+    parser.add_argument("--skip-skills", action="store_true", help="Skip installing the 202 curated skills")
     parser.add_argument("--skip-plugin", action="store_true", help="Skip installing the antigravity-swarm plugin")
     parser.add_argument("--skip-vault", action="store_true", help="Skip initializing the local Obsidian Knowledge Vault")
     parser.add_argument("--clean-skills", action="store_true", help="Remove uncurated/duplicate skills from global skill folders")
     parser.add_argument("--install-obsidian-app", action="store_true", help="Attempt to install Obsidian desktop app if missing")
     parser.add_argument("--skip-rtk", action="store_true", help="Skip discovering or installing the rtk CLI binary")
     parser.add_argument("--skip-chub", action="store_true", help="Skip discovering or installing the @aisuite/chub CLI")
+    parser.add_argument("--skip-rea", action="store_true", help="Skip installing the rea-agents CLI and isolated Node 24.x runtime")
     parser.add_argument("--install-laya", action="store_true", help="Install NandhaKishorM/laya package for neural System 1 routing")
     parser.add_argument(
         "--disable-decision-model",
@@ -994,6 +1315,7 @@ def main() -> int:
         install_obsidian_app=args.install_obsidian_app,
         skip_rtk=args.skip_rtk,
         skip_chub=args.skip_chub,
+        skip_rea=args.skip_rea,
         install_laya=args.install_laya,
         disable_decision_model=args.disable_decision_model,
     )

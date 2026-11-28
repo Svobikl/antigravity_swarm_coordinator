@@ -17,7 +17,7 @@ CORE_COORDINATOR_SKILLS = frozenset({
     "asw-harness-adapt", "asw-loop", "asw-lsp", "asw-plan", "asw-programming",
     "asw-refactor", "asw-remove-ai-slops", "asw-review", "asw-rules",
     "asw-start-work", "asw-test-gui", "asw-ui-ux", "rtk-token-killer", "context-hub", "obs-memory", "agent-memory", "agent-memory-mcp",
-    "obsidian-markdown", "obsidian-cli", "obsidian-bases",
+    "obsidian-markdown", "obsidian-cli", "obsidian-bases", "rea-reference-recon",
 })
 
 REQUIRED_DOMAIN_REPRESENTATIVES = frozenset({
@@ -48,12 +48,12 @@ class TestSkillCatalogCuration(unittest.TestCase):
         self.ag_dir = self.home / ".agents" / "skills"
 
     def test_catalog_size_under_antigravity_budget(self):
-        """Global skill catalog must contain exactly 201 curated skills (strictly <= 215 budget)."""
+        """Global skill catalog must contain exactly 202 curated skills (strictly <= 215 budget)."""
         cfg_skills = {d.name for d in self.cfg_dir.iterdir() if d.is_dir()}
         self.assertEqual(
             len(cfg_skills),
-            201,
-            f"Expected exactly 201 curated skills in .gemini/config/skills, found {len(cfg_skills)}",
+            202,
+            f"Expected exactly 202 curated skills in .gemini/config/skills, found {len(cfg_skills)}",
         )
         ide_skills = {d.name for d in self.ide_dir.iterdir() if d.is_dir()}
         ag_skills = {d.name for d in self.ag_dir.iterdir() if d.is_dir()}
@@ -88,7 +88,7 @@ class TestSkillCatalogCuration(unittest.TestCase):
             )
 
     def test_core_and_multi_domain_coverage_preserved(self):
-        """All 39 Swarm Coordinator/ASW/Obsidian skills and all 9 domain representatives must exist."""
+        """All 47 Swarm Coordinator/ASW/Obsidian core skills and all 9 domain representatives must exist."""
         cfg_skills = {d.name for d in self.cfg_dir.iterdir() if d.is_dir()}
         missing_core = CORE_COORDINATOR_SKILLS - cfg_skills
         self.assertFalse(missing_core, f"Missing protected core skills: {missing_core}")
@@ -178,8 +178,7 @@ class TestSkillCatalogCuration(unittest.TestCase):
             bad_skill_dir = Path(tmp) / "edge-broken-skill"
             bad_skill_dir.mkdir(parents=True, exist_ok=True)
             bad_md = bad_skill_dir / "SKILL.md"
-            bad_md.write_bytes(b"\xef\xbb\xbf# Edge Broken Skill\n\nProvides specialized verification for edge-case skills.\n")
-            self.assertFalse(bad_md.read_text(encoding="utf-8-sig").startswith("---"))
+            bad_md.write_bytes(b"\xef\xbb\xbf---\r\nname: old\r\ndescription: old\r\n---\r\n\r\n# Edge Broken Skill\r\n\r\nProvides specialized verification for edge-case skills.\r\n")
             mod.normalize_skill_frontmatter(
                 bad_md,
                 "edge-broken-skill",
@@ -187,6 +186,7 @@ class TestSkillCatalogCuration(unittest.TestCase):
             )
             repaired_raw = bad_md.read_bytes()
             self.assertFalse(repaired_raw.startswith(b"\xef\xbb\xbf"))
+            self.assertNotIn(b"\r", repaired_raw, "normalize_skill_frontmatter must strip CRLF to pure LF")
             repaired_txt = repaired_raw.decode("utf-8")
             self.assertTrue(repaired_txt.startswith("---\nname: edge-broken-skill\ndescription: "))
 
@@ -1408,6 +1408,105 @@ class TestSkillCatalogCuration(unittest.TestCase):
         )
         self.assertIn("ASW PLAN MODE ENABLED!", msg_m7_clarify)
         self.assertNotIn("ASW SPEC-KIT CLARIFY GATE", msg_m7_clarify)
+
+    def test_rea_reference_recon_skill_and_mit_playbook_synced(self):
+        """M6: rea-reference-recon SKILL.md and MIT recon-playbook.md must sync cleanly across repo + home dirs with 0 BOM, desc<=120, and STE-100 compliance."""
+        import importlib.util
+
+        repo_root = Path(__file__).resolve().parent.parent
+        skill_roots = [
+            repo_root / "core_framework" / "skills",
+            repo_root / ".antigravity" / "skills",
+            self.cfg_dir,
+            self.ide_dir,
+            self.ag_dir,
+        ]
+        toon_path = repo_root / ".antigravity" / "scripts" / "toon_codec.py"
+        spec = importlib.util.spec_from_file_location("_toon_codec_rea_test", toon_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        toon_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(toon_mod)
+
+        skill_bytes_ref: bytes | None = None
+        playbook_bytes_ref: bytes | None = None
+
+        for root in skill_roots:
+            skill_dir = root / "rea-reference-recon"
+            skill_md = skill_dir / "SKILL.md"
+            playbook_md = skill_dir / "references" / "recon-playbook.md"
+            self.assertTrue(skill_md.is_file(), f"Missing SKILL.md at {skill_md}")
+            self.assertTrue(playbook_md.is_file(), f"Missing recon-playbook.md at {playbook_md}")
+
+            s_raw = skill_md.read_bytes()
+            p_raw = playbook_md.read_bytes()
+            self.assertFalse(s_raw.startswith(b"\xef\xbb\xbf"), f"UTF-8 BOM found in {skill_md}")
+            self.assertFalse(p_raw.startswith(b"\xef\xbb\xbf"), f"UTF-8 BOM found in {playbook_md}")
+            s_norm = s_raw.replace(b"\r\n", b"\n")
+            p_norm = p_raw.replace(b"\r\n", b"\n")
+
+            if skill_bytes_ref is None:
+                skill_bytes_ref = s_norm
+            else:
+                self.assertEqual(s_norm, skill_bytes_ref, f"SKILL.md out of sync at {skill_md}")
+            if playbook_bytes_ref is None:
+                playbook_bytes_ref = p_norm
+            else:
+                self.assertEqual(p_norm, playbook_bytes_ref, f"recon-playbook.md out of sync at {playbook_md}")
+
+        s_txt = skill_bytes_ref.decode("utf-8")
+        p_txt = playbook_bytes_ref.decode("utf-8")
+
+        fm_match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", s_txt, re.S)
+        self.assertIsNotNone(fm_match, "rea-reference-recon/SKILL.md missing YAML frontmatter")
+        fm = fm_match.group(1)
+        body = fm_match.group(2)
+        self.assertIn("name: rea-reference-recon", fm)
+        desc = None
+        for line in fm.splitlines():
+            if line.strip().startswith("description:"):
+                desc = line.split(":", 1)[1].strip().strip("\"'")
+                break
+        self.assertIsNotNone(desc, "SKILL.md missing single-line description")
+        self.assertTrue(15 <= len(desc) <= 120, f"Invalid description length {len(desc)}: {desc!r}")
+
+        for required_token in ("rea_bridge.py --recon", "Dual-Track", "### Reference Product Parity", "references/recon-playbook.md"):
+            self.assertIn(required_token, s_txt, f"SKILL.md missing {required_token!r}")
+
+        self.assertIn("MIT License", p_txt)
+        self.assertIn("Copyright (c) 2026 morluto", p_txt)
+        self.assertIn("https://github.com/morluto/rea", p_txt)
+
+        ste_skill = toon_mod.lint_ste100_text(body, max_words_per_bullet=24)
+        self.assertTrue(ste_skill["ok"], f"SKILL.md STE-100 violations: {ste_skill['violations']}")
+        ste_playbook = toon_mod.lint_ste100_text(p_txt, max_words_per_bullet=24)
+        self.assertTrue(ste_playbook["ok"], f"recon-playbook.md STE-100 violations: {ste_playbook['violations']}")
+
+    def test_curate_catalog_size_guard_and_mirror_parity(self):
+        """curate_catalog must reject catalog sizes != 202 and maintain byte-identical repo mirrors."""
+        import importlib.util
+        from unittest import mock
+
+        repo_root = Path(__file__).resolve().parent.parent
+        ag_curate = repo_root / ".antigravity" / "scripts" / "curate_skill_catalog.py"
+        core_curate = repo_root / "core_framework" / "scripts" / "curate_skill_catalog.py"
+        self.assertEqual(
+            ag_curate.read_bytes().replace(b"\r\n", b"\n"),
+            core_curate.read_bytes().replace(b"\r\n", b"\n"),
+        )
+
+        spec = importlib.util.spec_from_file_location("_curate_skill_catalog_test", ag_curate)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        curate_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(curate_mod)
+
+        res = curate_mod.curate_catalog(dry_run=True)
+        self.assertEqual(res["golden_target"], 202)
+
+        with mock.patch.dict(curate_mod.GOLDEN_CATALOG, {"temp-extra-skill": "Temporary test skill description."}):
+            with self.assertRaises(ValueError):
+                curate_mod.curate_catalog(dry_run=True)
 
 
 if __name__ == "__main__":

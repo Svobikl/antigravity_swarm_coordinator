@@ -632,10 +632,10 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
 
                 self.assertTrue(global_dst.is_file(), f"Missing deployed script: {global_dst}")
                 self.assertTrue(ag_dst.is_file(), f"Missing deployed script: {ag_dst}")
-                expected_bytes = ag_src.read_bytes()
-                self.assertEqual(cf_src.read_bytes(), expected_bytes, f"core_framework parity mismatch: {script_name}")
-                self.assertEqual(global_dst.read_bytes(), expected_bytes, f"~/.gemini/scripts mismatch: {script_name}")
-                self.assertEqual(ag_dst.read_bytes(), expected_bytes, f"~/.gemini/.antigravity/scripts mismatch: {script_name}")
+                expected_bytes = ag_src.read_bytes().replace(b"\r\n", b"\n")
+                self.assertEqual(cf_src.read_bytes().replace(b"\r\n", b"\n"), expected_bytes, f"core_framework parity mismatch: {script_name}")
+                self.assertEqual(global_dst.read_bytes().replace(b"\r\n", b"\n"), expected_bytes, f"~/.gemini/scripts mismatch: {script_name}")
+                self.assertEqual(ag_dst.read_bytes().replace(b"\r\n", b"\n"), expected_bytes, f"~/.gemini/.antigravity/scripts mismatch: {script_name}")
 
             plugin_agents_dir = fake_home / ".gemini" / "config" / "plugins" / "antigravity-swarm" / "agents"
             for agent_name in ("asw-reviewer.md", "asw-opposition-reviewer.md"):
@@ -645,10 +645,10 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
                 deployed_agent = plugin_agents_dir / agent_name
 
                 self.assertTrue(deployed_agent.is_file(), f"Missing deployed agent: {deployed_agent}")
-                expected_bytes = ag_agent.read_bytes()
-                self.assertEqual(cf_agent.read_bytes(), expected_bytes, f"core_framework parity mismatch: {agent_name}")
-                self.assertEqual(pl_agent.read_bytes(), expected_bytes, f"plugin parity mismatch: {agent_name}")
-                self.assertEqual(deployed_agent.read_bytes(), expected_bytes, f"deployed plugin agent mismatch: {agent_name}")
+                expected_bytes = ag_agent.read_bytes().replace(b"\r\n", b"\n")
+                self.assertEqual(cf_agent.read_bytes().replace(b"\r\n", b"\n"), expected_bytes, f"core_framework parity mismatch: {agent_name}")
+                self.assertEqual(pl_agent.read_bytes().replace(b"\r\n", b"\n"), expected_bytes, f"plugin parity mismatch: {agent_name}")
+                self.assertEqual(deployed_agent.read_bytes().replace(b"\r\n", b"\n"), expected_bytes, f"deployed plugin agent mismatch: {agent_name}")
 
                 agent_text = deployed_agent.read_text(encoding="utf-8")
                 self.assertIn("RETRACE", agent_text)
@@ -706,9 +706,9 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
             ag_dst_toon = fake_home / ".gemini" / ".antigravity" / "scripts" / "toon_codec.py"
             self.assertTrue(global_toon.is_file(), f"Missing deployed script: {global_toon}")
             self.assertTrue(ag_dst_toon.is_file(), f"Missing deployed script: {ag_dst_toon}")
-            expected_bytes = ag_toon.read_bytes()
-            self.assertEqual(global_toon.read_bytes(), expected_bytes, "~/.gemini/scripts/toon_codec.py mismatch")
-            self.assertEqual(ag_dst_toon.read_bytes(), expected_bytes, "~/.gemini/.antigravity/scripts/toon_codec.py mismatch")
+            expected_bytes = ag_toon.read_bytes().replace(b"\r\n", b"\n")
+            self.assertEqual(global_toon.read_bytes().replace(b"\r\n", b"\n"), expected_bytes, "~/.gemini/scripts/toon_codec.py mismatch")
+            self.assertEqual(ag_dst_toon.read_bytes().replace(b"\r\n", b"\n"), expected_bytes, "~/.gemini/.antigravity/scripts/toon_codec.py mismatch")
 
             deployed_hook = fake_home / ".gemini" / "config" / "plugins" / "antigravity-swarm" / "scripts" / "asw-hook.mjs"
             self.assertTrue(deployed_hook.is_file(), f"Missing deployed hook: {deployed_hook}")
@@ -729,6 +729,282 @@ class TestCrossPlatformInstallerAndMacOSRuntime(unittest.TestCase):
             reviewer_text = deployed_reviewer.read_text(encoding="utf-8")
             self.assertIn("--output .asw/reviews/blind-packet.md", reviewer_text)
             self.assertIn("collapsed_mirrors", reviewer_text)
+
+    def test_run_install_skip_rea_deploys_rea_bridge_without_network(self):
+        """M7: run_install(skip_rea=True) and PYTEST_CURRENT_TEST deploy rea_bridge.py without network calls."""
+        import importlib.util
+
+        install_py = self.repo_root / "install.py"
+        spec = importlib.util.spec_from_file_location("installer_mod_rea_skip", install_py)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_home = Path(tmp) / "fake_home"
+            fake_home.mkdir(parents=True)
+            with mock.patch("urllib.request.urlopen", side_effect=AssertionError("network call forbidden")):
+                summary = mod.run_install(
+                    repo_root=self.repo_root,
+                    home_dir=fake_home,
+                    skip_prompt=True,
+                    skip_skills=True,
+                    skip_plugin=True,
+                    skip_vault=True,
+                    skip_rtk=True,
+                    skip_chub=True,
+                    skip_rea=True,
+                    install_laya=False,
+                )
+                self.assertTrue(summary.get("rea_bridge_installed"), f"Expected rea_bridge_installed=True: {summary}")
+                self.assertFalse(summary.get("rea_installed"))
+                self.assertIsNone(summary.get("rea_version"))
+                self.assertFalse(summary.get("rea_isolated_node"))
+
+                ag_bridge = self.repo_root / ".antigravity" / "scripts" / "rea_bridge.py"
+                global_bridge = fake_home / ".gemini" / "scripts" / "rea_bridge.py"
+                ag_dst_bridge = fake_home / ".gemini" / ".antigravity" / "scripts" / "rea_bridge.py"
+                self.assertTrue(global_bridge.is_file(), f"Missing {global_bridge}")
+                self.assertTrue(ag_dst_bridge.is_file(), f"Missing {ag_dst_bridge}")
+                expected_bytes = ag_bridge.read_bytes().replace(b"\r\n", b"\n")
+                self.assertEqual(global_bridge.read_bytes().replace(b"\r\n", b"\n"), expected_bytes)
+                self.assertEqual(ag_dst_bridge.read_bytes().replace(b"\r\n", b"\n"), expected_bytes)
+
+                # Also verify PYTEST_CURRENT_TEST guard prevents implicit network download even with skip_rea=False
+                fake_home_implicit = Path(tmp) / "fake_home_implicit"
+                fake_home_implicit.mkdir(parents=True)
+                with mock.patch.dict("os.environ", {"PYTEST_CURRENT_TEST": "test_guard"}, clear=False):
+                    implicit_summary = mod.run_install(
+                        repo_root=self.repo_root,
+                        home_dir=fake_home_implicit,
+                        skip_prompt=True,
+                        skip_skills=True,
+                        skip_plugin=True,
+                        skip_vault=True,
+                        skip_rtk=True,
+                        skip_chub=True,
+                        skip_rea=False,
+                        install_laya=False,
+                    )
+                self.assertTrue(implicit_summary.get("rea_bridge_installed"))
+                self.assertFalse(implicit_summary.get("rea_installed"))
+
+    def test_write_rea_wrappers_posix_and_windows(self):
+        """M7: _write_rea_wrappers writes POSIX rea (chmod 0o755) and Windows rea.cmd wrappers."""
+        import importlib.util
+        import stat
+
+        install_py = self.repo_root / "install.py"
+        spec = importlib.util.spec_from_file_location("installer_mod_rea_wrap", install_py)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_root = root / "rea-runtime"
+            local_bin = root / "local-bin"
+            node_exe = runtime_root / "node" / "bin" / "node"
+            rea_mjs = runtime_root / "pkg" / "node_modules" / "rea-agents" / "scripts" / "rea.mjs"
+
+            posix_launcher = mod._write_rea_wrappers(
+                runtime_root, local_bin, node_exe, rea_mjs, is_win=False
+            )
+            self.assertEqual(posix_launcher, runtime_root / "bin" / "rea")
+            for p in (posix_launcher, local_bin / "rea"):
+                self.assertTrue(p.is_file(), f"Missing POSIX wrapper {p}")
+                content = p.read_text(encoding="utf-8")
+                self.assertTrue(content.startswith("#!/bin/sh\n"))
+                self.assertIn(f'exec "{node_exe}" "{rea_mjs}" "$@"', content)
+                if sys.platform != "win32":
+                    self.assertTrue((stat.S_IMODE(p.stat().st_mode) & 0o111) != 0)
+
+            win_launcher = mod._write_rea_wrappers(
+                runtime_root, local_bin, node_exe, rea_mjs, is_win=True
+            )
+            self.assertEqual(win_launcher, runtime_root / "bin" / "rea.cmd")
+            for p in (win_launcher, local_bin / "rea.cmd"):
+                self.assertTrue(p.is_file(), f"Missing Windows wrapper {p}")
+                raw = p.read_bytes()
+                self.assertEqual(
+                    raw.decode("utf-8"),
+                    f'@echo off\r\n"{node_exe}" "{rea_mjs}" %*\r\n',
+                )
+
+    def test_ensure_rea_installed_sha256_valid_and_tampered(self):
+        """M7: ensure_rea_installed verifies Node 24.x SHA256, extracts cleanly, and aborts on tampered hash."""
+        import hashlib
+        import importlib.util
+        import io
+        import tarfile
+
+        install_py = self.repo_root / "install.py"
+        spec = importlib.util.spec_from_file_location("installer_mod_rea_sha", install_py)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        archive_name = "node-v24.22.3-darwin-arm64.tar.gz"
+        top_dir = "node-v24.22.3-darwin-arm64"
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+            for rel_path, payload in (
+                (f"{top_dir}/bin/node", b"#!/bin/sh\necho v24.22.3\n"),
+                (f"{top_dir}/bin/npm", b"#!/bin/sh\nexit 0\n"),
+            ):
+                ti = tarfile.TarInfo(name=rel_path)
+                ti.size = len(payload)
+                ti.mode = 0o755
+                tf.addfile(ti, io.BytesIO(payload))
+        archive_bytes = buf.getvalue()
+        valid_sha = hashlib.sha256(archive_bytes).hexdigest()
+        shasums_ok = f"{valid_sha}  {archive_name}\n".encode("utf-8")
+        shasums_bad = f"{'0' * 64}  {archive_name}\n".encode("utf-8")
+
+        class _FakeResp:
+            def __init__(self, data: bytes):
+                self._data = data
+
+            def read(self) -> bytes:
+                return self._data
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        def _make_urlopen(shasums_bytes: bytes):
+            def _urlopen(url: str, timeout: int = 30):
+                if url.endswith("SHASUMS256.txt"):
+                    return _FakeResp(shasums_bytes)
+                if url.endswith(archive_name):
+                    return _FakeResp(archive_bytes)
+                raise AssertionError(f"Unexpected URL: {url}")
+
+            return _urlopen
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_home = Path(tmp) / "home_ok"
+            fake_home.mkdir(parents=True)
+
+            # Negative: attempt_install=False returns installed=False
+            no_inst = mod.ensure_rea_installed(
+                repo_root=self.repo_root,
+                home_dir=fake_home,
+                attempt_install=False,
+            )
+            self.assertEqual(
+                no_inst,
+                {"installed": False, "version": None, "path": None, "isolated_node": False},
+            )
+
+            real_subproc_run = subprocess.run
+
+            def _fake_subproc_run(cmd, *args, **kwargs):
+                cmd_list = [str(c) for c in cmd]
+                if "install" in cmd_list and "--prefix" in cmd_list:
+                    prefix_idx = cmd_list.index("--prefix") + 1
+                    pkg_prefix = Path(cmd_list[prefix_idx])
+                    rea_mjs = pkg_prefix / "node_modules" / "rea-agents" / "scripts" / "rea.mjs"
+                    rea_mjs.parent.mkdir(parents=True, exist_ok=True)
+                    rea_mjs.write_text("// stub rea.mjs\n", encoding="utf-8")
+                    return subprocess.CompletedProcess(cmd, 0, stdout="added 1 package\n", stderr="")
+                if cmd_list and cmd_list[-1] == "--version" and "rea-runtime" in cmd_list[0]:
+                    return subprocess.CompletedProcess(cmd, 0, stdout="1.2.3\n", stderr="")
+                return real_subproc_run(cmd, *args, **kwargs)
+
+            with (
+                mock.patch("platform.system", return_value="Darwin"),
+                mock.patch("platform.machine", return_value="arm64"),
+                mock.patch("shutil.which", return_value=None),
+                mock.patch("urllib.request.urlopen", side_effect=_make_urlopen(shasums_ok)),
+                mock.patch("subprocess.run", side_effect=_fake_subproc_run),
+            ):
+                res_ok = mod.ensure_rea_installed(
+                    repo_root=self.repo_root,
+                    home_dir=fake_home,
+                    attempt_install=True,
+                )
+
+            self.assertTrue(res_ok["installed"], f"Expected installed=True: {res_ok}")
+            self.assertTrue(res_ok["isolated_node"])
+            self.assertEqual(res_ok["version"], "1.2.3")
+            extracted_node = fake_home / ".gemini" / "rea-runtime" / "node" / "bin" / "node"
+            extracted_npm = fake_home / ".gemini" / "rea-runtime" / "node" / "bin" / "npm"
+            self.assertTrue(extracted_node.is_file(), f"Missing extracted node: {extracted_node}")
+            self.assertTrue(extracted_npm.is_file(), f"Missing extracted npm: {extracted_npm}")
+            self.assertFalse((fake_home / ".gemini" / "rea-runtime" / "node" / top_dir).exists())
+            self.assertTrue((fake_home / ".gemini" / "rea-runtime" / "bin" / "rea").is_file())
+            self.assertTrue((fake_home / ".local" / "bin" / "rea").is_file())
+
+            # Negative: tampered SHA256 must abort cleanly without writing node binary
+            fake_home_bad = Path(tmp) / "home_bad"
+            fake_home_bad.mkdir(parents=True)
+            with (
+                mock.patch("platform.system", return_value="Darwin"),
+                mock.patch("platform.machine", return_value="arm64"),
+                mock.patch("shutil.which", return_value=None),
+                mock.patch("urllib.request.urlopen", side_effect=_make_urlopen(shasums_bad)),
+            ):
+                res_bad = mod.ensure_rea_installed(
+                    repo_root=self.repo_root,
+                    home_dir=fake_home_bad,
+                    attempt_install=True,
+                )
+            self.assertFalse(res_bad["installed"])
+            self.assertIsNone(res_bad["version"])
+            self.assertIsNone(res_bad["path"])
+            self.assertFalse((fake_home_bad / ".gemini" / "rea-runtime" / "node" / "bin" / "node").exists())
+
+    def test_rea_bridge_loader_and_archive_safety_guards(self):
+        """M7: Verify _load_rea_bridge fallback/negative guards, existing runtime discovery, and archive path traversal checks."""
+        import importlib.util
+        import types
+
+        install_py = self.repo_root / "install.py"
+        spec = importlib.util.spec_from_file_location("installer_mod_rea_guards", install_py)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        # 1. _load_rea_bridge happy path (.antigravity) + core_framework fallback + missing/None spec
+        loaded = mod._load_rea_bridge(self.repo_root)
+        self.assertIsNotNone(loaded)
+        self.assertTrue(callable(getattr(loaded, "discover_rea_runtime", None)))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertIsNone(mod._load_rea_bridge(root))
+
+            cf_bridge = root / "core_framework" / "scripts" / "rea_bridge.py"
+            cf_bridge.parent.mkdir(parents=True)
+            cf_bridge.write_bytes((self.repo_root / ".antigravity" / "scripts" / "rea_bridge.py").read_bytes())
+            loaded_cf = mod._load_rea_bridge(root)
+            self.assertIsNotNone(loaded_cf)
+            self.assertTrue(callable(getattr(loaded_cf, "satisfies_rea_node_range", None)))
+
+            with mock.patch("importlib.util.spec_from_file_location", return_value=None):
+                self.assertIsNone(mod._load_rea_bridge(self.repo_root))
+            with mock.patch("importlib.util.spec_from_file_location", return_value=types.SimpleNamespace(loader=None)):
+                self.assertIsNone(mod._load_rea_bridge(self.repo_root))
+
+            # 2. Existing managed runtime discovered without attempt_install=True
+            fake_home = root / "home_existing"
+            launcher = fake_home / ".gemini" / "rea-runtime" / "bin" / ("rea.cmd" if sys.platform == "win32" else "rea")
+            launcher.parent.mkdir(parents=True)
+            if sys.platform == "win32":
+                launcher.write_text("@echo off\r\necho 2.4.0\r\n", encoding="utf-8", newline="")
+            else:
+                launcher.write_text("#!/bin/sh\necho 2.4.0\n", encoding="utf-8", newline="\n")
+                launcher.chmod(0o755)
+            found = mod.ensure_rea_installed(repo_root=self.repo_root, home_dir=fake_home, attempt_install=False)
+            self.assertTrue(found["installed"])
+            self.assertEqual(found["version"], "2.4.0")
+            self.assertTrue(found["isolated_node"])
+
+        # 3. _safe_strip_archive_parts boundary and traversal checks
+        self.assertEqual(mod._safe_strip_archive_parts("node-v24.22.3-darwin-arm64"), [])
+        self.assertEqual(mod._safe_strip_archive_parts("node-v24.22.3-darwin-arm64/bin/node"), ["bin", "node"])
+        for bad_path in ("/etc/passwd", "\\Windows\\System32", "node-v24/../../evil", "C:/evil/node"):
+            with self.assertRaises(ValueError):
+                mod._safe_strip_archive_parts(bad_path)
 
 
 if __name__ == "__main__":

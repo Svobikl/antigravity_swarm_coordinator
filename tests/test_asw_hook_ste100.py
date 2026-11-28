@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -182,6 +183,122 @@ class TestAswHookSte100(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             msg = json.loads(proc.stdout)["injectSteps"][0]["userMessage"]
             self.assertIn(expected_header, msg)
+
+    def _run_hook(self, prompt: str, extra_env: dict[str, str] | None = None) -> dict[str, object]:
+        env = dict(os.environ)
+        env.pop("ASW_DECISION_MODEL_ENABLED", None)
+        if extra_env:
+            env.update(extra_env)
+        proc = subprocess.run(
+            ["node", str(HOOK_SCRIPT)],
+            input=json.dumps({"invocationNum": 1, "lastUserInput": prompt, "cwd": str(REPO_ROOT)}),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            timeout=15,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout)
+
+    def test_m4_reference_product_recon_gate_positive(self):
+        """M4: Figurative analogies inject Opt-In ask_question gate; explicit REA/artifacts inject Direct gate."""
+        opt_in_prompts = (
+            ("/asw chci aby to vypadalo a fungovalo jako Raycast", "reference-raycast.md"),
+            ("/asw-plan tato funkcionalita by měla být podobná Notion", "reference-notion.md"),
+            ("/asw build a command palette like Linear", "reference-linear.md"),
+        )
+        for prompt, expected_out_file in opt_in_prompts:
+            with self.subTest(prompt=prompt, mode="opt_in"):
+                data = self._run_hook(prompt)
+                msg = data["injectSteps"][0]["userMessage"]
+                self.assertIn("ASW REFERENCE-PRODUCT RECON GATE", msg)
+                self.assertIn("AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:", msg)
+                self.assertLess(
+                    msg.index("ASW REFERENCE-PRODUCT RECON GATE"),
+                    msg.index("AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:"),
+                )
+
+                skills_idx = msg.index("AUTO-ACTIVATED SUB-SKILLS & DOMAIN SKILLS:")
+                skills_block = msg[skills_idx:]
+                self.assertIn("rea-reference-recon", skills_block)
+
+                gate_blocks = [
+                    p for p in msg.split("\n\n") if p.startswith("ASW REFERENCE-PRODUCT RECON GATE")
+                ]
+                self.assertEqual(len(gate_blocks), 1, f"Expected single gate block in:\n{msg}")
+                gate_block = gate_blocks[0]
+
+                for required in (
+                    "Opt-In",
+                    "ask_question",
+                    "(Recommended)",
+                    "rea_bridge.py --recon",
+                    f'--output ".asw/evidence/{expected_out_file}"',
+                    "FALLBACK_REQUIRED",
+                    "### Reference Product Parity",
+                    "<frozen-after-approval>",
+                ):
+                    self.assertIn(required, gate_block)
+
+                self.assertLessEqual(
+                    len(gate_block.split()),
+                    55,
+                    f"Gate block exceeded 55 words ({len(gate_block.split())}):\n{gate_block}",
+                )
+                lint = tc.lint_ste100_text(gate_block, max_words_per_bullet=22)
+                self.assertTrue(lint["ok"], f"Gate block failed STE-100 lint: {lint}")
+
+        direct_prompts = (
+            ('/asw Analyzuj "/Applications/Slack.app" přes rea', "reference-applications-slack-app.md"),
+            ("/asw-plan vytvoř editor jako Notion --with-rea", "reference-notion.md"),
+        )
+        for prompt, expected_out_file in direct_prompts:
+            with self.subTest(prompt=prompt, mode="direct"):
+                data = self._run_hook(prompt)
+                msg = data["injectSteps"][0]["userMessage"]
+                gate_blocks = [
+                    p for p in msg.split("\n\n") if p.startswith("ASW REFERENCE-PRODUCT RECON GATE")
+                ]
+                self.assertEqual(len(gate_blocks), 1, f"Expected single gate block in:\n{msg}")
+                gate_block = gate_blocks[0]
+                self.assertIn("Direct", gate_block)
+                self.assertNotIn("ask_question", gate_block)
+                self.assertIn(f'--output ".asw/evidence/{expected_out_file}"', gate_block)
+                self.assertLessEqual(len(gate_block.split()), 55)
+                lint = tc.lint_ste100_text(gate_block, max_words_per_bullet=22)
+                self.assertTrue(lint["ok"], f"Direct gate block failed STE-100 lint: {lint}")
+
+    def test_m5_reference_product_recon_gate_negative_and_bypasses(self):
+        """M5: Non-reference, consultation, --no-rea, disabled router, and synthetic cascade never inject REA gate."""
+        # 1. False-positive analogy ("jako např. int nebo string")
+        msg_fp = self._run_hook("/asw přidej parametr jako např. int nebo string")["injectSteps"][0]["userMessage"]
+        self.assertNotIn("ASW REFERENCE-PRODUCT RECON GATE", msg_fp)
+        self.assertNotIn("rea-reference-recon", msg_fp)
+
+        # 2. Consultation questions ("/asw Jak funguje REA?" and "/asw Jak funguje rea-agents?")
+        for consult_prompt in ("/asw Jak funguje REA?", "/asw Jak funguje rea-agents?"):
+            msg_consult = self._run_hook(consult_prompt)["injectSteps"][0]["userMessage"]
+            self.assertIn("ASW CONSULTATION / MODE 1 ENABLED!", msg_consult)
+            self.assertNotIn("ASW REFERENCE-PRODUCT RECON GATE", msg_consult)
+            self.assertNotIn("rea-reference-recon", msg_consult)
+
+        # 3. Explicit --no-rea bypass
+        msg_no_rea = self._run_hook("/asw-plan vytvoř editor jako Notion --no-rea")["injectSteps"][0]["userMessage"]
+        self.assertIn("ASW PLAN MODE ENABLED!", msg_no_rea)
+        self.assertNotIn("ASW REFERENCE-PRODUCT RECON GATE", msg_no_rea)
+        self.assertNotIn("rea-reference-recon", msg_no_rea)
+
+        # 4. Router disabled via ASW_DECISION_MODEL_ENABLED=0
+        msg_disabled = self._run_hook(
+            "/asw vytvoř editor jako Notion",
+            extra_env={"ASW_DECISION_MODEL_ENABLED": "0"},
+        )["injectSteps"][0]["userMessage"]
+        self.assertNotIn("ASW REFERENCE-PRODUCT RECON GATE", msg_disabled)
+
+        # 5. Synthetic cascading guard
+        synthetic_out = self._run_hook("ASW REFERENCE-PRODUCT RECON GATE (Target: Raycast): ...")
+        self.assertEqual(synthetic_out, {})
 
 
 if __name__ == "__main__":

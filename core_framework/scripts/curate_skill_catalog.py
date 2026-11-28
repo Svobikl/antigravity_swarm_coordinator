@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Curate and synchronize the Antigravity Multi-Domain Golden Skill Catalog (201 skills).
+"""Curate and synchronize the Antigravity Multi-Domain Golden Skill Catalog (202 skills).
 
 Eliminates duplicate, overlapping, placeholder, and foreign-language bloat across:
   - ~/.gemini/config/skills
@@ -21,8 +21,8 @@ import sys
 from pathlib import Path
 
 GOLDEN_CATALOG: dict[str, str] = {
-    # === 1. Swarm Coordinator, ASW & Obsidian Memory Core (45 skills) ===
-    "swarm-coordinator": "Global orchestration lead enforcing Mode 0-5 routing, Tri-Model gates, and verification.",
+    # === 1. Swarm Coordinator, ASW & Obsidian Memory Core (46 skills) ===
+    "swarm-coordinator": "Global orchestration lead enforcing Mode 0-5 routing, Quad-Model gates, and verification.",
     "skill-router": "Selects a bounded active skill set (max 8 skills) from the catalog per leaf task.",
     "program-state-controller": "Manages Mode 5 control-plane files, task graphs, requirement ledgers, and state transitions.",
     "spec-product-analyst": "Translates user goals into precise, testable requirements, acceptance criteria, and non-goals.",
@@ -58,7 +58,7 @@ GOLDEN_CATALOG: dict[str, str] = {
     "asw-review": "Reviews diffs, test evidence, hooks, packaging, and real-surface QA transcripts.",
     "asw-rules": "Loads and enforces project-level rules and instruction precedence hierarchies.",
     "asw-start-work": "Executes approved .asw/plans checklists wave-by-wave with persistent state tracking.",
-    "asw-test-gui": "On-demand physical GUI and localhost Playwright verification for web, native, and mobile apps.",
+    "asw-test-gui": "Auto-activated and on-demand physical GUI and Playwright verification for web, native, and mobile apps.",
     "asw-ui-ux": "Product-grade frontend UI/UX and README visual presentation workflow for ASW deliveries.",
     "context-hub": "Fetches versioned API/SDK docs via chub CLI and saves sanitized self-improvement notes.",
     "obs-memory": "Orients sessions, queries project notes, and records recaps in the Obsidian Knowledge Vault.",
@@ -67,6 +67,7 @@ GOLDEN_CATALOG: dict[str, str] = {
     "obsidian-markdown": "Creates and edits Obsidian Flavored Markdown with wikilinks, callouts, and frontmatter.",
     "obsidian-cli": "Executes Obsidian vault queries, note operations, and index maintenance from the CLI.",
     "obsidian-bases": "Creates and manages Obsidian Bases (.base files) with structured views and formulas.",
+    "rea-reference-recon": "Extracts evidence-backed behavior and UI specs from reference apps/SW via REA CLI.",
 
     # === 2. Legal, Contracts, GDPR, Compliance & Regulatory (9 skills) ===
     "lex": "Cross-jurisdictional legal analysis (EU, US, CA) and commercial contract scaffolding.",
@@ -255,12 +256,12 @@ def normalize_skill_frontmatter(skill_md: Path, skill_name: str, concise_desc: s
     raw = skill_md.read_bytes()
     if raw.startswith(b"\xef\xbb\xbf"):
         raw = raw[3:]
-    txt = raw.decode("utf-8", errors="replace")
-    m = re.match(r"^---\s*\r?\n(.*?)\r?\n---\s*\r?\n(.*)$", txt, re.S)
+    txt = raw.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+    m = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", txt, re.S)
     if m:
-        body = m.group(2).lstrip("\r\n")
+        body = m.group(2).lstrip("\n")
     else:
-        body = txt.lstrip("\r\n")
+        body = txt.lstrip("\n")
 
     clean_frontmatter = (
         f"---\n"
@@ -272,8 +273,8 @@ def normalize_skill_frontmatter(skill_md: Path, skill_name: str, concise_desc: s
 
 
 def curate_catalog(*, dry_run: bool = False) -> dict[str, object]:
-    if len(GOLDEN_CATALOG) != 201:
-        raise ValueError(f"GOLDEN_CATALOG must have exactly 201 skills, got {len(GOLDEN_CATALOG)}")
+    if len(GOLDEN_CATALOG) != 202:
+        raise ValueError(f"GOLDEN_CATALOG must have exactly 202 skills, got {len(GOLDEN_CATALOG)}")
 
     home = Path.home()
     cfg_dir = home / ".gemini" / "config" / "skills"
@@ -328,7 +329,7 @@ def curate_catalog(*, dry_run: bool = False) -> dict[str, object]:
                 if local_md.exists():
                     normalize_skill_frontmatter(local_md, name, desc)
 
-        # Step 4: Synchronize all 201 normalized skills from cfg_dir into ide_dir and ag_dir
+        # Step 4: Synchronize all 202 normalized skills from cfg_dir into ide_dir and ag_dir
         for mirror_root in (ide_dir, ag_dir):
             mirror_root.mkdir(parents=True, exist_ok=True)
             for name in sorted(GOLDEN_CATALOG):
@@ -350,7 +351,7 @@ def curate_catalog(*, dry_run: bool = False) -> dict[str, object]:
                 m_data = json.loads(deployed_manifest.read_text(encoding="utf-8"))
                 if "skills" in m_data:
                     m_data.pop("skills", None)
-                    deployed_manifest.write_text(json.dumps(m_data, indent=2) + "\n", encoding="utf-8")
+                    deployed_manifest.write_text(json.dumps(m_data, indent=2) + "\n", encoding="utf-8", newline="\n")
             except Exception:
                 pass
 
@@ -413,7 +414,7 @@ def verify_catalog() -> dict[str, object]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Curate and verify the Antigravity 201-skill Golden Catalog.")
+    parser = argparse.ArgumentParser(description="Curate and verify the Antigravity 202-skill Golden Catalog.")
     parser.add_argument("--dry-run", action="store_true", help="Report actions without modifying files.")
     parser.add_argument("--verify", action="store_true", help="Verify the curated catalog state.")
     args = parser.parse_args()

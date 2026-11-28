@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { redactSecrets, safeMode } from "./asw-redact.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SYNTHETIC_MODE_RE = /ASW\s+(?:[A-Z0-9_-]+\s+MODE|CONSULTATION\s*\/\s*MODE\s+1)\s+ENABLED!|ASW\s+SPEC-KIT\s+CLARIFY\s+GATE/i;
+const SYNTHETIC_MODE_RE = /ASW\s+(?:[A-Z0-9_-]+\s+MODE|CONSULTATION\s*\/\s*MODE\s+1)\s+ENABLED!|ASW\s+SPEC-KIT\s+CLARIFY\s+GATE|ASW\s+REFERENCE-PRODUCT\s+RECON\s+GATE/i;
 
 function pythonBin() {
   return process.platform === "win32" ? "python" : "python3";
@@ -188,7 +188,12 @@ function queryAutoDecisionRouter(prompt, repoDir) {
     const res = spawnSync(
       process.platform === "win32" ? "python" : "python3",
       [routerPath, "--mode", "route-prompt", "--compact", "--text", String(prompt)],
-      { timeout: 1500, encoding: "utf8", cwd: safeCwd }
+      {
+        timeout: 1500,
+        encoding: "utf8",
+        cwd: safeCwd,
+        env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+      }
     );
     if (res.status === 0 && res.stdout) {
       const parsed = JSON.parse(res.stdout);
@@ -207,6 +212,7 @@ const WORD = "(?<![A-Za-z0-9_./-])/?";
 const END = "(?![A-Za-z0-9_/-])";
 const CLARIFY_RE = new RegExp(`${WORD}(?:asw-clarify|swarmwork-clarify|asw\\s+clarify)${END}`, "i");
 const NO_CLARIFY_RE = /(?:--no-clarify|(?<![A-Za-z0-9_\u00c0-\u024f])(?:no-clarify|bez\s+dopt[aá]v[aá]n[ií]|neptej\s+se|rozhodni\s+s[aá]m|skip\s+clarify)(?![A-Za-z0-9_\u00c0-\u024f]))/i;
+const NO_REA_RE = /(?:--no-rea|(?<![A-Za-z0-9_\u00c0-\u024f])(?:no-rea|bez\s+rea|skip\s+rea)(?![A-Za-z0-9_\u00c0-\u024f]))/i;
 const PLAN_RE = new RegExp(`${WORD}(?:asw-plan|swarmwork-plan|asw\\s+plan)${END}`);
 const GOAL_RE = new RegExp(`${WORD}(?:asw-goal|swarmwork-goal|asw\\s+goal)${END}`);
 const START_WORK_RE = new RegExp(`${WORD}(?:start-work|asw-start-work|swarmwork-start|asw\\s+start\\s+work)${END}`);
@@ -432,10 +438,39 @@ export function buildClarifyGateDirective(route) {
   ].join("\n");
 }
 
-export function formatAutoSkillsDirective(route) {
+export function buildReaGateDirective(route) {
+  const recon = route && typeof route === "object" ? route.reference_recon : null;
+  const rawTargets = Array.isArray(recon?.targets) ? recon.targets : [];
+  const sanitize = (v) => String(v ?? "").replace(/["`$\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  const targets = rawTargets.map(sanitize).filter(Boolean).slice(0, 3);
+  const label = targets.length > 0 ? targets.join(", ") : "reference-product";
+  const safePrimary = targets[0] ?? "reference-product";
+  const slug = safePrimary.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "target";
+  if (Boolean(recon?.ask_confirmation)) {
+    return [
+      `ASW REFERENCE-PRODUCT RECON GATE (Target: ${label} | Opt-In):`,
+      `1. Confirm Scope First: Ask via \`ask_question\` (\`(Recommended) Basic model/docs lookup (skip REA)\` vs \`Full REA reverse-engineering\`) before running \`rea_bridge.py\`.`,
+      `2. If Full REA Chosen: Run \`python .antigravity/scripts/rea_bridge.py --recon "${safePrimary}" --output ".asw/evidence/reference-${slug}.md"\` (\`FALLBACK_REQUIRED\` -> \`### Reference Product Parity\` in \`<frozen-after-approval>\`).`,
+    ].join("\n");
+  }
+  return [
+    `ASW REFERENCE-PRODUCT RECON GATE (Target: ${label} | Direct):`,
+    `1. Extract Evidence First: Run \`python .antigravity/scripts/rea_bridge.py --recon "${safePrimary}" --output ".asw/evidence/reference-${slug}.md"\` before planning.`,
+    `2. Dual-Track Clean-Room Parity: On \`FALLBACK_REQUIRED\`, capture live docs/UI via \`asw-librarian\`/\`browser\` into \`### Reference Product Parity\` in \`<frozen-after-approval>\` (zero asset copying).`,
+  ].join("\n");
+}
+
+export function formatAutoSkillsDirective(route, options = {}) {
   if (!route || route.enabled === false) return "";
-  const autoSkills = Array.isArray(route.auto_subskills) ? route.auto_subskills : [];
-  const domainSkills = Array.isArray(route.selected_skills) ? route.selected_skills : [];
+  const suppressRea = Boolean(options?.suppressRea);
+  const rawAuto = Array.isArray(route.auto_subskills) ? route.auto_subskills : [];
+  const rawDomain = Array.isArray(route.selected_skills) ? route.selected_skills : [];
+  const autoSkills = suppressRea
+    ? rawAuto.filter((s) => String(s ?? "").trim() !== "rea-reference-recon")
+    : rawAuto;
+  const domainSkills = suppressRea
+    ? rawDomain.filter((s) => String(s ?? "").trim() !== "rea-reference-recon")
+    : rawDomain;
   const combined = [];
   for (const s of [...autoSkills, ...domainSkills]) {
     const name = String(s ?? "").trim();
@@ -530,12 +565,21 @@ export function directiveFor(prompt, payload = {}, repoDir = "") {
         : isDecisionModelEnabled(repoDir)
       : route?.clarification_gate?.needs_clarification === true);
 
+  const noRea = NO_REA_RE.test(stripped);
+  const wantsReaGate =
+    !isConsultation &&
+    !noRea &&
+    route?.enabled !== false &&
+    route?.reference_recon?.needs_recon === true &&
+    (isClarifyEligibleCmd || autoRouterOptIn);
+
   const sections = [];
   if (base) sections.push(base);
   if (wantsClarifyGate) sections.push(buildClarifyGateDirective(route));
+  if (wantsReaGate) sections.push(buildReaGateDirective(route));
   if (hasExplicitTestGui || wantsAutoGui) sections.push(TEST_GUI_DIRECTIVE);
 
-  const skillsBlock = formatAutoSkillsDirective(route);
+  const skillsBlock = formatAutoSkillsDirective(route, { suppressRea: noRea || isConsultation });
   if (skillsBlock && sections.length > 0) {
     sections.push(skillsBlock);
   }

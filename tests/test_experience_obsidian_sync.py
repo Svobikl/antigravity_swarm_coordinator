@@ -325,7 +325,7 @@ class TestSkillsAndRouting(unittest.TestCase):
             ]:
                 raw = skill_path.read_bytes()
                 self.assertFalse(raw.startswith(b"\xef\xbb\xbf"), f"{skill_path} must not have UTF-8 BOM")
-                content = raw.decode("utf-8")
+                content = raw.decode("utf-8").replace("\r\n", "\n")
                 self.assertTrue(content.startswith("---\n"), f"{skill_path} missing frontmatter start")
                 self.assertIn(f"name: {expected_name}", content)
                 desc_lines = [l for l in content.splitlines()[:10] if l.startswith("description:")]
@@ -343,12 +343,12 @@ class TestSkillsAndRouting(unittest.TestCase):
             router_content = skill_router.read_text(encoding="utf-8")
             self.assertIn("asw-harness-adapt", router_content)
 
-        # Repo skill trees must be byte-identical for shared skills
+        # Repo skill trees must be identical (CRLF-normalized) for shared skills
         for sk in ("asw-harness-adapt", "skill-router"):
-            ref_bytes = (skill_trees[0] / sk / "SKILL.md").read_bytes()
+            ref_bytes = (skill_trees[0] / sk / "SKILL.md").read_bytes().replace(b"\r\n", b"\n")
             for tree in skill_trees[1:]:
                 self.assertEqual(
-                    (tree / sk / "SKILL.md").read_bytes(),
+                    (tree / sk / "SKILL.md").read_bytes().replace(b"\r\n", b"\n"),
                     ref_bytes,
                     f"{tree / sk / 'SKILL.md'} differs from {skill_trees[0] / sk / 'SKILL.md'}",
                 )
@@ -381,9 +381,9 @@ class TestSkillsAndRouting(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in ad.iterdir() if p.is_file()), ref_files)
             for fname in ref_files:
                 self.assertEqual(
-                    (ad / fname).read_bytes(),
-                    (agent_dirs[0] / fname).read_bytes(),
-                    f"Agent file {ad / fname} is not byte-identical to {agent_dirs[0] / fname}",
+                    (ad / fname).read_bytes().replace(b"\r\n", b"\n"),
+                    (agent_dirs[0] / fname).read_bytes().replace(b"\r\n", b"\n"),
+                    f"Agent file {ad / fname} does not match {agent_dirs[0] / fname}",
                 )
 
         for fname in ref_files:

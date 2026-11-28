@@ -372,12 +372,12 @@ class TestBMADMethodIntegration(unittest.TestCase):
         ]
 
         for agent_file, tools_line in expected_tools.items():
-            ref_bytes = (mirror_dirs[0] / agent_file).read_bytes()
+            ref_bytes = (mirror_dirs[0] / agent_file).read_bytes().replace(b"\r\n", b"\n")
             for md_dir in mirror_dirs[1:]:
                 self.assertEqual(
-                    (md_dir / agent_file).read_bytes(),
+                    (md_dir / agent_file).read_bytes().replace(b"\r\n", b"\n"),
                     ref_bytes,
-                    f"{md_dir / agent_file} is not byte-identical to {mirror_dirs[0] / agent_file}",
+                    f"{md_dir / agent_file} does not match {mirror_dirs[0] / agent_file}",
                 )
 
             txt = ref_bytes.decode("utf-8")
@@ -492,7 +492,10 @@ class TestBMADMethodIntegration(unittest.TestCase):
                 self.assertTrue(res_real["ok"], f"Expected adaptive-speckit-clarify-gate.md to pass: {res_real}")
                 self.assertEqual(res_real["total_findings"], 0)
 
-        self.assertEqual(SPINE_SCRIPT.read_bytes(), cf_spine_script.read_bytes())
+        self.assertEqual(
+            SPINE_SCRIPT.read_bytes().replace(b"\r\n", b"\n"),
+            cf_spine_script.read_bytes().replace(b"\r\n", b"\n"),
+        )
 
     def test_m6_bmad_lint_spine_format_json_and_toon(self):
         """M6: bmad_lint_spine.py defaults to pretty JSON and emits encode_smart TOON via --format toon."""

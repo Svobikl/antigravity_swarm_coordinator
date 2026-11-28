@@ -363,7 +363,7 @@ class TestContextHubIntegration(unittest.TestCase):
             self.assertIn("[Untrusted local annotation", recall_proc.stdout)
 
     def test_m7_readme_context_hub_documentation_parity(self) -> None:
-        """M7: README.md documents Context Hub (@aisuite/chub), self-improvement sync, and 201-skill catalog."""
+        """M7: README.md documents Context Hub (@aisuite/chub), self-improvement sync, and 202-skill catalog."""
         readme_path = REPO_ROOT / "README.md"
         self.assertTrue(readme_path.is_file(), f"Missing {readme_path}")
         txt = readme_path.read_text(encoding="utf-8")
@@ -377,8 +377,9 @@ class TestContextHubIntegration(unittest.TestCase):
         self.assertIn("CHUB_TELEMETRY=0", txt)
         self.assertIn("CHUB_FEEDBACK=0", txt)
         self.assertIn("lessons/Context Hub API Annotations.md", txt)
-        self.assertIn("201", txt)
-        self.assertIn("201-Skill", txt)
+        self.assertIn("202", txt)
+        self.assertIn("202-Skill", txt)
+        self.assertNotIn("201-Skill", txt)
         self.assertNotIn("200-Skill", txt)
 
 

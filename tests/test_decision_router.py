@@ -244,6 +244,7 @@ class TestDecisionRouter(unittest.TestCase):
             [sys.executable, str(script_path), "--mode", "route-prompt", "--compact", "--text", prompt],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         out1 = p1.stdout.strip()
@@ -253,6 +254,7 @@ class TestDecisionRouter(unittest.TestCase):
             [sys.executable, str(script_path), "--mode", "route-prompt", "--compact", "--text", prompt],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         out2 = p2.stdout.strip()
@@ -293,6 +295,7 @@ class TestDecisionRouter(unittest.TestCase):
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         data_cli = json.loads(p_cli.stdout)
@@ -396,12 +399,14 @@ class TestDecisionRouter(unittest.TestCase):
             [sys.executable, str(script_path), "--mode", "judge-loop", "--compact", "--text", digest],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         p2 = subprocess.run(
             [sys.executable, str(script_path), "--mode", "judge-loop", "--compact", "--text", digest],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         out1 = p1.stdout.strip()
@@ -845,6 +850,7 @@ class TestDecisionRouter(unittest.TestCase):
             [sys.executable, str(script_path), "--benchmark-routing"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         cli_report = json.loads(proc.stdout)
@@ -1039,6 +1045,7 @@ class TestDecisionRouter(unittest.TestCase):
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         cli_data = json.loads(proc.stdout.strip())
@@ -1566,6 +1573,314 @@ class TestDecisionRouter(unittest.TestCase):
             self.assertGreaterEqual(len(g_forced["missing_dimensions"]), 1)
             self.assertLessEqual(len(g_forced["missing_dimensions"]), 3)
             self.assertEqual(g_forced["max_questions"], 3)
+
+    # --- REA Reference-Product Recon Gate (M4, M5) ---
+    def test_rea_m4_positive_bilingual_reference_product_prompts(self):
+        """M4: 12 bilingual CZ/EN positive reference-product prompts trigger reference_recon and rea-reference-recon."""
+        positive_cases = [
+            ("chci aby to fungovalo/vypadalo jako Raycast", "Raycast", "reference_product_analogy"),
+            ("chci aby to fungovalo jako Raycast", "Raycast", "reference_product_analogy"),
+            ("tato funkcionalita by měla být podobná XY", "XY", "reference_product_analogy"),
+            ("tato funkcionalita by měla být podobná Notion", "Notion", "reference_product_analogy"),
+            ("vytvoř dashboard ve stylu Obsidian", "Obsidian", "reference_product_analogy"),
+            ("Vytvoř editor jako Notion", "Notion", "reference_product_analogy"),
+            ("Implementuj vyhledávání inspirované Alfred", "Alfred", "reference_product_analogy"),
+            ("Build a command palette like Linear", "Linear", "reference_product_analogy"),
+            ("Make the search workflow work just like in Raycast", "Raycast", "reference_product_analogy"),
+            ("Design an editor inspired by VS Code", "VS Code", "reference_product_analogy"),
+            ("Implement a notes workspace similar to Obsidian", "Obsidian", "reference_product_analogy"),
+            ("Analyzuj resources/app.asar a vyextrahuj IPC kontrakty", "resources/app.asar", "explicit_rea_or_artifact"),
+        ]
+        self.assertEqual(len(positive_cases), 12)
+        for prompt, expected_target, expected_reason in positive_cases:
+            with self.subTest(prompt=prompt):
+                expected_ask = expected_reason == "reference_product_analogy"
+                direct = decision_router.detect_reference_product_intent(prompt)
+                self.assertIs(direct["needs_recon"], True)
+                self.assertIs(direct["ask_confirmation"], expected_ask)
+                self.assertEqual(direct["reason"], expected_reason)
+                self.assertTrue(
+                    any(expected_target.lower() in t.lower() for t in direct["targets"]),
+                    f"Expected {expected_target!r} in {direct['targets']!r} for {prompt!r}",
+                )
+
+                routed = self.router.route_prompt(prompt)
+                self.assertEqual(routed["opt_tokens"], 0.0)
+                self.assertFalse(routed["is_consultation"])
+                recon = routed["reference_recon"]
+                self.assertIs(recon["needs_recon"], True)
+                self.assertIs(recon["ask_confirmation"], expected_ask)
+                self.assertEqual(recon["reason"], expected_reason)
+                self.assertIn("rea-reference-recon", routed["auto_subskills"])
+                self.assertLessEqual(len(routed["auto_subskills"]) + len(routed["selected_skills"]), 8)
+
+        # Implicit multi-word reference-product build prompt promotes cleanly to mode_3
+        notion_build = self.router.route_prompt("Vytvoř editor jako Notion")
+        self.assertEqual(notion_build["execution_mode"], "mode_3")
+        self.assertTrue(notion_build["requires_subagent_plan_wave"])
+        self.assertIs(notion_build["reference_recon"]["ask_confirmation"], True)
+
+        # Explicit --with-rea / rea cue bypasses confirmation (ask_confirmation=False)
+        notion_with_rea = self.router.route_prompt("Vytvoř editor jako Notion --with-rea")
+        self.assertIs(notion_with_rea["reference_recon"]["needs_recon"], True)
+        self.assertIs(notion_with_rea["reference_recon"]["ask_confirmation"], False)
+        self.assertEqual(notion_with_rea["reference_recon"]["reason"], "explicit_rea_or_artifact")
+
+        # Quoted .app path with explicit rea cue still extracts the artifact target without confirmation prompt
+        slack_res = self.router.route_prompt('Analyzuj "/Applications/Slack.app" přes rea')
+        self.assertIs(slack_res["reference_recon"]["needs_recon"], True)
+        self.assertIs(slack_res["reference_recon"]["ask_confirmation"], False)
+        self.assertEqual(slack_res["reference_recon"]["reason"], "explicit_rea_or_artifact")
+        self.assertIn("/Applications/Slack.app", slack_res["reference_recon"]["targets"])
+
+    def test_rea_m5_negative_false_positives_and_bypasses(self):
+        """M5: 12+ tricky false-positive & bypass prompts stay needs_recon=False and preserve 1.0 P@k."""
+        import os
+
+        negative_cases = [
+            ("Implementuj parser pro typy jako např. int nebo str", None),
+            ("Oprav funkci stejně jako v minulém commitu", None),
+            ("Ulož konfiguraci jako JSON a exportuj jako CSV", None),
+            ("It looks like a race condition bug in worker", None),
+            ("Make sure it works as well as expected", None),
+            ("Spusť proces jako root nebo admin", None),
+            ("/asw Jak funguje REA?", "non_implementation_mode"),
+            ("Chci aby to vypadalo jako Raycast --no-rea", "user_skip"),
+            ("Vytvoř dashboard ve stylu Obsidian bez rea", "user_skip"),
+            ("/asw-cleanup vyčisti mrtvý kód podobný jako v modulu", "maintenance_or_review"),
+            ("/asw-refactor rozděl soubor stejně jako v Notion", "maintenance_or_review"),
+            ("Run pytest", "non_implementation_mode"),
+        ]
+        self.assertEqual(len(negative_cases), 12)
+        for prompt, expected_reason in negative_cases:
+            with self.subTest(prompt=prompt):
+                routed = self.router.route_prompt(prompt)
+                recon = routed["reference_recon"]
+                self.assertIs(recon["needs_recon"], False, f"False positive on {prompt!r}: {recon!r}")
+                if expected_reason is not None:
+                    self.assertEqual(recon["reason"], expected_reason)
+                self.assertNotIn("rea-reference-recon", routed["auto_subskills"])
+
+        # Additional quoted/fenced/review/start-work/mode_4/backtick/module-attr/CZ-verb-object guards
+        for extra_neg in (
+            'Do not trigger on "fungovalo jako Raycast"',
+            "```python\n# looks like Linear\n```\nImplementuj parser",
+            "/asw-review zkontroluj kód podobný jako v Notion",
+            "/asw-start-work plan podobný Notion",
+            "emergency restore production",
+            "Vrať výsledek jako dict",
+            "Chci aby to fungovalo jako v src/router.py",
+            "/asw Jak funguje rea-agents?",
+            "Analyze app.asar --no-rea",
+            "Ignore `app.asar` string",
+            'Do not touch "app.asar" in docs',
+            "Fix flask.app import",
+            "Check celery.app and current.app config",
+            "Ulož výstup jako CustomReport",
+            "Vytvoř export a ulož výstup jako CustomReport",
+            "Vytvoř tabulku a exportuj tabulku jako Parquet",
+        ):
+            with self.subTest(extra_neg=extra_neg):
+                routed = self.router.route_prompt(extra_neg)
+                self.assertIs(routed["reference_recon"]["needs_recon"], False)
+                self.assertNotIn("rea-reference-recon", routed["auto_subskills"])
+                self.assertNotIn("rea-reference-recon", routed["selected_skills"])
+
+        # Explicit non-backticked .app bundle paths still trigger
+        for app_pos, exp_app in (
+            ("Analyzuj dist/Slack.app", "dist/Slack.app"),
+            ("Analyzuj Slack.app", "Slack.app"),
+        ):
+            with self.subTest(app_pos=app_pos):
+                res_app = self.router.route_prompt(app_pos)
+                self.assertIs(res_app["reference_recon"]["needs_recon"], True)
+                self.assertIn(exp_app, res_app["reference_recon"]["targets"])
+
+        # ASW_DECISION_MODEL_ENABLED=0 negative isolation
+        with mock.patch.dict(os.environ, {"ASW_DECISION_MODEL_ENABLED": "0"}):
+            dis = decision_router.DecisionRouter()
+            r_dis = dis.route_prompt("Chci aby to fungovalo jako Raycast")
+            self.assertEqual(
+                r_dis["reference_recon"],
+                {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": "disabled"},
+            )
+            self.assertEqual(r_dis["auto_subskills"], [])
+            self.assertEqual(
+                dis.detect_reference_product_intent("Chci aby to fungovalo jako Raycast"),
+                {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": "disabled"},
+            )
+
+        # 30-prompt benchmark integrity: P@k == 1.0 and 0 forbidden_hits
+        bench = decision_router.benchmark_skill_routing(self.router)
+        self.assertEqual(bench["upgraded"]["precision_at_k"], 1.0)
+        self.assertEqual(bench["upgraded"]["forbidden_hits"], 0)
+        self.assertEqual(bench["opt_tokens"], 0.0)
+
+    def test_rea_latency_24_prompt_benchmark_and_mirror_parity(self):
+        """Verify 24/24 accuracy, <5ms per-call latency, Laya mode_1 override, CLI output, and dual-mirror parity."""
+        import importlib.util
+        import time
+
+        prompts_24 = [
+            ("chci aby to fungovalo/vypadalo jako Raycast", True),
+            ("tato funkcionalita by měla být podobná XY", True),
+            ("vytvoř dashboard ve stylu Obsidian", True),
+            ("Vytvoř editor jako Notion", True),
+            ("Implementuj vyhledávání inspirované Alfred", True),
+            ("Build a command palette like Linear", True),
+            ("Make the search workflow work just like in Raycast", True),
+            ("Design an editor inspired by VS Code", True),
+            ("Implement a notes workspace similar to Obsidian", True),
+            ("Analyzuj resources/app.asar a vyextrahuj IPC kontrakty", True),
+            ('Analyzuj "/Applications/Slack.app" přes rea', True),
+            ("Reverse-engineer app.asar using morluto/rea", True),
+            ("Implementuj parser pro typy jako např. int nebo str", False),
+            ("Oprav funkci stejně jako v minulém commitu", False),
+            ("Ulož konfiguraci jako JSON a exportuj jako CSV", False),
+            ("It looks like a race condition bug in worker", False),
+            ("Make sure it works as well as expected", False),
+            ("Spusť proces jako root nebo admin", False),
+            ("/asw Jak funguje REA?", False),
+            ("Chci aby to vypadalo jako Raycast --no-rea", False),
+            ("Vytvoř dashboard ve stylu Obsidian bez rea", False),
+            ("/asw-cleanup vyčisti mrtvý kód podobný jako v modulu", False),
+            ("/asw-refactor rozděl soubor stejně jako v Notion", False),
+            ("Run pytest", False),
+        ]
+        self.assertEqual(len(prompts_24), 24)
+
+        offline_router = decision_router.DecisionRouter(
+            config={"enabled": True, "use_daemon": False},
+            enable_inproc=False,
+        )
+        offline_router.route_prompt("warmup")
+
+        t_det = time.perf_counter()
+        for prompt, _ in prompts_24:
+            decision_router.detect_reference_product_intent(prompt)
+        detect_avg_ms = ((time.perf_counter() - t_det) * 1000.0) / len(prompts_24)
+        self.assertLess(detect_avg_ms, 2.0, f"Expected <2ms avg detector latency, got {detect_avg_ms:.2f}ms")
+
+        correct = 0
+        t0 = time.perf_counter()
+        for prompt, expected_recon in prompts_24:
+            res = offline_router.route_prompt(prompt)
+            if bool(res["reference_recon"]["needs_recon"]) is expected_recon:
+                correct += 1
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        avg_ms = elapsed_ms / len(prompts_24)
+        self.assertEqual(correct, 24)
+        self.assertLess(avg_ms, 5.0, f"Expected <5ms avg routing latency, got {avg_ms:.2f}ms")
+
+        # Dual-mirror parity + boundary guards + Laya mode_1 override refresh
+        for idx, path in enumerate((AG_SCRIPTS / "decision_router.py", CORE_SCRIPTS / "decision_router.py")):
+            spec = importlib.util.spec_from_file_location(f"rea_mirror_{idx}", str(path))
+            self.assertIsNotNone(spec)
+            assert spec is not None and spec.loader is not None
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+
+            self.assertEqual(
+                mod.detect_reference_product_intent(""),
+                {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": None},
+            )
+            self.assertEqual(
+                mod.detect_reference_product_intent(None),  # type: ignore[arg-type]
+                {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": None},
+            )
+            self.assertEqual(
+                mod.detect_reference_product_intent("Vytvoř editor jako Notion", enabled=False),
+                {"needs_recon": False, "ask_confirmation": False, "targets": [], "reason": "disabled"},
+            )
+            self.assertEqual(
+                mod.detect_reference_product_intent("Vytvoř editor jako Notion", execution_mode="mode_0")["reason"],
+                "non_implementation_mode",
+            )
+            self.assertEqual(
+                mod.detect_reference_product_intent("Vytvoř editor jako Notion", execution_mode="mode_4")["reason"],
+                "non_implementation_mode",
+            )
+            self.assertEqual(
+                mod.detect_reference_product_intent("Vytvoř editor jako Notion", is_consultation=True)["reason"],
+                "non_implementation_mode",
+            )
+            self.assertEqual(
+                mod.detect_reference_product_intent("Vytvoř editor jako Notion", recommended_command="asw-start-work")["reason"],
+                "maintenance_or_review",
+            )
+            self.assertEqual(
+                mod.detect_reference_product_intent("Vytvoř editor jako Notion", auto_subskills=["asw-refactor"])["reason"],
+                "maintenance_or_review",
+            )
+            self.assertEqual(
+                mod.detect_reference_product_intent("Vytvoř editor jako Notion --no-rea")["reason"],
+                "user_skip",
+            )
+
+            # Patch #1B: direct _clean_reference_target(..., require_cap=True) boundary assertions
+            self.assertEqual(mod._clean_reference_target("https://linear.app/docs", require_cap=True), "https://linear.app/docs")
+            self.assertEqual(mod._clean_reference_target("http://localhost:3000", require_cap=True), "http://localhost:3000")
+            self.assertEqual(mod._clean_reference_target("/Applications/Slack.app", require_cap=True), "/Applications/Slack.app")
+            self.assertEqual(mod._clean_reference_target("bundle.asar", require_cap=True), "bundle.asar")
+            self.assertEqual(mod._clean_reference_target("Slack.app", require_cap=True), "Slack.app")
+            self.assertEqual(mod._clean_reference_target("a Raycast", require_cap=True), "Raycast")
+            self.assertIsNone(mod._clean_reference_target("the", require_cap=True))
+            self.assertIsNone(mod._clean_reference_target("lowercaseword", require_cap=True))
+
+            # Laya override mode_3 -> mode_1 resets reference_recon and strips rea-reference-recon from auto & selected
+            r_inst = mod.DecisionRouter()
+            base_rea = r_inst.route_prompt("Vytvoř editor jako Notion s rea-agents")
+            self.assertIs(base_rea["reference_recon"]["needs_recon"], True)
+            self.assertIn("rea-reference-recon", base_rea["auto_subskills"])
+            base_rea_with_sel = dict(base_rea)
+            base_rea_with_sel["selected_skills"] = ["rea-reference-recon", "python-pro"]
+
+            daemon_inst = mod.DecisionRouter(
+                server_url="http://127.0.0.1:18765",
+                enable_inproc=False,
+                config={"enabled": True, "use_daemon": True, "compact_question_schema": True},
+            )
+            fake_m1 = json.dumps({
+                "answers": {
+                    "execution_mode": {"choice": "mode_1", "answer_confidence": 0.95, "probabilities": {"mode_1": 0.95}},
+                },
+            }).encode("utf-8")
+
+            class _FakeRespM1Rea:
+                status = 200
+                def __enter__(self_r): return self_r
+                def __exit__(self_r, *args): return False
+                def read(self_r): return fake_m1
+
+            with mock.patch("urllib.request.urlopen", return_value=_FakeRespM1Rea()):
+                overridden = daemon_inst._enrich_with_laya("Vytvoř editor jako Notion s rea-agents", base_rea_with_sel)
+            self.assertEqual(overridden["execution_mode"], "mode_1")
+            self.assertIs(overridden["reference_recon"]["needs_recon"], False)
+            self.assertEqual(overridden["reference_recon"]["reason"], "non_implementation_mode")
+            self.assertNotIn("rea-reference-recon", overridden["auto_subskills"])
+            self.assertNotIn("rea-reference-recon", overridden["selected_skills"])
+            self.assertIn("python-pro", overridden["selected_skills"])
+
+        # CLI --mode route-prompt --compact exposes reference_recon
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(CORE_SCRIPTS / "decision_router.py"),
+                "--mode",
+                "route-prompt",
+                "--compact",
+                "--prompt",
+                "Build a command palette like Linear",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+        cli_out = json.loads(proc.stdout.strip())
+        self.assertIs(cli_out["reference_recon"]["needs_recon"], True)
+        self.assertIn("Linear", cli_out["reference_recon"]["targets"])
+        self.assertIn("rea-reference-recon", cli_out["auto_subskills"])
 
 
 if __name__ == "__main__":

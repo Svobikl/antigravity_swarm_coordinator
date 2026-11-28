@@ -415,7 +415,10 @@ class TestToonCodec(unittest.TestCase):
     def test_mirror_script_parity(self):
         self.assertTrue(TOON_SCRIPT.exists())
         self.assertTrue(MIRROR_TOON_SCRIPT.exists())
-        self.assertEqual(TOON_SCRIPT.read_bytes(), MIRROR_TOON_SCRIPT.read_bytes())
+        self.assertEqual(
+            TOON_SCRIPT.read_bytes().replace(b"\r\n", b"\n"),
+            MIRROR_TOON_SCRIPT.read_bytes().replace(b"\r\n", b"\n"),
+        )
 
 
 if __name__ == "__main__":
